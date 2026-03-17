@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IC Reports — Admin Viewer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet" />
+  <!-- MSAL.js — Microsoft Authentication Library for browser SPA -->
+  <script src="https://alcdn.msauth.net/browser/3.27.0/js/msal-browser.min.js"></script>
+  <style>
+    :root {
+      --navy:   #1a3a5c;
+      --navy2:  #112840;
+      --gold:   #c8a96e;
+      --cream:  #f9f7f4;
+      --paper:  #f2ede6;
+      --ink:    #1a1a1a;
+      --muted:  #6b6660;
+      --border: #d8d0c6;
+      --red:    #9b2335;
+      --green:  #2a6b3c;
+      --sidebar-w: 320px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Source Serif 4', Georgia, serif; background: var(--paper); color: var(--ink); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ── Auth gate ── */
+    #authGate {
+      position: fixed; inset: 0; background: var(--navy2);
+      display: flex; align-items: center; justify-content: center; z-index: 100;
+    }
+    .auth-box {
+      background: var(--cream); border-radius: 6px;
+      padding: 48px 52px; width: min(440px, 90vw);
+      box-shadow: 0 20px 60px rgba(0,0,0,.4); text-align: center;
+    }
+    .auth-logo { font-size: 36px; margin-bottom: 16px; }
+    .auth-box h2 { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--navy); margin-bottom: 8px; }
+    .auth-box p  { color: var(--muted); font-size: 14px; line-height: 1.6; margin-bottom: 32px; }
+    .btn-msft {
+      display: inline-flex; align-items: center; justify-content: center; gap: 12px;
+      width: 100%; padding: 14px 20px;
+      background: #0078d4; color: #fff; border: none; border-radius: 4px;
+      font-family: 'Source Serif 4', serif; font-size: 15px;
+      cursor: pointer; transition: background .2s;
+    }
+    .btn-msft:hover    { background: #006cbf; }
+    .btn-msft:disabled { opacity: .6; cursor: not-allowed; }
+    .btn-msft svg { flex-shrink: 0; }
+    .auth-error {
+      margin-top: 16px; padding: 10px 14px; background: rgba(155,35,53,.08);
+      border: 1px solid rgba(155,35,53,.2); border-radius: 3px;
+      color: var(--red); font-size: 13px; display: none; text-align: left;
+      line-height: 1.5;
+    }
+    .auth-loading { margin-top: 16px; color: var(--muted); font-size: 13px; display: none; }
+
+    /* ── Top bar ── */
+    .topbar {
+      background: var(--navy); padding: 0 24px;
+      display: flex; align-items: center; gap: 16px;
+      height: 56px; flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,.2);
+    }
+    .topbar h1 { font-family: 'Playfair Display', serif; font-size: 18px; color: #fff; letter-spacing: .3px; white-space: nowrap; }
+    .topbar-divider { width: 1px; height: 24px; background: rgba(255,255,255,.2); }
+    .search-wrap { position: relative; flex: 1; max-width: 360px; }
+    .search-wrap input {
+      width: 100%; padding: 7px 12px 7px 34px;
+      background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+      border-radius: 3px; color: #fff; font-size: 14px; font-family: inherit;
+    }
+    .search-wrap input::placeholder { color: rgba(255,255,255,.4); }
+    .search-wrap input:focus { outline: none; border-color: var(--gold); }
+    .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 14px; opacity: .5; }
+    .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+    .report-count { color: rgba(255,255,255,.6); font-size: 13px; white-space: nowrap; }
+
+    /* User chip */
+    .user-chip {
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.15);
+      border-radius: 20px; padding: 4px 12px 4px 4px;
+    }
+    .user-avatar {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--gold); color: var(--navy);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+    .user-name { color: rgba(255,255,255,.9); font-size: 13px; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .btn-signout {
+      padding: 5px 12px; background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.18); color: rgba(255,255,255,.8);
+      border-radius: 3px; font-size: 12px; cursor: pointer; font-family: inherit;
+      transition: background .15s;
+    }
+    .btn-signout:hover { background: rgba(255,255,255,.18); }
+
+    .btn-refresh {
+      padding: 6px 14px; background: rgba(255,255,255,.1);
+      border: 1px solid rgba(255,255,255,.2); color: #fff;
+      border-radius: 3px; font-size: 13px; cursor: pointer;
+      font-family: inherit; transition: background .15s;
+    }
+    .btn-refresh:hover { background: rgba(255,255,255,.2); }
+
+    /* ── Layout ── */
+    .app-body { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: var(--sidebar-w); flex-shrink: 0;
+      background: var(--cream); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .sidebar-header { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+    .report-list { flex: 1; overflow-y: auto; }
+    .report-list::-webkit-scrollbar { width: 6px; }
+    .report-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .report-card { padding: 14px 18px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .15s; }
+    .report-card:hover  { background: rgba(26,58,92,.04); }
+    .report-card.active { background: rgba(26,58,92,.08); border-left: 3px solid var(--navy); padding-left: 15px; }
+    .report-card .rc-title { font-weight: 600; font-size: 14px; color: var(--navy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .report-card .rc-loc   { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .report-card .rc-date  { font-size: 11px; color: var(--border); margin-top: 4px; }
+    .report-card .rc-badge { display: inline-block; font-size: 11px; padding: 2px 7px; background: rgba(26,58,92,.08); border-radius: 10px; color: var(--navy); margin-top: 5px; }
+
+    .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); }
+    .load-more-btn { width: 100%; padding: 8px; background: var(--navy); color: #fff; border: none; border-radius: 3px; font-size: 13px; cursor: pointer; font-family: inherit; transition: background .15s; }
+    .load-more-btn:hover    { background: #254e7a; }
+    .load-more-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ── Detail pane ── */
+    .detail-pane { flex: 1; overflow-y: auto; background: white; }
+    .detail-pane::-webkit-scrollbar { width: 8px; }
+    .detail-pane::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--muted); gap: 12px; }
+    .empty-state .icon { font-size: 48px; opacity: .4; }
+    .empty-state p { font-size: 16px; font-style: italic; }
+
+    .loading-state { display: flex; align-items: center; justify-content: center; height: 100%; gap: 12px; color: var(--muted); }
+    .spinner-lg { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--navy); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Report detail ── */
+    .report-header { background: var(--navy); padding: 32px 40px; position: sticky; top: 0; z-index: 10; }
+    .report-header .rh-title { font-family: 'Playfair Display', serif; font-size: 24px; color: #fff; margin-bottom: 6px; }
+    .report-header .rh-meta  { color: #a8c4e0; font-size: 14px; }
+    .report-header .rh-coordinator { margin-top: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .report-header .rh-coordinator span { background: rgba(255,255,255,.1); border-radius: 20px; padding: 4px 12px; font-size: 13px; color: rgba(255,255,255,.85); }
+
+    .report-body { padding: 36px 40px; }
+    .section-title { font-family: 'Playfair Display', serif; font-size: 17px; color: var(--navy); border-bottom: 2px solid var(--gold); padding-bottom: 8px; margin-bottom: 20px; margin-top: 36px; }
+    .section-title:first-child { margin-top: 0; }
+
+    .intro-text { line-height: 1.75; font-size: 15px; color: #333; white-space: pre-wrap; }
+
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+    .stat-cell { background: #fff; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
+    .stat-cell .sc-label { font-size: 13px; color: var(--muted); }
+    .stat-cell .sc-value { font-weight: 700; font-size: 18px; color: var(--navy); }
+    .stat-cell .sc-value.zero { color: var(--border); font-weight: 400; }
+
+    .testimony { border-left: 3px solid var(--gold); padding: 16px 20px; margin-bottom: 20px; background: rgba(200,169,110,.05); border-radius: 0 4px 4px 0; }
+    .testimony:last-child { margin-bottom: 0; }
+    .testimony-author { font-weight: 600; font-size: 14px; color: var(--navy); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .testimony-author .t-num { width: 22px; height: 22px; border-radius: 50%; background: var(--navy); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
+    .testimony-text { font-size: 14px; line-height: 1.75; color: #333; white-space: pre-wrap; }
+
+    .finance-wrap { border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+    .finance-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .finance-table tr { border-bottom: 1px solid #f0ece6; }
+    .finance-table tr:last-child { border-bottom: none; }
+    .finance-table td { padding: 10px 12px; }
+    .finance-table td:last-child { text-align: right; font-weight: 600; }
+    .finance-table .ft-group td:first-child { font-weight: 600; color: var(--navy); }
+    .finance-table .ft-group { background: rgba(26,58,92,.03); }
+    .finance-table .ft-sub td:first-child { color: var(--muted); padding-left: 28px; font-style: italic; }
+    .finance-table .ft-total { background: rgba(200,169,110,.12); }
+    .finance-table .ft-total td { font-weight: 700; font-size: 15px; }
+    .finance-table .ft-zero td { color: var(--border); }
+
+    .no-data { color: var(--muted); font-style: italic; font-size: 14px; }
+
+    .print-btn { position: fixed; bottom: 28px; right: 28px; background: var(--navy); color: #fff; border: none; padding: 12px 20px; border-radius: 30px; font-family: 'Source Serif 4', serif; font-size: 14px; cursor: pointer; box-shadow: 0 4px 16px rgba(26,58,92,.3); transition: background .2s, transform .15s; display: none; align-items: center; gap: 8px; }
+    .print-btn:hover { background: #254e7a; transform: translateY(-1px); }
+    #printBtn.visible { display: flex; }
+
+    @media print {
+      .topbar, .sidebar, #authGate, #printBtn { display: none !important; }
+      .detail-pane { overflow: visible; }
+      body, .app-body { overflow: visible; height: auto; display: block; }
+    }
+    @media (max-width: 768px) {
+      :root { --sidebar-w: 100%; }
+      .app-body { flex-direction: column; }
+      .sidebar { width: 100%; height: 240px; border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Azure AD auth gate ── -->
+<div id="authGate">
+  <div class="auth-box">
+    <div class="auth-logo">📋</div>
+    <h2>IC Report Admin</h2>
+    <p>Sign in with your Microsoft 365 account to access submitted project reports.</p>
+    <button class="btn-msft" id="signInBtn" onclick="signIn()">
+      <!-- Microsoft "M" logo mark -->
+      <svg width="20" height="20" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1" y="1" width="9" height="9" fill="#F25022"/>
+        <rect x="11" y="1" width="9" height="9" fill="#7FBA00"/>
+        <rect x="1" y="11" width="9" height="9" fill="#00A4EF"/>
+        <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
+      </svg>
+      Sign in with Microsoft
+    </button>
+    <div class="auth-loading" id="authLoading">⏳ Signing in…</div>
+    <div class="auth-error" id="authError"></div>
+  </div>
+</div>
+
+<!-- ── Top bar ── -->
+<div class="topbar">
+  <h1>IC Project Reports</h1>
+  <div class="topbar-divider"></div>
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="searchInput" placeholder="Search by title, location, or coordinator…" oninput="filterReports()" />
+  </div>
+  <div class="topbar-right">
+    <span class="report-count" id="reportCount"></span>
+    <button class="btn-refresh" onclick="loadReports()">↻ Refresh</button>
+    <div class="user-chip" id="userChip" style="display:none;">
+      <div class="user-avatar" id="userAvatar">?</div>
+      <span class="user-name" id="userName"></span>
+    </div>
+    <button class="btn-signout" id="signOutBtn" style="display:none;" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
+<!-- ── App body ── -->
+<div class="app-body">
+  <div class="sidebar">
+    <div class="sidebar-header">Reports</div>
+    <div class="report-list" id="reportList">
+      <div style="padding:24px 18px;color:var(--muted);font-size:13px;font-style:italic;">Sign in to load reports.</div>
+    </div>
+    <div class="sidebar-footer">
+      <button class="load-more-btn" id="loadMoreBtn" onclick="loadMore()" disabled>Load more</button>
+    </div>
+  </div>
+  <div class="detail-pane" id="detailPane">
+    <div class="empty-state">
+      <div class="icon">📋</div>
+      <p>Select a report to view details</p>
+    </div>
+  </div>
+</div>
+
+<button class="print-btn" id="printBtn" onclick="window.print()">🖨 Print Report</button>
+
+<script>
+  // ── Configuration — update these three values ─────────────────────────────
+  const WORKER_URL      = "https://your-worker.your-subdomain.workers.dev";
+  const TENANT_ID       = "YOUR_AZURE_TENANT_ID";
+  const ADMIN_CLIENT_ID = "YOUR_ADMIN_CLIENT_ID";  // The SPA app registration
+
+  // The scope exposed on your app registration: api://{AZURE_CLIENT_ID}/Reports.Read
+  // If ADMIN_CLIENT_ID === AZURE_CLIENT_ID (same app), this is simply:
+  const API_SCOPE = `api://${ADMIN_CLIENT_ID}/Reports.Read`;
+
+  const PAGE_SIZE = 25;
+
+  // ── MSAL setup ────────────────────────────────────────────────────────────
+  const msalInstance = new msal.PublicClientApplication({
+    auth: {
+      clientId:    ADMIN_CLIENT_ID,
+      authority:   `https://login.microsoftonline.com/${TENANT_ID}`,
+      redirectUri: window.location.origin + window.location.pathname,
+    },
+    cache: {
+      cacheLocation:      "sessionStorage",
+      storeAuthStateInCookie: false,
+    },
+  });
+
+  // Handle redirect response on page load (redirect flow fallback)
+  msalInstance.initialize().then(() => {
+    msalInstance.handleRedirectPromise().then(response => {
+      if (response) onSignInSuccess(response.account);
+    }).catch(err => {
+      showAuthError(err);
+    });
+
+    // If already signed in from a previous session, auto-restore
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length > 0) {
+      onSignInSuccess(accounts[0]);
+    }
+  });
+
+  // ── Auth state ────────────────────────────────────────────────────────────
+  let currentAccount = null;
+  let allReports     = [];
+  let filteredList   = [];
+  let activeId       = null;
+  let nextLink       = null;
+  let loading        = false;
+
+  // ── Sign in ───────────────────────────────────────────────────────────────
+  async function signIn() {
+    const btn = document.getElementById("signInBtn");
+    btn.disabled = true;
+    document.getElementById("authLoading").style.display = "block";
+    document.getElementById("authError").style.display   = "none";
+
+    try {
+      // Try popup first; fall back to redirect if popups are blocked
+      const response = await msalInstance.loginPopup({
+        scopes: ["openid", "profile", API_SCOPE],
+      });
+      onSignInSuccess(response.account);
+    } catch (err) {
+      if (err.errorCode === "popup_window_error" || err.errorCode === "empty_window_error") {
+        // Popup blocked — use redirect flow instead
+        await msalInstance.loginRedirect({ scopes: ["openid", "profile", API_SCOPE] });
+      } else {
+        showAuthError(err);
+        btn.disabled = false;
+        document.getElementById("authLoading").style.display = "none";
+      }
+    }
+  }
+
+  function onSignInSuccess(account) {
+    currentAccount = account;
+    document.getElementById("authGate").style.display = "none";
+
+    // Populate user chip
+    const name     = account.name || account.username || "Admin";
+    const initials = name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
+    document.getElementById("userAvatar").textContent = initials;
+    document.getElementById("userName").textContent   = name;
+    document.getElementById("userChip").style.display = "flex";
+    document.getElementById("signOutBtn").style.display = "block";
+
+    loadReports();
+  }
+
+  function showAuthError(err) {
+    const el = document.getElementById("authError");
+    el.textContent = err.message || String(err);
+    el.style.display = "block";
+  }
+
+  // ── Sign out ──────────────────────────────────────────────────────────────
+  async function signOut() {
+    await msalInstance.logoutPopup({ account: currentAccount }).catch(() =>
+      msalInstance.logoutRedirect({ account: currentAccount })
+    );
+    currentAccount = null;
+    document.getElementById("userChip").style.display   = "none";
+    document.getElementById("signOutBtn").style.display = "none";
+    document.getElementById("authGate").style.display   = "flex";
+    document.getElementById("reportList").innerHTML =
+      `<div style="padding:24px 18px;color:var(--muted);font-size:13px;font-style:italic;">Sign in to load reports.</div>`;
+    document.getElementById("detailPane").innerHTML =
+      `<div class="empty-state"><div class="icon">📋</div><p>Select a report to view details</p></div>`;
+    document.getElementById("printBtn").classList.remove("visible");
+    allReports = []; filteredList = []; activeId = null;
+    document.getElementById("reportCount").textContent = "";
+  }
+
+  // ── Acquire access token for the API ─────────────────────────────────────
+  async function getAccessToken() {
+    try {
+      // Silent first (uses cached token / refresh token)
+      const result = await msalInstance.acquireTokenSilent({
+        scopes:  [API_SCOPE],
+        account: currentAccount,
+      });
+      return result.accessToken;
+    } catch (silentErr) {
+      // Falls back to interactive popup if silent fails (e.g. consent required)
+      const result = await msalInstance.acquireTokenPopup({
+        scopes:  [API_SCOPE],
+        account: currentAccount,
+      });
+      return result.accessToken;
+    }
+  }
+
+  // ── Load reports ──────────────────────────────────────────────────────────
+  async function loadReports() {
+    if (!currentAccount || loading) return;
+    loading = true; allReports = []; nextLink = null;
+    document.getElementById("reportList").innerHTML =
+      `<div class="loading-state"><div class="spinner-lg"></div><span>Loading…</span></div>`;
+    document.getElementById("loadMoreBtn").disabled = true;
+    await fetchPage(`${WORKER_URL}/reports?top=${PAGE_SIZE}`);
+    loading = false;
+  }
+
+  async function loadMore() {
+    if (!nextLink || loading) return;
+    loading = true;
+    document.getElementById("loadMoreBtn").disabled  = true;
+    document.getElementById("loadMoreBtn").textContent = "Loading…";
+    await fetchPage(nextLink);
+    loading = false;
+    document.getElementById("loadMoreBtn").textContent = "Load more";
+  }
+
+  async function fetchPage(url) {
+    try {
+      const token = await getAccessToken();
+      const res   = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const data  = await res.json();
+      if (!res.ok) throw new Error(data.error || res.statusText);
+
+      allReports = [...allReports, ...(data.items || [])];
+      nextLink   = data.nextLink || null;
+      document.getElementById("loadMoreBtn").disabled = !nextLink;
+      filterReports();
+    } catch (err) {
+      document.getElementById("reportList").innerHTML =
+        `<div style="padding:20px;color:var(--red);font-size:13px;">Error: ${escHtml(err.message)}</div>`;
+    }
+  }
+
+  // ── Filter ────────────────────────────────────────────────────────────────
+  function filterReports() {
+    const q = document.getElementById("searchInput").value.trim().toLowerCase();
+    filteredList = q
+      ? allReports.filter(r =>
+          (r.projectTitle    || "").toLowerCase().includes(q) ||
+          (r.location        || "").toLowerCase().includes(q) ||
+          (r.coordinatorName || "").toLowerCase().includes(q))
+      : [...allReports];
+    renderSidebar();
+  }
+
+  // ── Render sidebar ────────────────────────────────────────────────────────
+  function renderSidebar() {
+    const list = document.getElementById("reportList");
+    document.getElementById("reportCount").textContent =
+      `${filteredList.length} of ${allReports.length} report${allReports.length !== 1 ? "s" : ""}`;
+
+    if (!filteredList.length) {
+      list.innerHTML = `<div style="padding:24px 18px;color:var(--muted);font-size:13px;font-style:italic;">No reports found.</div>`;
+      return;
+    }
+
+    list.innerHTML = filteredList.map(r => {
+      const date   = r.submittedAt ? new Date(r.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+      const tCount = (r.testimonies || []).length;
+      return `<div class="report-card${r.id === activeId ? " active" : ""}" onclick="showReport('${r.id}')">
+        <div class="rc-title">${escHtml(r.projectTitle || "Untitled Report")}</div>
+        <div class="rc-loc">${escHtml(r.location || "")}</div>
+        ${date ? `<div class="rc-date">${date}</div>` : ""}
+        ${tCount ? `<span class="rc-badge">📖 ${tCount} testimon${tCount === 1 ? "y" : "ies"}</span>` : ""}
+      </div>`;
+    }).join("");
+  }
+
+  // ── Show report detail ────────────────────────────────────────────────────
+  function showReport(id) {
+    const report = filteredList.find(r => r.id === id);
+    if (!report) return;
+    activeId = id;
+    renderSidebar();
+    document.getElementById("detailPane").innerHTML = buildReportHtml(report);
+    document.getElementById("detailPane").scrollTop = 0;
+    document.getElementById("printBtn").classList.add("visible");
+  }
+
+  // ── Build full report HTML ────────────────────────────────────────────────
+  function buildReportHtml(r) {
+    const dateRange  = r.projectDateFrom
+      ? (r.projectDateTo ? `${fmt(r.projectDateFrom)} – ${fmt(r.projectDateTo)}` : fmt(r.projectDateFrom))
+      : "";
+    const submittedOn = r.submittedAt
+      ? new Date(r.submittedAt).toLocaleString("en-US", { dateStyle: "long", timeStyle: "short" }) : "";
+
+    const testimonies    = r.testimonies || [];
+    const testimoniesHtml = testimonies.length
+      ? testimonies.map((t, i) => `
+          <div class="testimony">
+            <div class="testimony-author">
+              <div class="t-num">${i + 1}</div>
+              ${t.author ? escHtml(t.author) : `<em style="color:var(--muted);font-weight:400;">Anonymous</em>`}
+            </div>
+            <div class="testimony-text">${escHtml(t.text || "")}</div>
+          </div>`).join("")
+      : `<p class="no-data">No testimonies recorded.</p>`;
+
+    const stats = [
+      ["# Churches Participated",         r.churchesParticipated],
+      ["# Localities",                     r.localities],
+      ["# National Participants",          r.nationalParticipants],
+      ["# USA Participants",               r.usaParticipants],
+      ["# Other Country Participants",     r.otherCountriesParticipants],
+      ["# of Visits",                      r.totalVisits],
+      ["# People Who Heard the Gospel",    r.peopleHeardGospel],
+      ["# Professions of Faith",           r.professionsOfFaith],
+      ["# Rededications to Christ",        r.rededications],
+      ["# Baptisms",                       r.baptisms],
+      ["# New Churches Planted",           r.newChurchesPlanted],
+    ];
+
+    const statsHtml = `<div class="stats-grid">
+      ${stats.map(([label, val]) => {
+        const empty = val === null || val === undefined || val === 0;
+        return `<div class="stat-cell">
+          <span class="sc-label">${label}</span>
+          <span class="sc-value${empty ? " zero" : ""}">${empty ? "—" : val}</span>
+        </div>`;
+      }).join("")}
+    </div>`;
+
+    const totalTrip = (r.ticketsCost||0)+(r.fuelCost||0)+(r.accommodationCost||0)+(r.foodCost||0);
+
+    const financeHtml = `<div class="finance-wrap"><table class="finance-table">
+      ${fRow("Total Funds Sent by IC", r.totalFundsSent, "ft-total")}
+      ${fRow("Materials",              r.spentOnMaterials, "ft-group")}
+      <tr class="ft-group"><td colspan="2" style="padding:8px 12px 4px;font-weight:600;color:var(--navy);">Coordinator Trips</td></tr>
+      ${fRow("Tickets",       r.ticketsCost,       "ft-sub")}
+      ${fRow("Fuel / Taxi",   r.fuelCost,          "ft-sub")}
+      ${fRow("Accommodation", r.accommodationCost, "ft-sub")}
+      ${fRow("Food",          r.foodCost,          "ft-sub")}
+      ${fRow("Trips Total",   totalTrip,           "ft-group")}
+      ${fRow("Financial Help to Participants", r.financialHelpParticipants, "ft-group")}
+      ${r.numParticipantsHelp ? `<tr class="ft-sub"><td>Participants Receiving Help</td><td>${r.numParticipantsHelp}</td></tr>` : ""}
+      ${fRow("Rallies Expenses", r.ralliesExpenses, "ft-group")}
+      ${r.ralliesDescription ? `<tr class="ft-sub"><td colspan="2" style="color:var(--muted);font-style:italic;">${escHtml(r.ralliesDescription)}</td></tr>` : ""}
+      ${fRow("Additional Expenses", r.additionalExpenses, "ft-group")}
+      ${r.additionalNeedDescription ? `<tr class="ft-sub"><td colspan="2" style="color:var(--muted);font-style:italic;">${escHtml(r.additionalNeedDescription)}</td></tr>` : ""}
+    </table></div>`;
+
+    return `
+      <div class="report-header">
+        <div class="rh-title">${escHtml(r.projectTitle || "IC Project Report")}</div>
+        <div class="rh-meta">
+          ${escHtml(r.location || "")}${dateRange ? ` &nbsp;·&nbsp; ${dateRange}` : ""}
+          ${submittedOn ? ` &nbsp;·&nbsp; Submitted ${submittedOn}` : ""}
+        </div>
+        <div class="rh-coordinator">
+          ${r.coordinatorName  ? `<span>👤 ${escHtml(r.coordinatorName)}</span>`  : ""}
+          ${r.coordinatorEmail ? `<span>✉ ${escHtml(r.coordinatorEmail)}</span>` : ""}
+        </div>
+      </div>
+      <div class="report-body">
+        <div class="section-title">1 — Introduction</div>
+        <p class="intro-text">${escHtml(r.introduction || "")}</p>
+        <div class="section-title">2 — Statistics</div>
+        ${statsHtml}
+        <div class="section-title">3 &amp; 4 — Testimonies &amp; Photos
+          <span style="font-family:'Source Serif 4',serif;font-weight:400;font-size:13px;color:var(--muted);margin-left:10px;">
+            ${testimonies.length} testimon${testimonies.length === 1 ? "y" : "ies"}
+          </span>
+        </div>
+        ${testimoniesHtml}
+        <div class="section-title">5 — Financial Report</div>
+        ${financeHtml}
+      </div>`;
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function escHtml(str) {
+    return String(str ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+  function fmt(d) {
+    const dt = new Date(d);
+    return isNaN(dt) ? d : dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+  function money(val) {
+    const n = parseFloat(val);
+    return isNaN(n) ? null : `USD $${n.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+  }
+  function fRow(label, val, cls = "") {
+    const m     = money(val);
+    const empty = m === null || parseFloat(val) === 0;
+    return `<tr class="${cls}${empty ? " ft-zero" : ""}"><td>${label}</td><td>${empty ? "—" : m}</td></tr>`;
+  }
+</script>
+</body>
+</html>
