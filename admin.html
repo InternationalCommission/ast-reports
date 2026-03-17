@@ -209,7 +209,7 @@
     <img src="https://internationalcommission.org/Files/Blue-globe-square-crop.png.webp" alt="International Commission" style="width:80px;height:80px;object-fit:contain;margin-bottom:8px;border-radius:8px;" />
     <h2>IC Report Admin</h2>
     <p>Sign in with your Microsoft 365 account to access submitted project reports.</p>
-    <button class="btn-msft" id="signInBtn" onclick="signIn()">
+    <button class="btn-msft" id="signInBtn">
       <!-- Microsoft "M" logo mark -->
       <svg width="20" height="20" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect x="1" y="1" width="9" height="9" fill="#F25022"/>
@@ -230,16 +230,16 @@
   <div class="topbar-divider"></div>
   <div class="search-wrap">
     <span class="search-icon">🔍</span>
-    <input type="text" id="searchInput" placeholder="Search by title, location, or coordinator…" oninput="filterReports()" />
+    <input type="text" id="searchInput" placeholder="Search by title, location, or coordinator…" />
   </div>
   <div class="topbar-right">
     <span class="report-count" id="reportCount"></span>
-    <button class="btn-refresh" onclick="loadReports()">↻ Refresh</button>
+    <button class="btn-refresh" id="refreshBtn">↻ Refresh</button>
     <div class="user-chip" id="userChip" style="display:none;">
       <div class="user-avatar" id="userAvatar">?</div>
       <span class="user-name" id="userName"></span>
     </div>
-    <button class="btn-signout" id="signOutBtn" style="display:none;" onclick="signOut()">Sign out</button>
+    <button class="btn-signout" id="signOutBtn" style="display:none;">Sign out</button>
   </div>
 </div>
 
@@ -251,7 +251,7 @@
       <div style="padding:24px 18px;color:var(--muted);font-size:13px;font-style:italic;">Sign in to load reports.</div>
     </div>
     <div class="sidebar-footer">
-      <button class="load-more-btn" id="loadMoreBtn" onclick="loadMore()" disabled>Load more</button>
+      <button class="load-more-btn" id="loadMoreBtn" disabled>Load more</button>
     </div>
   </div>
   <div class="detail-pane" id="detailPane">
@@ -262,7 +262,7 @@
   </div>
 </div>
 
-<button class="print-btn" id="printBtn" onclick="window.print()">🖨 Print Report</button>
+<button class="print-btn" id="printBtn">🖨 Print Report</button>
 
 <script>
   window.addEventListener("DOMContentLoaded", () => {
@@ -275,10 +275,18 @@
       return;
     }
 
+    // ── Wire up all event listeners ───────────────────────────────────────
+    document.getElementById("signInBtn").addEventListener("click",  () => signIn());
+    document.getElementById("signOutBtn").addEventListener("click", () => signOut());
+    document.getElementById("refreshBtn").addEventListener("click", () => loadReports());
+    document.getElementById("loadMoreBtn").addEventListener("click",() => loadMore());
+    document.getElementById("printBtn").addEventListener("click",   () => window.print());
+    document.getElementById("searchInput").addEventListener("input",() => filterReports());
+
   // ── Configuration — update these three values ─────────────────────────────
   const WORKER_URL      = "https://ast-report.alex-wascomb.workers.dev";
   const TENANT_ID       = "3e34eb62-b83a-4aa8-8ba8-d0959d15e612";
-  const ADMIN_CLIENT_ID = "66d5787b-f69b-468a-af0b-6791dee76928";  // The SPA app registration
+  const ADMIN_CLIENT_ID = "66d5787b-f69b-468a-af0b-6791dee76928";
 
   // When using a single app registration, the app implicitly has access to its
   // own scopes — no "API permissions" grant is needed in the portal. Azure will
@@ -479,8 +487,8 @@
     }).join("");
   }
 
-  // ── Show report detail ────────────────────────────────────────────────────
-  function showReport(id) {
+  // ── Show report detail (exposed on window — called from dynamic HTML) ────
+  window.showReport = function(id) {
     const report = filteredList.find(r => r.id === id);
     if (!report) return;
     activeId = id;
