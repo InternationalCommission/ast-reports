@@ -11,10 +11,10 @@
 # ============================================================
 
 param(
-    [string]$SiteUrl  = "https://international260.sharepoint.com/sites/reports",
+    [string]$SiteUrl  = "https://international260.sharepoint.com/sites/ASTReports",
     [string]$ListName = "Reports",
     [string]$ClientId = "66d5787b-f69b-468a-af0b-6791dee76928",
-    [string]$TenantId = "3e34eb62-b83a-4aa8-8ba8-d0959d15e612"
+    [string]$TenantId = "3e34eb62-b83a-4aa8-d0959d15e612"
 )
 
 # ── Connect ───────────────────────────────────────────────────────────────────

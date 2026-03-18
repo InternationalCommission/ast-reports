@@ -46,6 +46,7 @@ export default {
 // ────────────────────────────────────────────────────────────────────────────
 
 async function handleSubmit(request, env) {
+  console.log(">>> HANDLING SUBMIT");
   const origin = request.headers.get("Origin") || "";
   if (env.ALLOWED_ORIGIN && origin !== env.ALLOWED_ORIGIN) {
     return corsResponse({ error: "Forbidden origin" }, 403, env);
@@ -56,13 +57,17 @@ async function handleSubmit(request, env) {
     const fields   = extractFields(formData);
     const photos   = formData.getAll("photos");
 
-    const token = await getAccessToken(env);
+    // Get two tokens - one for Graph API, one for SharePoint REST
+    const [graphToken, spToken] = await Promise.all([
+      getAccessToken(env, "graph"),
+      getAccessToken(env, "sharepoint"),
+    ]);
 
     // Run all three in parallel
     const [listItemResult, uploadResults, emailResult] = await Promise.allSettled([
-      createSharePointListItem(fields, env, token),
-      uploadPhotos(photos, fields.projectTitle, env, token),
-      sendConfirmationEmail(fields, env, token),
+      createSharePointListItem(fields, env, graphToken),
+      uploadPhotos(photos, fields.projectTitle, env, graphToken, spToken),
+      sendConfirmationEmail(fields, env, graphToken),
     ]);
 
     // If both list item and uploads succeeded, patch the folder URL back onto
@@ -71,7 +76,7 @@ async function handleSubmit(request, env) {
       const { folderWebUrl, driveId, folderItemId } = uploadResults.value;
       const listItemId = listItemResult.value?.id;
       if (folderWebUrl && listItemId) {
-        await patchPhotoFolder(listItemId, folderWebUrl, driveId, folderItemId, env, token)
+        await patchPhotoFolder(listItemId, folderWebUrl, driveId, folderItemId, env, graphToken)
           .catch(e => console.warn("Could not patch photo folder URL:", e.message));
       }
     }
@@ -80,24 +85,32 @@ async function handleSubmit(request, env) {
     if (listItemResult.status === "rejected")
       errors.push({ step: "sharepoint_list", message: listItemResult.reason?.message });
     if (uploadResults.status === "rejected")
-      errors.push({ step: "file_upload",     message: uploadResults.reason?.message });
+      errors.push({ step: "file_upload", message: uploadResults.reason?.message });
     if (emailResult.status === "rejected")
-      errors.push({ step: "email",           message: emailResult.reason?.message });
+      errors.push({ step: "email", message: emailResult.reason?.message });
+
+    // Add per-file upload errors if some uploads failed but not all
+    if (uploadResults.status === "fulfilled" && uploadResults.value?.errors?.length > 0) {
+      uploadResults.value.errors.forEach(e => {
+        errors.push({ step: "file_upload", file: e.file, message: e.error });
+      });
+    }
 
     const listItemId  = listItemResult.status  === "fulfilled" ? listItemResult.value?.id   : null;
     const uploadValue = uploadResults.status   === "fulfilled" ? uploadResults.value         : null;
 
-    return corsResponse(
-      {
-        success:       errors.length === 0,
-        message:       errors.length === 0 ? "Report submitted successfully." : "Report submitted with some issues.",
-        listItemId:    listItemId ?? null,
-        uploadedFiles: uploadValue?.uploaded ?? [],
-        errors,
-      },
-      errors.length === 0 ? 200 : 207,
-      env
-    );
+  return corsResponse(
+    {
+      success:       errors.length === 0,
+      message:       errors.length === 0 ? "Report submitted successfully." : "Report submitted with some issues.",
+      listItemId:    listItemId ?? null,
+      uploadedFiles: uploadValue?.uploaded ?? [],
+      uploadErrors:  uploadValue?.errors ?? [],
+      errors,
+    },
+    errors.length === 0 ? 200 : 207,
+    env
+  );
   } catch (err) {
     console.error("Submit error:", err);
     return corsResponse({ success: false, error: err.message }, 500, env);
@@ -567,21 +580,31 @@ async function createSharePointListItem(fields, env, token) {
 // Photo upload
 // ────────────────────────────────────────────────────────────────────────────
 
-async function uploadPhotos(photoFiles, projectTitle, env, token) {
+async function uploadPhotos(photoFiles, projectTitle, env, graphToken, spToken) {
+  console.log(">>> UPLOAD PHOTOS START");
+  console.log(">>> PHOTOS COUNT:", photoFiles.length);
+  console.log(">>> GRAPH TOKEN:", !!graphToken);
+  console.log(">>> SP TOKEN:", !!spToken);
+  
   const validFiles = photoFiles.filter(f => f?.size > 0 && f?.name);
+  console.log(">>> VALID FILES:", validFiles.length);
   if (!validFiles.length) return { uploaded: [], folderPath: null, folderWebUrl: null };
 
-  const headers  = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+  const graphHeaders  = { Authorization: `Bearer ${graphToken}`, Accept: "application/json" };
+  const spHeaders = { Authorization: `Bearer ${spToken}`, Accept: "application/json" };
   const hostname = new URL(env.SHAREPOINT_SITE_URL).hostname;
   const sitePath = new URL(env.SHAREPOINT_SITE_URL).pathname;
 
-  const siteRes  = await graphFetch(`https://graph.microsoft.com/v1.0/sites/${hostname}:${sitePath}`, { headers });
+  console.log(`>>> Getting site from Graph...`);
+  const siteRes  = await graphFetch(`https://graph.microsoft.com/v1.0/sites/${hostname}:${sitePath}`, { headers: graphHeaders });
+  console.log(`>>> Site ID: ${siteRes.id}`);
 
-  // Log all available drives so we can identify the correct one
-  const drivesRes = await graphFetch(`https://graph.microsoft.com/v1.0/sites/${siteRes.id}/drives?$select=id,name,webUrl`, { headers });
+  // Log all available drives
+  console.log(`>>> Getting drives...`);
+  const drivesRes = await graphFetch(`https://graph.microsoft.com/v1.0/sites/${siteRes.id}/drives?$select=id,name,webUrl`, { headers: graphHeaders });
   console.log(`Available drives: ${JSON.stringify(drivesRes.value.map(d => ({ id: d.id, name: d.name, url: d.webUrl })))}`);
 
-  const driveRes = await graphFetch(`https://graph.microsoft.com/v1.0/sites/${siteRes.id}/drive`, { headers });
+  const driveRes = await graphFetch(`https://graph.microsoft.com/v1.0/sites/${siteRes.id}/drive`, { headers: graphHeaders });
   const driveId  = driveRes.id;
   console.log(`Using default drive: ${driveId} (${driveRes.name}) at ${driveRes.webUrl}`);
 
@@ -597,16 +620,17 @@ async function uploadPhotos(photoFiles, projectTitle, env, token) {
 
   // Try to use an existing folder first — avoids creating duplicates like "folder 1"
   let folderData = null;
-  const existingRes = await fetch(
-    `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${parentPath}/${encodeURIComponent(folderName)}`,
-    { headers }
-  );
-
+  const folderUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${parentPath}/${encodeURIComponent(folderName)}`;
+  console.log(`>>> Folder URL: ${folderUrl}`);
+  const existingRes = await fetch(folderUrl, { headers: graphHeaders });
+  console.log(`>>> Existing folder check: ${existingRes.status}`);
+  
   if (existingRes.ok) {
     folderData = await existingRes.json();
-    console.log(`Using existing folder: id=${folderData.id} url=${folderData.webUrl}`);
+    console.log(`>>> Using existing folder: id=${folderData.id}`);
   } else {
     // Folder doesn't exist — create it
+    console.log(`>>> Creating new folder: ${parentPath}/${folderName}`);
     const folderRes = await fetch(
       `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${parentPath}:/children`,
       {
@@ -622,60 +646,160 @@ async function uploadPhotos(photoFiles, projectTitle, env, token) {
 
     if (!folderRes.ok) {
       const errText = await folderRes.text();
-      console.error(`Folder creation failed (${folderRes.status}): ${errText}`);
-      throw new Error(`Failed to create photo folder (${folderRes.status}) at "${parentPath}": ${errText}`);
+      console.log(`>>> Folder create error: ${errText.slice(0, 200)}`);
+      if (folderRes.status === 409) {
+        // Try search
+        const searchRes = await graphFetch(
+          `https://graph.microsoft.com/v1.0/drives/${driveId}/root/search(q='${encodeURIComponent(folderName)}')`,
+          { headers }
+        );
+        const foundFolder = searchRes.value?.find(f => f.name === folderName);
+        if (foundFolder) {
+          folderData = foundFolder;
+          console.log(`>>> Found via search: ${folderData.id}`);
+        }
+      } else {
+        throw new Error(`Failed to create photo folder (${folderRes.status}): ${errText.slice(0, 200)}`);
+      }
+    } else {
+      folderData = await folderRes.json();
+      console.log(`>>> Created folder: ${folderData.id}`);
     }
+  }
 
-    folderData = await folderRes.json();
-    console.log(`Folder created: id=${folderData.id} url=${folderData.webUrl}`);
+  if (!folderData) {
+    throw new Error(`>>> Could not resolve photo folder: ${parentPath}/${folderName}`);
   }
 
   const folderWebUrl  = folderData.webUrl;
   const folderDriveId = folderData.parentReference?.driveId || driveId;
   const folderItemId  = folderData.id;
 
-  // Upload each file using the SharePoint REST API rather than the Graph
-  // drives endpoint — this triggers SharePoint's indexing pipeline so files
-  // appear in the UI correctly.
-  const spHostname   = new URL(env.SHAREPOINT_SITE_URL).hostname;
-  const spSitePath   = new URL(env.SHAREPOINT_SITE_URL).pathname;
-  const spFolderPath = `${spSitePath}/Documents/${parentPath}/${folderName}`;
-
+  console.log(`>>> Folder ID: ${folderItemId}, Drive ID: ${folderDriveId}`);
+  
   const uploaded = [];
+  const errors = [];
+  const CHUNK_SIZE = 5 * 1024 * 1024;
+  
+  console.log(`>>> About to upload ${validFiles.length} files`);
+  
   for (const file of validFiles) {
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const mimeType = file.type || "application/octet-stream";
     const buffer   = await file.arrayBuffer();
+    const fileSize = buffer.byteLength;
 
-    console.log(`Uploading ${safeName} (${buffer.byteLength} bytes) via SharePoint REST to ${spFolderPath}`);
+    console.log(`>>> Uploading ${safeName} (${fileSize} bytes)`);
 
-    const uploadRes = await fetch(
-      `https://${spHostname}${spSitePath}/_api/web/GetFolderByServerRelativeUrl('${encodeURIComponent(spFolderPath)}')/Files/add(url='${encodeURIComponent(safeName)}',overwrite=true)`,
-      {
-        method:  "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": mimeType,
-          Accept:         "application/json;odata=verbose",
-        },
-        body: buffer,
+    try {
+      let fileUrl;
+      
+      if (fileSize > CHUNK_SIZE) {
+        fileUrl = await chunkedUpload(folderDriveId, folderItemId, folderWebUrl, safeName, mimeType, buffer, spToken);
+      } else {
+        fileUrl = await simpleUpload(folderDriveId, folderItemId, folderWebUrl, safeName, mimeType, buffer, spToken);
       }
-    );
-
-    const uploadText = await uploadRes.text();
-    console.log(`Upload response ${uploadRes.status} for ${safeName}: ${uploadText.slice(0, 500)}`);
-
-    if (uploadRes.ok) {
-      const data    = JSON.parse(uploadText);
-      const fileUrl = `https://${spHostname}${data.d?.ServerRelativeUrl || spFolderPath + "/" + safeName}`;
-      uploaded.push({ name: safeName, webUrl: fileUrl, id: data.d?.UniqueId || safeName });
-      console.log(`Uploaded ${safeName} → ${fileUrl}`);
-    } else {
-      throw new Error(`Failed to upload "${safeName}" (${uploadRes.status}): ${uploadText}`);
+      
+      uploaded.push({ name: safeName, webUrl: fileUrl });
+      console.log(`>>> Uploaded ${safeName}`);
+    } catch (err) {
+      const errMsg = err.message || "Unknown error";
+      errors.push({ file: safeName, error: errMsg });
+      console.error(`>>> Upload failed: ${errMsg}`);
     }
   }
 
-  return { uploaded, folderWebUrl, driveId: folderDriveId, folderItemId };
+  console.log(`>>> Upload summary: ${uploaded.length} succeeded, ${errors.length} failed`);
+  
+  return { uploaded, folderWebUrl, driveId: folderDriveId, folderItemId, errors };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Simple upload for small files (< 5MB)
+// ────────────────────────────────────────────────────────────────────────────
+
+async function simpleUpload(driveId, folderId, folderWebUrl, fileName, mimeType, buffer, token) {
+  console.log(`>>> SIMPLE UPLOAD START folder=${folderId} file=${fileName} size=${buffer.byteLength}`);
+  
+  // Use the folderWebUrl we already have from folder resolution
+  const folderServerRelUrl = folderWebUrl.replace('https://international260.sharepoint.com', '');
+  
+  console.log(`>>> Folder path: ${folderServerRelUrl}`);
+  
+  // Test SharePoint access first
+  const testUrl = `https://international260.sharepoint.com/_api/web/GetFolderByServerRelativeUrl('${encodeURIComponent(folderServerRelUrl)}')`;
+  console.log(`>>> Testing SharePoint: ${testUrl}`);
+  const testRes = await fetch(testUrl, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=verbose" }
+  });
+  console.log(`>>> Test result: ${testRes.status}`);
+  
+  if (testRes.status === 401) {
+    console.error(`>>> SHAREPOINT AUTH FAILED - Token may not have SharePoint scope`);
+  }
+  
+  // Upload via SharePoint REST API
+  const uploadUrl = `https://international260.sharepoint.com/_api/web/GetFolderByServerRelativeUrl('${encodeURIComponent(folderServerRelUrl)}')/Files/add(url='${encodeURIComponent(fileName)}',overwrite=true)`;
+  console.log(`>>> Upload URL: ${uploadUrl}`);
+  
+  const uploadRes = await fetch(uploadUrl, {
+    method:  "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": mimeType,
+      Accept: "application/json;odata=verbose",
+    },
+    body: buffer,
+  });
+
+  console.log(`>>> Upload response: ${uploadRes.status}`);
+  
+  if (!uploadRes.ok) {
+    const text = await uploadRes.text();
+    console.error(`>>> UPLOAD ERROR: ${text.slice(0, 500)}`);
+    throw new Error(`HTTP ${uploadRes.status}: ${text.slice(0, 200)}`);
+  }
+
+  const data = await uploadRes.json();
+  const webUrl = data.d?.ServerRelativeUrl ? `https://international260.sharepoint.com${data.d.ServerRelativeUrl}` : folderInfo.webUrl + '/' + fileName;
+  console.log(`>>> UPLOAD SUCCESS: ${webUrl}`);
+  return webUrl;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Chunked upload for large files using Graph API upload session
+// ────────────────────────────────────────────────────────────────────────────
+
+async function chunkedUpload(driveId, folderId, folderWebUrl, fileName, mimeType, buffer, token) {
+  console.log(`>>> CHUNKED UPLOAD START folder=${folderId} file=${fileName} size=${buffer.byteLength}`);
+  
+  // Use the folderWebUrl we already have
+  const folderServerRelUrl = folderWebUrl.replace('https://international260.sharepoint.com', '');
+  
+  console.log(`>>> Folder path: ${folderServerRelUrl}`);
+  
+  // Use simple upload for large files too via SharePoint REST API
+  const uploadUrl = `https://international260.sharepoint.com/_api/web/GetFolderByServerRelativeUrl('${encodeURIComponent(folderServerRelUrl)}')/Files/add(url='${encodeURIComponent(fileName)}',overwrite=true)`;
+  
+  const uploadRes = await fetch(uploadUrl, {
+    method:  "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": mimeType,
+      Accept: "application/json;odata=verbose",
+    },
+    body: buffer,
+  });
+
+  if (!uploadRes.ok) {
+    const text = await uploadRes.text();
+    throw new Error(`HTTP ${uploadRes.status}: ${text.slice(0, 200)}`);
+  }
+
+  const data = await uploadRes.json();
+  const webUrl = data.d?.ServerRelativeUrl ? `https://international260.sharepoint.com${data.d.ServerRelativeUrl}` : folderWebUrl + '/' + fileName;
+  console.log(`>>> UPLOAD SUCCESS: ${webUrl}`);
+  return webUrl;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -793,17 +917,33 @@ async function sendConfirmationEmail(fields, env, token) {
 // Utilities
 // ────────────────────────────────────────────────────────────────────────────
 
-async function getAccessToken(env) {
+async function getAccessToken(env, scopeType = "graph") {
+  console.log(`>>> GET ACCESS TOKEN: ${scopeType}`);
+  const tenantId = env.AZURE_TENANT_ID;
+  const clientId = env.AZURE_CLIENT_ID;
+  const clientSecret = env.AZURE_CLIENT_SECRET;
+  
+  let scope;
+  const hostname = new URL(env.SHAREPOINT_SITE_URL).hostname;
+  
+  if (scopeType === "sharepoint") {
+    scope = `https://${hostname}/.default`;
+  } else {
+    scope = "https://graph.microsoft.com/.default";
+  }
+  
+  console.log(`>>> Token scope: ${scope}`);
+  
   const res = await fetch(
-    `https://login.microsoftonline.com/${env.AZURE_TENANT_ID}/oauth2/v2.0/token`,
+    `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
     {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         grant_type:    "client_credentials",
-        client_id:     env.AZURE_CLIENT_ID,
-        client_secret: env.AZURE_CLIENT_SECRET,
-        scope:         "https://graph.microsoft.com/.default",
+        client_id:     clientId,
+        client_secret: clientSecret,
+        scope:         scope,
       }),
     }
   );
