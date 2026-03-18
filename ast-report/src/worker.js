@@ -732,32 +732,37 @@ async function chunkedUpload(driveId, folderId, folderWebUrl, fileName, mimeType
   return uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, token, env);
 }
 
-function buildSharePointUploadContext(folderWebUrl, fileName) {
+function buildSharePointUploadContext(folderWebUrl, fileName, env) {
   const folderUrl = new URL(folderWebUrl);
+  const siteUrl = new URL(env.SHAREPOINT_SITE_URL);
+  const siteApiBase = `${siteUrl.origin}${siteUrl.pathname.replace(/\/$/, "")}`;
   const folderServerRelativeUrl = decodeURIComponent(folderUrl.pathname);
   const encodedFolderPath = escapeODataStringLiteral(folderServerRelativeUrl);
   const encodedFileName = escapeODataStringLiteral(fileName);
 
   return {
     siteOrigin: folderUrl.origin,
+    siteApiBase,
     folderServerRelativeUrl,
-    testUrl: `${folderUrl.origin}/_api/web/GetFolderByServerRelativeUrl(decodedurl='${encodedFolderPath}')`,
-    uploadUrl: `${folderUrl.origin}/_api/web/GetFolderByServerRelativeUrl(decodedurl='${encodedFolderPath}')/Files/add(url='${encodedFileName}',overwrite=true)`,
+    testUrl: `${siteApiBase}/_api/web/GetFolderByServerRelativeUrl(decodedurl='${encodedFolderPath}')`,
+    uploadUrl: `${siteApiBase}/_api/web/GetFolderByServerRelativeUrl(decodedurl='${encodedFolderPath}')/Files/add(url='${encodedFileName}',overwrite=true)`,
   };
 }
 
 async function uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, token, env) {
-  const { siteOrigin, folderServerRelativeUrl, testUrl, uploadUrl } = buildSharePointUploadContext(folderWebUrl, fileName);
+  const { siteOrigin, siteApiBase, folderServerRelativeUrl, testUrl, uploadUrl } = buildSharePointUploadContext(folderWebUrl, fileName, env);
   const initialHeaders = {
     Authorization: `Bearer ${token}`,
     Accept: "application/json;odata=verbose",
   };
 
   console.log(`>>> Folder path: ${folderServerRelativeUrl}`);
+  console.log(`>>> Site API base: ${siteApiBase}`);
   return performSharePointUploadAttempt(
     {
       folderWebUrl,
       siteOrigin,
+      siteApiBase,
       testUrl,
       uploadUrl,
       fileName,
