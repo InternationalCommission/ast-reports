@@ -69,8 +69,9 @@ async function handleSubmit(request, env) {
     // the list item so the admin viewer can find the photos later
     if (listItemResult.status === "fulfilled" && uploadResults.status === "fulfilled") {
       const { folderWebUrl, driveId, folderItemId } = uploadResults.value;
-      if (folderWebUrl && listItemResult.value?.id) {
-        await patchPhotoFolder(listItemResult.value.id, folderWebUrl, driveId, folderItemId, env, token)
+      const listItemId = listItemResult.value?.id;
+      if (folderWebUrl && listItemId) {
+        await patchPhotoFolder(listItemId, folderWebUrl, driveId, folderItemId, env, token)
           .catch(e => console.warn("Could not patch photo folder URL:", e.message));
       }
     }
@@ -83,12 +84,15 @@ async function handleSubmit(request, env) {
     if (emailResult.status === "rejected")
       errors.push({ step: "email",           message: emailResult.reason?.message });
 
+    const listItemId  = listItemResult.status  === "fulfilled" ? listItemResult.value?.id   : null;
+    const uploadValue = uploadResults.status   === "fulfilled" ? uploadResults.value         : null;
+
     return corsResponse(
       {
         success:       errors.length === 0,
         message:       errors.length === 0 ? "Report submitted successfully." : "Report submitted with some issues.",
-        listItemId:    listItemResult.value?.id ?? null,
-        uploadedFiles: uploadResults.value?.uploaded ?? [],
+        listItemId:    listItemId ?? null,
+        uploadedFiles: uploadValue?.uploaded ?? [],
         errors,
       },
       errors.length === 0 ? 200 : 207,
@@ -137,7 +141,7 @@ async function handleGetReports(request, env, url) {
     // Sort descending by SubmittedAt client-side since the column isn't indexed
     const items = (res.value || [])
       .map(item => normalizeItem(item))
-      .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
+      .sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime());
 
     // Convert SharePoint's nextLink into a worker-relative cursor URL so the
     // admin never calls SharePoint directly and all requests stay authenticated.
