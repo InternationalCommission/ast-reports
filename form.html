@@ -428,9 +428,18 @@
   const isEditMode = urlParams.has("edit") && urlParams.get("edit") === "1" 
                      && urlParams.has("reportId") && urlParams.has("token") && urlParams.has("expires");
   const EDIT_MODE_REPORT_ID = isEditMode ? urlParams.get("reportId") : null;
+  const EDIT_MODE_TESTIMONIES = (function() {
+    if (!isEditMode) return null;
+    try {
+      const json = urlParams.get("testimoniesJson");
+      return json ? JSON.parse(json) : [];
+    } catch(e) {
+      return [];
+    }
+  })();
 
-  // ── Initialize edit mode UI ─────────────────────────────────────────────
-  (function initEditMode() {
+  // ── Initialize edit mode UI (called after testimonies array is defined) ──
+  function applyEditMode() {
     if (!EDIT_MODE_REPORT_ID) return;
     
     document.title = "Edit Report — IC Project Report";
@@ -471,17 +480,7 @@
       const el = document.getElementById("projectDateTo");
       if (el) el.value = urlParams.get("projectDateTo");
     }
-    if (urlParams.has("testimoniesJson")) {
-      try {
-        const tes = JSON.parse(urlParams.get("testimoniesJson"));
-        testimonies = [];
-        testimonyCounter = 0;
-        tes.forEach(t => addTestimony(t.author || "", t.text || ""));
-      } catch(e) {
-        console.warn("Could not parse testimonies:", e);
-      }
-    }
-  })();
+  }
 
   // ── File drag & drop ─────────────────────────────────────────────────────
   const dropZone  = document.getElementById("dropZone");
@@ -589,8 +588,15 @@
 
   document.getElementById("addTestimonyBtn").addEventListener("click", () => addTestimony());
 
-  // Start with one empty testimony
-  addTestimony();
+  // Start with testimonies (either from edit mode or empty)
+  if (EDIT_MODE_TESTIMONIES && EDIT_MODE_TESTIMONIES.length > 0) {
+    testimonies = [];
+    testimonyCounter = 0;
+    EDIT_MODE_TESTIMONIES.forEach(t => addTestimony(t.author || "", t.text || ""));
+    applyEditMode();
+  } else {
+    addTestimony();
+  }
 
   // ── Form submission ───────────────────────────────────────────────────────
   const form      = document.getElementById("reportForm");
