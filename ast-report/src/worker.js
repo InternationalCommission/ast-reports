@@ -590,10 +590,10 @@ async function uploadPhotos(photoFiles, projectTitle, env, graphToken, spToken) 
   console.log(">>> VALID FILES:", validFiles.length);
   if (!validFiles.length) return { uploaded: [], folderPath: null, folderWebUrl: null };
 
-  const graphHeaders  = { Authorization: `Bearer ${graphToken}`, Accept: "application/json" };
-  const spHeaders = { Authorization: `Bearer ${spToken}`, Accept: "application/json" };
-  const hostname = new URL(env.SHAREPOINT_SITE_URL).hostname;
-  const sitePath = new URL(env.SHAREPOINT_SITE_URL).pathname;
+  const graphHeaders = { Authorization: `Bearer ${graphToken}`, Accept: "application/json" };
+  const siteUrl = new URL(env.SHAREPOINT_SITE_URL);
+  const hostname = siteUrl.hostname;
+  const sitePath = siteUrl.pathname;
 
   console.log(`>>> Getting site from Graph...`);
   const siteRes  = await graphFetch(`https://graph.microsoft.com/v1.0/sites/${hostname}:${sitePath}`, { headers: graphHeaders });
@@ -635,7 +635,7 @@ async function uploadPhotos(photoFiles, projectTitle, env, graphToken, spToken) 
       `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${parentPath}:/children`,
       {
         method:  "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: { ...graphHeaders, "Content-Type": "application/json" },
         body: JSON.stringify({
           name:   folderName,
           folder: {},
@@ -651,7 +651,7 @@ async function uploadPhotos(photoFiles, projectTitle, env, graphToken, spToken) 
         // Try search
         const searchRes = await graphFetch(
           `https://graph.microsoft.com/v1.0/drives/${driveId}/root/search(q='${encodeURIComponent(folderName)}')`,
-          { headers }
+          { headers: graphHeaders }
         );
         const foundFolder = searchRes.value?.find(f => f.name === folderName);
         if (foundFolder) {
@@ -720,50 +720,7 @@ async function uploadPhotos(photoFiles, projectTitle, env, graphToken, spToken) 
 
 async function simpleUpload(driveId, folderId, folderWebUrl, fileName, mimeType, buffer, token) {
   console.log(`>>> SIMPLE UPLOAD START folder=${folderId} file=${fileName} size=${buffer.byteLength}`);
-  
-  // Use the folderWebUrl we already have from folder resolution
-  const folderServerRelUrl = folderWebUrl.replace('https://international260.sharepoint.com', '');
-  
-  console.log(`>>> Folder path: ${folderServerRelUrl}`);
-  
-  // Test SharePoint access first
-  const testUrl = `https://international260.sharepoint.com/_api/web/GetFolderByServerRelativeUrl('${encodeURIComponent(folderServerRelUrl)}')`;
-  console.log(`>>> Testing SharePoint: ${testUrl}`);
-  const testRes = await fetch(testUrl, {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=verbose" }
-  });
-  console.log(`>>> Test result: ${testRes.status}`);
-  
-  if (testRes.status === 401) {
-    console.error(`>>> SHAREPOINT AUTH FAILED - Token may not have SharePoint scope`);
-  }
-  
-  // Upload via SharePoint REST API
-  const uploadUrl = `https://international260.sharepoint.com/_api/web/GetFolderByServerRelativeUrl('${encodeURIComponent(folderServerRelUrl)}')/Files/add(url='${encodeURIComponent(fileName)}',overwrite=true)`;
-  console.log(`>>> Upload URL: ${uploadUrl}`);
-  
-  const uploadRes = await fetch(uploadUrl, {
-    method:  "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": mimeType,
-      Accept: "application/json;odata=verbose",
-    },
-    body: buffer,
-  });
-
-  console.log(`>>> Upload response: ${uploadRes.status}`);
-  
-  if (!uploadRes.ok) {
-    const text = await uploadRes.text();
-    console.error(`>>> UPLOAD ERROR: ${text.slice(0, 500)}`);
-    throw new Error(`HTTP ${uploadRes.status}: ${text.slice(0, 200)}`);
-  }
-
-  const data = await uploadRes.json();
-  const webUrl = data.d?.ServerRelativeUrl ? `https://international260.sharepoint.com${data.d.ServerRelativeUrl}` : folderInfo.webUrl + '/' + fileName;
-  console.log(`>>> UPLOAD SUCCESS: ${webUrl}`);
-  return webUrl;
+  return uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, token);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -772,34 +729,73 @@ async function simpleUpload(driveId, folderId, folderWebUrl, fileName, mimeType,
 
 async function chunkedUpload(driveId, folderId, folderWebUrl, fileName, mimeType, buffer, token) {
   console.log(`>>> CHUNKED UPLOAD START folder=${folderId} file=${fileName} size=${buffer.byteLength}`);
-  
-  // Use the folderWebUrl we already have
-  const folderServerRelUrl = folderWebUrl.replace('https://international260.sharepoint.com', '');
-  
-  console.log(`>>> Folder path: ${folderServerRelUrl}`);
-  
-  // Use simple upload for large files too via SharePoint REST API
-  const uploadUrl = `https://international260.sharepoint.com/_api/web/GetFolderByServerRelativeUrl('${encodeURIComponent(folderServerRelUrl)}')/Files/add(url='${encodeURIComponent(fileName)}',overwrite=true)`;
-  
+  return uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, token);
+}
+
+function buildSharePointUploadContext(folderWebUrl, fileName) {
+  const folderUrl = new URL(folderWebUrl);
+  const folderServerRelativeUrl = decodeURIComponent(folderUrl.pathname);
+  const encodedFolderPath = encodeODataString(folderServerRelativeUrl);
+  const encodedFileName = encodeODataString(fileName);
+
+  return {
+    siteOrigin: folderUrl.origin,
+    folderServerRelativeUrl,
+    testUrl: `${folderUrl.origin}/_api/web/GetFolderByServerRelativeUrl(decodedurl='${encodedFolderPath}')`,
+    uploadUrl: `${folderUrl.origin}/_api/web/GetFolderByServerRelativeUrl(decodedurl='${encodedFolderPath}')/Files/add(url='${encodedFileName}',overwrite=true)`,
+  };
+}
+
+async function uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, token) {
+  const { siteOrigin, folderServerRelativeUrl, testUrl, uploadUrl } = buildSharePointUploadContext(folderWebUrl, fileName);
+
+  console.log(`>>> Folder path: ${folderServerRelativeUrl}`);
+  console.log(`>>> Testing SharePoint: ${testUrl}`);
+
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json;odata=verbose",
+  };
+
+  const testRes = await fetch(testUrl, { headers });
+  console.log(`>>> Test result: ${testRes.status}`);
+
+  if (!testRes.ok) {
+    const text = await testRes.text().catch(() => "");
+    if (testRes.status === 401) {
+      console.error(`>>> SHAREPOINT AUTH FAILED - Token may not have SharePoint scope or consent`);
+    }
+    throw new Error(`SharePoint folder check failed (${testRes.status}): ${text.slice(0, 200)}`);
+  }
+
+  console.log(`>>> Upload URL: ${uploadUrl}`);
+
   const uploadRes = await fetch(uploadUrl, {
-    method:  "POST",
+    method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...headers,
       "Content-Type": mimeType,
-      Accept: "application/json;odata=verbose",
     },
     body: buffer,
   });
 
+  console.log(`>>> Upload response: ${uploadRes.status}`);
+
   if (!uploadRes.ok) {
-    const text = await uploadRes.text();
+    const text = await uploadRes.text().catch(() => "");
+    console.error(`>>> UPLOAD ERROR: ${text.slice(0, 500)}`);
     throw new Error(`HTTP ${uploadRes.status}: ${text.slice(0, 200)}`);
   }
 
   const data = await uploadRes.json();
-  const webUrl = data.d?.ServerRelativeUrl ? `https://international260.sharepoint.com${data.d.ServerRelativeUrl}` : folderWebUrl + '/' + fileName;
+  const serverRelativeUrl = data.d?.ServerRelativeUrl || data.d?.ListItemAllFields?.FileRef;
+  const webUrl = serverRelativeUrl ? `${siteOrigin}${serverRelativeUrl}` : `${folderWebUrl}/${encodeURIComponent(fileName)}`;
   console.log(`>>> UPLOAD SUCCESS: ${webUrl}`);
   return webUrl;
+}
+
+function encodeODataString(value) {
+  return String(value).replace(/'/g, "''");
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -922,28 +918,54 @@ async function getAccessToken(env, scopeType = "graph") {
   const tenantId = env.AZURE_TENANT_ID;
   const clientId = env.AZURE_CLIENT_ID;
   const clientSecret = env.AZURE_CLIENT_SECRET;
-  
-  let scope;
   const hostname = new URL(env.SHAREPOINT_SITE_URL).hostname;
-  
-  if (scopeType === "sharepoint") {
-    scope = `https://${hostname}/.default`;
-  } else {
-    scope = "https://graph.microsoft.com/.default";
+
+  if (scopeType !== "sharepoint") {
+    const graphScope = "https://graph.microsoft.com/.default";
+    console.log(`>>> Token scope: ${graphScope}`);
+    return fetchTokenV2(tenantId, clientId, clientSecret, graphScope);
   }
-  
-  console.log(`>>> Token scope: ${scope}`);
-  
+
+  const sharePointScope = `https://${hostname}/.default`;
+  console.log(`>>> Token scope: ${sharePointScope}`);
+
+  try {
+    return await fetchTokenV2(tenantId, clientId, clientSecret, sharePointScope);
+  } catch (err) {
+    console.warn(`>>> SharePoint v2 token request failed, retrying with v1 resource token: ${err.message}`);
+    return fetchTokenV1(tenantId, clientId, clientSecret, `https://${hostname}`);
+  }
+}
+
+async function fetchTokenV2(tenantId, clientId, clientSecret, scope) {
   const res = await fetch(
     `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
     {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        grant_type:    "client_credentials",
-        client_id:     clientId,
+        grant_type: "client_credentials",
+        client_id: clientId,
         client_secret: clientSecret,
-        scope:         scope,
+        scope,
+      }),
+    }
+  );
+  if (!res.ok) throw new Error(`Token fetch failed (${res.status}): ${await res.text()}`);
+  return (await res.json()).access_token;
+}
+
+async function fetchTokenV1(tenantId, clientId, clientSecret, resource) {
+  const res = await fetch(
+    `https://login.microsoftonline.com/${tenantId}/oauth2/token`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: clientId,
+        client_secret: clientSecret,
+        resource,
       }),
     }
   );
