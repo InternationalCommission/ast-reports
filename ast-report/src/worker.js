@@ -576,11 +576,14 @@ async function uploadPhotos(photoFiles, projectTitle, env, token) {
   const driveId  = driveRes.id;
 
   const safeTitle  = (projectTitle || "IC Report").replace(/[^a-zA-Z0-9 _-]/g, "").trim();
-  const folderName = `${safeTitle} — ${new Date().toISOString().slice(0, 10)}`;
+  const folderName = `${safeTitle} - ${new Date().toISOString().slice(0, 10)}`;
 
-  // Create the subfolder using POST to children — more reliable than PATCH
-  const parentPath = env.SHAREPOINT_FOLDER_PATH;
-  const folderRes  = await fetch(
+  // Decode any URL-encoded characters in the folder path (e.g. %20 → space)
+  const parentPath = decodeURIComponent(env.SHAREPOINT_FOLDER_PATH);
+
+  console.log(`Creating folder "${folderName}" under "${parentPath}" on drive ${driveId}`);
+
+  const folderRes = await fetch(
     `https://graph.microsoft.com/v1.0/drives/${driveId}/root:${parentPath}:/children`,
     {
       method:  "POST",
@@ -595,7 +598,7 @@ async function uploadPhotos(photoFiles, projectTitle, env, token) {
 
   if (!folderRes.ok) {
     const err = await folderRes.text();
-    throw new Error(`Failed to create photo folder (${folderRes.status}): ${err}`);
+    throw new Error(`Failed to create photo folder (${folderRes.status}) at "${parentPath}": ${err}`);
   }
 
   const folderData    = await folderRes.json();
@@ -603,10 +606,13 @@ async function uploadPhotos(photoFiles, projectTitle, env, token) {
   const folderDriveId = folderData.parentReference?.driveId || driveId;
   const folderItemId  = folderData.id;
 
+  console.log(`Folder created: id=${folderItemId} url=${folderWebUrl}`);
+
   // Upload each file into the created folder
   const uploaded = [];
   for (const file of validFiles) {
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    console.log(`Uploading ${safeName} (${file.size} bytes) to folder ${folderItemId}`);
     const res = await fetch(
       `https://graph.microsoft.com/v1.0/drives/${folderDriveId}/items/${folderItemId}:/${safeName}:/content`,
       {
@@ -618,8 +624,11 @@ async function uploadPhotos(photoFiles, projectTitle, env, token) {
     if (res.ok) {
       const data = await res.json();
       uploaded.push({ name: safeName, webUrl: data.webUrl, id: data.id });
+      console.log(`Uploaded ${safeName} → ${data.webUrl}`);
     } else {
-      console.warn(`Upload failed for ${safeName}: ${res.status} ${await res.text()}`);
+      const errText = await res.text();
+      console.error(`Upload failed for ${safeName}: ${res.status} ${errText}`);
+      throw new Error(`Failed to upload "${safeName}" (${res.status}): ${errText}`);
     }
   }
 
