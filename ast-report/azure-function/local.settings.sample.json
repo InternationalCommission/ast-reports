@@ -1,0 +1,12 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "AZURE_TENANT_ID": "<tenant-id>",
+    "AZURE_CLIENT_ID": "<client-id>",
+    "AZURE_CLIENT_SECRET": "<client-secret>",
+    "SHAREPOINT_SITE_URL": "https://yourorg.sharepoint.com/sites/yoursite",
+    "SHAREPOINT_FOLDER_PATH": "/sites/yoursite/Shared Documents/IC Reports"
+  }
+}
