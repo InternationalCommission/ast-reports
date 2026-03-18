@@ -115,9 +115,10 @@ Add-ColumnIfMissing -InternalName "CoordinatorEmail"  -DisplayName "Coordinator 
 Add-ColumnIfMissing -InternalName "SubmittedAt"       -DisplayName "Submitted At"         -Type "DateTime"
 
 # Photo folder reference (written back after upload)
-Add-ColumnIfMissing -InternalName "PhotoFolderUrl"    -DisplayName "Photo Folder URL"     -Type "Text"
-Add-ColumnIfMissing -InternalName "PhotoDriveId"      -DisplayName "Photo Drive ID"       -Type "Text"
-Add-ColumnIfMissing -InternalName "PhotoFolderItemId" -DisplayName "Photo Folder Item ID" -Type "Text"
+Add-ColumnIfMissing -InternalName "PhotoFolderUrl"                -DisplayName "Photo Folder URL"                  -Type "Text"
+Add-ColumnIfMissing -InternalName "PhotoFolderServerRelativePath" -DisplayName "Photo Folder Server Relative Path" -Type "Text"
+Add-ColumnIfMissing -InternalName "PhotoDriveId"                  -DisplayName "Photo Drive ID"                    -Type "Text"
+Add-ColumnIfMissing -InternalName "PhotoFolderItemId"             -DisplayName "Photo Folder Item ID"              -Type "Text"
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 Write-Host "`n─────────────────────────────────────────"

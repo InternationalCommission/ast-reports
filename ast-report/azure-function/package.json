@@ -1,0 +1,13 @@
+{
+  "name": "ast-report-sharepoint-upload-function",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Azure Function that uploads AST report photos to SharePoint via SharePoint REST.",
+  "main": "src/functions/sharePointUpload.js",
+  "scripts": {
+    "start": "func start"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.8.0"
+  }
+}

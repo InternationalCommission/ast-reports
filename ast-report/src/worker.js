@@ -14,6 +14,8 @@
  *   SHAREPOINT_SITE_URL     - e.g. https://yourorg.sharepoint.com/sites/yoursite
  *   SHAREPOINT_LIST_NAME    - Target list name, e.g. "IC Project Reports"
  *   SHAREPOINT_FOLDER_PATH  - Server-relative folder for photo uploads
+ *   AZURE_FUNCTION_UPLOAD_URL - HTTP endpoint for the SharePoint upload Azure Function
+ *   AZURE_FUNCTION_UPLOAD_KEY - Function key for the SharePoint upload Azure Function
  *   EMAIL_SENDER            - Licensed M365 mailbox to send from
  *   EMAIL_RECIPIENT         - Where confirmation emails go
  *   ALLOWED_ORIGIN          - Your website origin for CORS (form + admin)
@@ -62,17 +64,17 @@ async function handleSubmit(request, env) {
     // Run all three in parallel
     const [listItemResult, uploadResults, emailResult] = await Promise.allSettled([
       createSharePointListItem(fields, env, graphToken),
-      uploadPhotos(photos, fields.projectTitle, env, graphToken),
+      uploadPhotos(photos, fields, env),
       sendConfirmationEmail(fields, env, graphToken),
     ]);
 
     // If both list item and uploads succeeded, patch the folder URL back onto
     // the list item so the admin viewer can find the photos later
     if (listItemResult.status === "fulfilled" && uploadResults.status === "fulfilled") {
-      const { folderWebUrl, driveId, folderItemId } = uploadResults.value;
+      const { folderWebUrl, folderServerRelativePath } = uploadResults.value;
       const listItemId = listItemResult.value?.id;
-      if (folderWebUrl && listItemId) {
-        await patchPhotoFolder(listItemId, folderWebUrl, driveId, folderItemId, env, graphToken)
+      if (folderWebUrl && folderServerRelativePath && listItemId) {
+        await patchPhotoFolder(listItemId, folderWebUrl, folderServerRelativePath, env, graphToken)
           .catch(e => console.warn("Could not patch photo folder URL:", e.message));
       }
     }
@@ -376,7 +378,7 @@ const sharePointFields = [
   "TotalFundsSent","SpentOnMaterials","TicketsCost","FuelCost",
   "AccommodationCost","FoodCost","FinancialHelpParticipants","NumParticipantsHelp",
   "RalliesExpenses","RalliesDescription","AdditionalExpenses","AdditionalNeedDescription",
-  "CoordinatorName","CoordinatorEmail","SubmittedAt",
+  "CoordinatorName","CoordinatorEmail","SubmittedAt","PhotoFolderServerRelativePath",
 ];
 
 let _cachedIds = null;
@@ -443,430 +445,164 @@ function normalizeItem(item) {
     coordinatorEmail:           f.CoordinatorEmail,
     submittedAt:                f.SubmittedAt,
     // Photo folder info — populated after upload
-    photoFolderUrl:             f.PhotoFolderUrl   || null,
-    photoDriveId:               f.PhotoDriveId     || null,
-    photoFolderItemId:          f.PhotoFolderItemId|| null,
+    photoFolderUrl:                  f.PhotoFolderUrl || null,
+    photoFolderServerRelativePath:   f.PhotoFolderServerRelativePath || null,
+    photoDriveId:                    f.PhotoDriveId || null,
+    photoFolderItemId:               f.PhotoFolderItemId || null,
   };
 }
 
 // ── Patch photo folder info back onto the list item after upload ──────────────
-async function patchPhotoFolder(itemId, folderWebUrl, driveId, folderItemId, env, token) {
-  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" };
-  const { siteId, listId } = await resolveListIds(env, token);
-  await graphFetch(
-    `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${itemId}/fields`,
-    {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify({
-        PhotoFolderUrl:    folderWebUrl,
-        PhotoDriveId:      driveId,
-        PhotoFolderItemId: folderItemId,
-      }),
-    }
-  );
+async function patchPhotoFolder(itemId, folderWebUrl, folderServerRelativePath, env, token) {
+	const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" };
+	const { siteId, listId } = await resolveListIds(env, token);
+	await graphFetch(
+		`https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${itemId}/fields`,
+		{
+			method: "PATCH",
+			headers,
+			body: JSON.stringify({
+				PhotoFolderUrl: folderWebUrl,
+				PhotoFolderServerRelativePath: folderServerRelativePath,
+			}),
+		}
+	);
 }
 
 // ── GET /reports/:id/photos — list photos in a report's folder ────────────────
 async function handleGetPhotos(request, env, id) {
-  const authError = await validateAzureToken(request, env);
-  if (authError) return corsResponse({ error: authError }, 401, env);
+	const authError = await validateAzureToken(request, env);
+	if (authError) return corsResponse({ error: authError }, 401, env);
 
-  try {
-    const token = await getAccessToken(env);
-    const { siteId, listId } = await resolveListIds(env, token);
-    const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+	try {
+		const graphToken = await getAccessToken(env);
+		const { siteId, listId } = await resolveListIds(env, graphToken);
+		const headers = { Authorization: `Bearer ${graphToken}`, Accept: "application/json" };
 
-    // Fetch the list item to get the folder drive/item IDs
-    const item = await graphFetch(
-      `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${id}?expand=fields($select=PhotoDriveId,PhotoFolderItemId,PhotoFolderUrl)`,
-      { headers }
-    );
+		const item = await graphFetch(
+			`https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${id}?expand=fields($select=PhotoFolderUrl,PhotoFolderServerRelativePath)`,
+			{ headers }
+		);
 
-    const driveId      = item.fields?.PhotoDriveId;
-    const folderItemId = item.fields?.PhotoFolderItemId;
-    const folderUrl    = item.fields?.PhotoFolderUrl;
+		const folderUrl = item.fields?.PhotoFolderUrl || null;
+		const folderServerRelativePath = item.fields?.PhotoFolderServerRelativePath || null;
 
-    if (!driveId || !folderItemId) {
-      return corsResponse({ photos: [], folderUrl: null }, 200, env);
-    }
+		if (!folderServerRelativePath) {
+			return corsResponse({ photos: [], folderUrl }, 200, env);
+		}
 
-    // List children of the folder
-    const childrenRes = await graphFetch(
-      `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${folderItemId}/children`
-        + `?$select=id,name,webUrl,thumbnails,file`,
-      { headers }
-    );
+		const sharePointToken = await getSharePointAccessToken(env);
+		const encodedPath = escapeODataString(folderServerRelativePath);
+		const filesRes = await sharePointFetchJson(
+			`${env.SHAREPOINT_SITE_URL}/_api/web/GetFolderByServerRelativePath(decodedUrl='${encodedPath}')/Files?$select=Name,ServerRelativeUrl,UniqueId,TimeLastModified,Length`,
+			sharePointToken
+		);
 
-    // Request thumbnails in the same call for faster rendering
-    const photos = await Promise.all(
-      (childrenRes.value || [])
-        .filter(f => f.file) // files only, not subfolders
-        .map(async f => {
-          let thumbnail = null;
-          try {
-            const thumbRes = await graphFetch(
-              `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${f.id}/thumbnails/0/medium`,
-              { headers }
-            );
-            thumbnail = thumbRes.url || null;
-          } catch { /* thumbnail unavailable */ }
-          return { id: f.id, name: f.name, webUrl: f.webUrl, thumbnail };
-        })
-    );
+		const files = Array.isArray(filesRes?.value) ? filesRes.value : Array.isArray(filesRes?.d?.results) ? filesRes.d.results : [];
+		const photos = files.map(file => ({
+			id: file.UniqueId || file.Name,
+			name: file.Name,
+			webUrl: buildSharePointFileUrl(env.SHAREPOINT_SITE_URL, file.ServerRelativeUrl),
+			thumbnail: null,
+			lastModified: file.TimeLastModified || null,
+			size: file.Length || null,
+		}));
 
-    return corsResponse({ photos, folderUrl }, 200, env);
-  } catch (err) {
-    console.error("GetPhotos error:", err);
-    return corsResponse({ error: err.message }, 500, env);
-  }
+		return corsResponse({ photos, folderUrl }, 200, env);
+	} catch (err) {
+		console.error("GetPhotos error:", err);
+		return corsResponse({ error: err.message }, 500, env);
+	}
 }
 
 async function createSharePointListItem(fields, env, token) {
-  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" };
-  const { siteId, listId } = await resolveListIds(env, token);
+	const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" };
+	const { siteId, listId } = await resolveListIds(env, token);
 
-  const createRes = await graphFetch(
-    `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`,
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        fields: {
-          Title:                       fields.projectTitle || "IC Project Report",
-          Location:                    fields.location,
-          ProjectDateFrom:             fields.projectDateFrom || null,
-          ProjectDateTo:               fields.projectDateTo   || null,
-          Introduction:                fields.introduction,
-          ChurchesParticipated:        toNum(fields.churchesParticipated),
-          Localities:                  toNum(fields.localities),
-          NationalParticipants:        toNum(fields.nationalParticipants),
-          USAParticipants:             toNum(fields.usaParticipants),
-          OtherCountriesParticipants:  toNum(fields.otherCountriesParticipants),
-          TotalVisits:                 toNum(fields.totalVisits),
-          PeopleHeardGospel:           toNum(fields.peopleHeardGospel),
-          ProfessionsOfFaith:          toNum(fields.professionsOfFaith),
-          Rededications:               toNum(fields.rededications),
-          Baptisms:                    toNum(fields.baptisms),
-          NewChurchesPlanted:          toNum(fields.newChurchesPlanted),
-          Testimonies:                 fields.testimoniesJson,
-          TotalFundsSent:              toNum(fields.totalFundsSent),
-          SpentOnMaterials:            toNum(fields.spentOnMaterials),
-          TicketsCost:                 toNum(fields.ticketsCost),
-          FuelCost:                    toNum(fields.fuelCost),
-          AccommodationCost:           toNum(fields.accommodationCost),
-          FoodCost:                    toNum(fields.foodCost),
-          FinancialHelpParticipants:   toNum(fields.financialHelpParticipants),
-          NumParticipantsHelp:         toNum(fields.numParticipantsHelp),
-          RalliesExpenses:             toNum(fields.ralliesExpenses),
-          RalliesDescription:          fields.ralliesDescription,
-          AdditionalExpenses:          toNum(fields.additionalExpenses),
-          AdditionalNeedDescription:   fields.additionalNeedDescription,
-          CoordinatorName:             fields.coordinatorName,
-          CoordinatorEmail:            fields.coordinatorEmail,
-          SubmittedAt:                 fields.submittedAt,
-        },
-      }),
-    }
-  );
-  return { id: createRes.id };
+	const createRes = await graphFetch(
+		`https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`,
+		{
+			method: "POST",
+			headers,
+			body: JSON.stringify({
+				fields: {
+					Title:                       fields.projectTitle || "IC Project Report",
+					Location:                    fields.location,
+					ProjectDateFrom:             fields.projectDateFrom || null,
+					ProjectDateTo:               fields.projectDateTo   || null,
+					Introduction:                fields.introduction,
+					ChurchesParticipated:        toNum(fields.churchesParticipated),
+					Localities:                  toNum(fields.localities),
+					NationalParticipants:        toNum(fields.nationalParticipants),
+					USAParticipants:             toNum(fields.usaParticipants),
+					OtherCountriesParticipants:  toNum(fields.otherCountriesParticipants),
+					TotalVisits:                 toNum(fields.totalVisits),
+					PeopleHeardGospel:           toNum(fields.peopleHeardGospel),
+					ProfessionsOfFaith:          toNum(fields.professionsOfFaith),
+					Rededications:               toNum(fields.rededications),
+					Baptisms:                    toNum(fields.baptisms),
+					NewChurchesPlanted:          toNum(fields.newChurchesPlanted),
+					Testimonies:                 fields.testimoniesJson,
+					TotalFundsSent:              toNum(fields.totalFundsSent),
+					SpentOnMaterials:            toNum(fields.spentOnMaterials),
+					TicketsCost:                 toNum(fields.ticketsCost),
+					FuelCost:                    toNum(fields.fuelCost),
+					AccommodationCost:           toNum(fields.accommodationCost),
+					FoodCost:                    toNum(fields.foodCost),
+					FinancialHelpParticipants:   toNum(fields.financialHelpParticipants),
+					NumParticipantsHelp:         toNum(fields.numParticipantsHelp),
+					RalliesExpenses:             toNum(fields.ralliesExpenses),
+					RalliesDescription:          fields.ralliesDescription,
+					AdditionalExpenses:          toNum(fields.additionalExpenses),
+					AdditionalNeedDescription:   fields.additionalNeedDescription,
+					CoordinatorName:             fields.coordinatorName,
+					CoordinatorEmail:            fields.coordinatorEmail,
+					SubmittedAt:                 fields.submittedAt,
+				},
+			}),
+		}
+	);
+	return { id: createRes.id };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
 // Photo upload
 // ────────────────────────────────────────────────────────────────────────────
 
-async function uploadPhotos(photoFiles, projectTitle, env, graphToken) {
-  console.log('>>> UPLOAD PHOTOS START');
-  console.log('>>> PHOTOS COUNT:', photoFiles.length);
-  console.log('>>> GRAPH TOKEN:', !!graphToken);
+async function uploadPhotos(photoFiles, fields, env) {
+	const validFiles = photoFiles.filter(file => file?.size > 0 && file?.name);
+	if (!validFiles.length) return { uploaded: [], errors: [], folderWebUrl: null, folderServerRelativePath: null };
 
-  const validFiles = photoFiles.filter(f => f?.size > 0 && f?.name);
-  console.log('>>> VALID FILES:', validFiles.length);
-  if (!validFiles.length) return { uploaded: [], folderPath: null, folderWebUrl: null };
+	if (!env.AZURE_FUNCTION_UPLOAD_URL) {
+		throw new Error('AZURE_FUNCTION_UPLOAD_URL is required when uploads are included');
+	}
 
-  const graphHeaders = { Authorization: `Bearer ${graphToken}`, Accept: 'application/json' };
-  const siteUrl = new URL(env.SHAREPOINT_SITE_URL);
-  const hostname = siteUrl.hostname;
-  const sitePath = siteUrl.pathname;
+	const payload = new FormData();
+	payload.append('projectTitle', fields.projectTitle || 'IC Project Report');
+	payload.append('submittedAt', fields.submittedAt || new Date().toISOString());
+	payload.append('sharePointFolderPath', env.SHAREPOINT_FOLDER_PATH || '');
 
-  console.log('>>> Getting site from Graph...');
-  const siteRes = await graphFetch(`https://graph.microsoft.com/v1.0/sites/${hostname}:${sitePath}`, { headers: graphHeaders });
-  console.log(`>>> Site ID: ${siteRes.id}`);
+	for (const file of validFiles) {
+		payload.append('photos', file, file.name);
+	}
 
-  console.log('>>> Getting drives...');
-  const drivesRes = await graphFetch(`https://graph.microsoft.com/v1.0/sites/${siteRes.id}/drives?$select=id,name,webUrl`, { headers: graphHeaders });
-  console.log(`Available drives: ${JSON.stringify(drivesRes.value.map(d => ({ id: d.id, name: d.name, url: d.webUrl })))}`);
+	const response = await fetch(env.AZURE_FUNCTION_UPLOAD_URL, {
+		method: 'POST',
+		headers: getUploadFunctionHeaders(env),
+		body: payload,
+	});
 
-  const driveRes = await graphFetch(`https://graph.microsoft.com/v1.0/sites/${siteRes.id}/drive`, { headers: graphHeaders });
-  const driveId = driveRes.id;
-  console.log(`Using default drive: ${driveId} (${driveRes.name}) at ${driveRes.webUrl}`);
+	const result = await parseJsonResponse(response);
+	if (!response.ok) {
+		throw new Error(`Azure Function upload failed (${response.status}): ${result?.error || result?.message || 'Unknown error'}`);
+	}
 
-  const safeTitle = (projectTitle || 'IC Report').replace(/[^a-zA-Z0-9 _-]/g, '').trim();
-  const folderName = `${safeTitle} - ${new Date().toISOString().slice(0, 10)}`;
-  const parentPath = decodeURIComponent(env.SHAREPOINT_FOLDER_PATH).replace(/^\//, '');
-
-  console.log(`Resolving folder "${folderName}" under "${parentPath}" on drive ${driveId}`);
-
-  let folderData = null;
-  const folderUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${parentPath}/${encodeURIComponent(folderName)}`;
-  console.log(`>>> Folder URL: ${folderUrl}`);
-  const existingRes = await fetch(folderUrl, { headers: graphHeaders });
-  console.log(`>>> Existing folder check: ${existingRes.status}`);
-
-  if (existingRes.ok) {
-    folderData = await existingRes.json();
-    console.log(`>>> Using existing folder: id=${folderData.id}`);
-  } else {
-    console.log(`>>> Creating new folder: ${parentPath}/${folderName}`);
-    const folderRes = await fetch(
-      `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${parentPath}:/children`,
-      {
-        method: 'POST',
-        headers: { ...graphHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: folderName,
-          folder: {},
-          '@microsoft.graph.conflictBehavior': 'fail',
-        }),
-      }
-    );
-
-    if (!folderRes.ok) {
-      const errText = await folderRes.text();
-      console.log(`>>> Folder create error: ${errText.slice(0, 200)}`);
-      if (folderRes.status === 409) {
-        const searchRes = await graphFetch(
-          `https://graph.microsoft.com/v1.0/drives/${driveId}/root/search(q='${encodeURIComponent(folderName)}')`,
-          { headers: graphHeaders }
-        );
-        const foundFolder = searchRes.value?.find(f => f.name === folderName);
-        if (foundFolder) {
-          folderData = foundFolder;
-          console.log(`>>> Found via search: ${folderData.id}`);
-        }
-      } else {
-        throw new Error(`Failed to create photo folder (${folderRes.status}): ${errText.slice(0, 200)}`);
-      }
-    } else {
-      folderData = await folderRes.json();
-      console.log(`>>> Created folder: ${folderData.id}`);
-    }
-  }
-
-  if (!folderData) {
-    throw new Error(`>>> Could not resolve photo folder: ${parentPath}/${folderName}`);
-  }
-
-  const folderWebUrl = folderData.webUrl;
-  const folderDriveId = folderData.parentReference?.driveId || driveId;
-  const folderItemId = folderData.id;
-
-  console.log(`>>> Folder ID: ${folderItemId}, Drive ID: ${folderDriveId}`);
-
-  const uploaded = [];
-  const errors = [];
-  const CHUNK_SIZE = 5 * 1024 * 1024;
-
-  console.log(`>>> About to upload ${validFiles.length} files via Microsoft Graph`);
-
-  for (const file of validFiles) {
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const mimeType = file.type || 'application/octet-stream';
-    const buffer = await file.arrayBuffer();
-    const fileSize = buffer.byteLength;
-
-    console.log(`>>> Uploading ${safeName} (${fileSize} bytes)`);
-
-    try {
-      const fileUrl = fileSize > CHUNK_SIZE
-        ? await uploadFileViaGraphSession(folderDriveId, folderItemId, safeName, mimeType, buffer, graphToken)
-        : await uploadFileViaGraphPut(folderDriveId, folderItemId, safeName, mimeType, buffer, graphToken);
-
-      uploaded.push({ name: safeName, webUrl: fileUrl });
-      console.log(`>>> Uploaded ${safeName}`);
-    } catch (err) {
-      const errMsg = err.message || 'Unknown error';
-      errors.push({ file: safeName, error: errMsg });
-      console.error(`>>> Upload failed: ${errMsg}`);
-    }
-  }
-
-  console.log(`>>> Upload summary: ${uploaded.length} succeeded, ${errors.length} failed`);
-
-  return { uploaded, folderWebUrl, driveId: folderDriveId, folderItemId, errors };
-}
-
-async function uploadFileViaGraphPut(driveId, folderId, fileName, mimeType, buffer, graphToken) {
-  const uploadUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${folderId}:/${encodeURIComponent(fileName)}:/content`;
-  console.log(`>>> GRAPH SIMPLE UPLOAD: ${uploadUrl}`);
-
-  const res = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${graphToken}`,
-      Accept: 'application/json',
-      'Content-Type': mimeType,
-    },
-    body: buffer,
-  });
-
-  if (!res.ok) {
-    throw new Error(`Graph simple upload failed (${res.status}): ${(await res.text().catch(() => '')).slice(0, 200)}`);
-  }
-
-  const data = await res.json();
-  console.log(`>>> GRAPH SIMPLE UPLOAD OK: ${data.webUrl}`);
-  return data.webUrl;
-}
-
-async function uploadFileViaGraphSession(driveId, folderId, fileName, mimeType, buffer, graphToken) {
-  const createUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${folderId}:/${encodeURIComponent(fileName)}:/createUploadSession`;
-  console.log(`>>> GRAPH CHUNKED CREATE SESSION: ${createUrl}`);
-
-  const sessionRes = await fetch(createUrl, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${graphToken}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      item: {
-        '@microsoft.graph.conflictBehavior': 'replace',
-        name: fileName,
-      },
-    }),
-  });
-
-  if (!sessionRes.ok) {
-    throw new Error(`Graph upload session failed (${sessionRes.status}): ${(await sessionRes.text().catch(() => '')).slice(0, 200)}`);
-  }
-
-  const { uploadUrl } = await sessionRes.json();
-  const chunkSize = 5 * 1024 * 1024;
-
-  for (let start = 0; start < buffer.byteLength; start += chunkSize) {
-    const end = Math.min(start + chunkSize, buffer.byteLength);
-    const chunk = buffer.slice(start, end);
-    const contentRange = `bytes ${start}-${end - 1}/${buffer.byteLength}`;
-    console.log(`>>> GRAPH CHUNK ${contentRange}`);
-
-    const chunkRes = await fetch(uploadUrl, {
-      method: 'PUT',
-      headers: {
-        'Content-Length': String(chunk.byteLength),
-        'Content-Range': contentRange,
-        'Content-Type': mimeType,
-      },
-      body: chunk,
-    });
-
-    if (!(chunkRes.status === 202 || chunkRes.ok)) {
-      throw new Error(`Graph chunk upload failed (${chunkRes.status}): ${(await chunkRes.text().catch(() => '')).slice(0, 200)}`);
-    }
-
-    if (chunkRes.ok) {
-      const data = await chunkRes.json();
-      console.log(`>>> GRAPH CHUNKED UPLOAD OK: ${data.webUrl}`);
-      return data.webUrl;
-    }
-  }
-
-  throw new Error('Graph upload session ended without a completed file');
-}
-
-async function fallbackToGraphUpload(context, reason) {
-  const { driveId, folderId, fileName, mimeType, buffer, graphToken, preferChunkedGraphUpload } = context;
-
-  if (!graphToken || !driveId || !folderId) {
-    throw new Error(`${reason}: Graph fallback unavailable`);
-  }
-
-  console.warn(`>>> ${reason}; falling back to Microsoft Graph drive upload`);
-
-  if (preferChunkedGraphUpload) {
-    return uploadFileViaGraphSession(driveId, folderId, fileName, mimeType, buffer, graphToken);
-  }
-
-  return uploadFileViaGraphPut(driveId, folderId, fileName, mimeType, buffer, graphToken);
-}
-
-async function uploadFileViaGraphPut(driveId, folderId, fileName, mimeType, buffer, graphToken) {
-  const uploadUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${folderId}:/${encodeURIComponent(fileName)}:/content`;
-  console.log(`>>> GRAPH SIMPLE UPLOAD: ${uploadUrl}`);
-
-  const res = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${graphToken}`,
-      Accept: "application/json",
-      "Content-Type": mimeType,
-    },
-    body: buffer,
-  });
-
-  if (!res.ok) {
-    throw new Error(`Graph simple upload failed (${res.status}): ${(await res.text().catch(() => "")).slice(0, 200)}`);
-  }
-
-  const data = await res.json();
-  return data.webUrl;
-}
-
-async function uploadFileViaGraphSession(driveId, folderId, fileName, mimeType, buffer, graphToken) {
-  const createUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${folderId}:/${encodeURIComponent(fileName)}:/createUploadSession`;
-  console.log(`>>> GRAPH CHUNKED CREATE SESSION: ${createUrl}`);
-
-  const sessionRes = await fetch(createUrl, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${graphToken}`,
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      item: {
-        "@microsoft.graph.conflictBehavior": "replace",
-        name: fileName,
-      },
-    }),
-  });
-
-  if (!sessionRes.ok) {
-    throw new Error(`Graph upload session failed (${sessionRes.status}): ${(await sessionRes.text().catch(() => "")).slice(0, 200)}`);
-  }
-
-  const { uploadUrl } = await sessionRes.json();
-  const chunkSize = 5 * 1024 * 1024;
-
-  for (let start = 0; start < buffer.byteLength; start += chunkSize) {
-    const end = Math.min(start + chunkSize, buffer.byteLength);
-    const chunk = buffer.slice(start, end);
-    const contentRange = `bytes ${start}-${end - 1}/${buffer.byteLength}`;
-    console.log(`>>> GRAPH CHUNK ${contentRange}`);
-
-    const chunkRes = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Length": String(chunk.byteLength),
-        "Content-Range": contentRange,
-        "Content-Type": mimeType,
-      },
-      body: chunk,
-    });
-
-    if (!(chunkRes.status === 202 || chunkRes.ok)) {
-      throw new Error(`Graph chunk upload failed (${chunkRes.status}): ${(await chunkRes.text().catch(() => "")).slice(0, 200)}`);
-    }
-
-    if (chunkRes.ok) {
-      const data = await chunkRes.json();
-      return data.webUrl;
-    }
-  }
-
-  throw new Error(`Graph upload session ended without a completed file`);
+	return {
+		uploaded: Array.isArray(result?.uploaded) ? result.uploaded : [],
+		errors: Array.isArray(result?.errors) ? result.errors : [],
+		folderWebUrl: result?.folderWebUrl || null,
+		folderServerRelativePath: result?.folderServerRelativePath || null,
+	};
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -983,6 +719,50 @@ async function sendConfirmationEmail(fields, env, token) {
 // ────────────────────────────────────────────────────────────────────────────
 // Utilities
 // ────────────────────────────────────────────────────────────────────────────
+async function getSharePointAccessToken(env) {
+	const tenantId = env.AZURE_TENANT_ID;
+	const clientId = env.AZURE_CLIENT_ID;
+	const clientSecret = env.AZURE_CLIENT_SECRET;
+	const sharePointOrigin = new URL(env.SHAREPOINT_SITE_URL).origin;
+	return fetchTokenV2(tenantId, clientId, clientSecret, `${sharePointOrigin}/.default`);
+}
+
+async function sharePointFetchJson(url, token, options = {}) {
+	const headers = {
+		Accept: 'application/json;odata=nometadata',
+		Authorization: `Bearer ${token}`,
+		...(options.headers || {}),
+	};
+	const res = await fetch(url, { ...options, headers });
+	if (!res.ok) throw new Error(`SharePoint ${res.status} at ${url}: ${await res.text().catch(() => '')}`);
+	return res.status === 204 ? null : res.json();
+}
+
+function getUploadFunctionHeaders(env) {
+	const headers = { Accept: 'application/json' };
+	if (env.AZURE_FUNCTION_UPLOAD_KEY) headers['x-functions-key'] = env.AZURE_FUNCTION_UPLOAD_KEY;
+	return headers;
+}
+
+async function parseJsonResponse(response) {
+	const text = await response.text();
+	if (!text) return null;
+	try {
+		return JSON.parse(text);
+	} catch {
+		return { message: text.slice(0, 500) };
+	}
+}
+
+function escapeODataString(value) {
+	return String(value || '').replace(/'/g, "''");
+}
+
+function buildSharePointFileUrl(siteUrl, serverRelativeUrl) {
+	if (!serverRelativeUrl) return null;
+	return `${new URL(siteUrl).origin}${serverRelativeUrl}`;
+}
+
 
 async function getAccessToken(env) {
   console.log('>>> GET ACCESS TOKEN: graph');
