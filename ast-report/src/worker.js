@@ -695,9 +695,9 @@ async function uploadPhotos(photoFiles, projectTitle, env, graphToken, spToken) 
       let fileUrl;
       
       if (fileSize > CHUNK_SIZE) {
-        fileUrl = await chunkedUpload(folderDriveId, folderItemId, folderWebUrl, safeName, mimeType, buffer, spToken, env);
+        fileUrl = await chunkedUpload(folderDriveId, folderItemId, folderWebUrl, safeName, mimeType, buffer, { graphToken, spToken }, env);
       } else {
-        fileUrl = await simpleUpload(folderDriveId, folderItemId, folderWebUrl, safeName, mimeType, buffer, spToken, env);
+        fileUrl = await simpleUpload(folderDriveId, folderItemId, folderWebUrl, safeName, mimeType, buffer, { graphToken, spToken }, env);
       }
       
       uploaded.push({ name: safeName, webUrl: fileUrl });
@@ -718,18 +718,18 @@ async function uploadPhotos(photoFiles, projectTitle, env, graphToken, spToken) 
 // Simple upload for small files (< 5MB)
 // ────────────────────────────────────────────────────────────────────────────
 
-async function simpleUpload(driveId, folderId, folderWebUrl, fileName, mimeType, buffer, token, env) {
+async function simpleUpload(driveId, folderId, folderWebUrl, fileName, mimeType, buffer, tokens, env) {
   console.log(`>>> SIMPLE UPLOAD START folder=${folderId} file=${fileName} size=${buffer.byteLength}`);
-  return uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, token, env);
+  return uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, tokens, env, { driveId, folderId, fileName });
 }
 
 // ────────────────────────────────────────────────────────────────────────────
 // Chunked upload for large files using Graph API upload session
 // ────────────────────────────────────────────────────────────────────────────
 
-async function chunkedUpload(driveId, folderId, folderWebUrl, fileName, mimeType, buffer, token, env) {
+async function chunkedUpload(driveId, folderId, folderWebUrl, fileName, mimeType, buffer, tokens, env) {
   console.log(`>>> CHUNKED UPLOAD START folder=${folderId} file=${fileName} size=${buffer.byteLength}`);
-  return uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, token, env);
+  return uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, tokens, env, { driveId, folderId, fileName, preferChunkedGraphUpload: true });
 }
 
 function buildSharePointUploadContext(folderWebUrl, fileName, env) {
@@ -749,10 +749,10 @@ function buildSharePointUploadContext(folderWebUrl, fileName, env) {
   };
 }
 
-async function uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, token, env) {
+async function uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, tokens, env, graphContext = {}) {
   const { siteOrigin, siteApiBase, folderServerRelativeUrl, testUrl, uploadUrl } = buildSharePointUploadContext(folderWebUrl, fileName, env);
   const initialHeaders = {
-    Authorization: `Bearer ${token}`,
+    Authorization: `Bearer ${tokens.spToken}`,
     Accept: "application/json;odata=verbose",
   };
 
@@ -769,6 +769,10 @@ async function uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer,
       mimeType,
       buffer,
       env,
+      graphToken: tokens.graphToken,
+      driveId: graphContext.driveId,
+      folderId: graphContext.folderId,
+      preferChunkedGraphUpload: graphContext.preferChunkedGraphUpload === true,
     },
     initialHeaders,
     false
@@ -791,8 +795,9 @@ async function performSharePointUploadAttempt(context, headers, usedV1Fallback) 
     if (testRes.status === 401 && !usedV1Fallback) {
       return retrySharePointUploadWithV1Token(context);
     }
-    if (testRes.status === 401) {
+    if (testRes.status === 401 || testRes.status === 403) {
       console.error(`>>> SHAREPOINT AUTH FAILED - Token may not have SharePoint scope or consent`);
+      return fallbackToGraphUpload(context, `SharePoint folder check failed (${testRes.status})`);
     }
     throw new Error(`SharePoint folder check failed (${testRes.status}): ${text.slice(0, 200)}`);
   }
@@ -814,6 +819,10 @@ async function performSharePointUploadAttempt(context, headers, usedV1Fallback) 
     const text = await uploadRes.text().catch(() => "");
     if (uploadRes.status === 401 && !usedV1Fallback) {
       return retrySharePointUploadWithV1Token(context);
+    }
+    if (uploadRes.status === 401 || uploadRes.status === 403) {
+      console.error(`>>> UPLOAD AUTH FAILED - Falling back to Graph upload`);
+      return fallbackToGraphUpload(context, `SharePoint file upload failed (${uploadRes.status})`);
     }
     console.error(`>>> UPLOAD ERROR: ${text.slice(0, 500)}`);
     throw new Error(`HTTP ${uploadRes.status}: ${text.slice(0, 200)}`);
@@ -839,6 +848,99 @@ async function retrySharePointUploadWithV1Token(context) {
     },
     true
   );
+}
+
+async function fallbackToGraphUpload(context, reason) {
+  const { driveId, folderId, fileName, mimeType, buffer, graphToken, preferChunkedGraphUpload } = context;
+
+  if (!graphToken || !driveId || !folderId) {
+    throw new Error(`${reason}: Graph fallback unavailable`);
+  }
+
+  console.warn(`>>> ${reason}; falling back to Microsoft Graph drive upload`);
+
+  if (preferChunkedGraphUpload) {
+    return uploadFileViaGraphSession(driveId, folderId, fileName, mimeType, buffer, graphToken);
+  }
+
+  return uploadFileViaGraphPut(driveId, folderId, fileName, mimeType, buffer, graphToken);
+}
+
+async function uploadFileViaGraphPut(driveId, folderId, fileName, mimeType, buffer, graphToken) {
+  const uploadUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${folderId}:/${encodeURIComponent(fileName)}:/content`;
+  console.log(`>>> GRAPH SIMPLE UPLOAD: ${uploadUrl}`);
+
+  const res = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${graphToken}`,
+      Accept: "application/json",
+      "Content-Type": mimeType,
+    },
+    body: buffer,
+  });
+
+  if (!res.ok) {
+    throw new Error(`Graph simple upload failed (${res.status}): ${(await res.text().catch(() => "")).slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  return data.webUrl;
+}
+
+async function uploadFileViaGraphSession(driveId, folderId, fileName, mimeType, buffer, graphToken) {
+  const createUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${folderId}:/${encodeURIComponent(fileName)}:/createUploadSession`;
+  console.log(`>>> GRAPH CHUNKED CREATE SESSION: ${createUrl}`);
+
+  const sessionRes = await fetch(createUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${graphToken}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      item: {
+        "@microsoft.graph.conflictBehavior": "replace",
+        name: fileName,
+      },
+    }),
+  });
+
+  if (!sessionRes.ok) {
+    throw new Error(`Graph upload session failed (${sessionRes.status}): ${(await sessionRes.text().catch(() => "")).slice(0, 200)}`);
+  }
+
+  const { uploadUrl } = await sessionRes.json();
+  const chunkSize = 5 * 1024 * 1024;
+
+  for (let start = 0; start < buffer.byteLength; start += chunkSize) {
+    const end = Math.min(start + chunkSize, buffer.byteLength);
+    const chunk = buffer.slice(start, end);
+    const contentRange = `bytes ${start}-${end - 1}/${buffer.byteLength}`;
+    console.log(`>>> GRAPH CHUNK ${contentRange}`);
+
+    const chunkRes = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Length": String(chunk.byteLength),
+        "Content-Range": contentRange,
+        "Content-Type": mimeType,
+      },
+      body: chunk,
+    });
+
+    if (!(chunkRes.status === 202 || chunkRes.ok)) {
+      throw new Error(`Graph chunk upload failed (${chunkRes.status}): ${(await chunkRes.text().catch(() => "")).slice(0, 200)}`);
+    }
+
+    if (chunkRes.ok) {
+      const data = await chunkRes.json();
+      return data.webUrl;
+    }
+  }
+
+  throw new Error(`Graph upload session ended without a completed file`);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
