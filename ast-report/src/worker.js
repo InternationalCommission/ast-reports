@@ -634,25 +634,29 @@ async function uploadPhotos(photoFiles, projectTitle, env, token) {
   const folderDriveId = folderData.parentReference?.driveId || driveId;
   const folderItemId  = folderData.id;
 
-  // Upload each file into the created folder
+  // Upload each file using the SharePoint REST API rather than the Graph
+  // drives endpoint — this triggers SharePoint's indexing pipeline so files
+  // appear in the UI correctly.
+  const spHostname   = new URL(env.SHAREPOINT_SITE_URL).hostname;
+  const spSitePath   = new URL(env.SHAREPOINT_SITE_URL).pathname;
+  const spFolderPath = `${spSitePath}/Documents/${parentPath}/${folderName}`;
+
   const uploaded = [];
   for (const file of validFiles) {
-    const safeName  = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const mimeType  = file.type || "application/octet-stream";
-    const buffer    = await file.arrayBuffer();
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const mimeType = file.type || "application/octet-stream";
+    const buffer   = await file.arrayBuffer();
 
-    console.log(`Uploading ${safeName} (${buffer.byteLength} bytes, ${mimeType}) → folder item ${folderItemId}`);
+    console.log(`Uploading ${safeName} (${buffer.byteLength} bytes) via SharePoint REST to ${spFolderPath}`);
 
-    // Use a clean set of headers for the PUT — don't include Accept:json
-    // as it can confuse the binary upload
     const uploadRes = await fetch(
-      `https://graph.microsoft.com/v1.0/drives/${folderDriveId}/items/${folderItemId}:/${encodeURIComponent(safeName)}:/content`,
+      `https://${spHostname}${spSitePath}/_api/web/GetFolderByServerRelativeUrl('${encodeURIComponent(spFolderPath)}')/Files/add(url='${encodeURIComponent(safeName)}',overwrite=true)`,
       {
-        method:  "PUT",
+        method:  "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": mimeType,
-          "Content-Length": String(buffer.byteLength),
+          Accept:         "application/json;odata=verbose",
         },
         body: buffer,
       }
@@ -662,9 +666,10 @@ async function uploadPhotos(photoFiles, projectTitle, env, token) {
     console.log(`Upload response ${uploadRes.status} for ${safeName}: ${uploadText.slice(0, 500)}`);
 
     if (uploadRes.ok) {
-      const data = JSON.parse(uploadText);
-      uploaded.push({ name: safeName, webUrl: data.webUrl, id: data.id });
-      console.log(`Uploaded ${safeName} → ${data.webUrl}`);
+      const data    = JSON.parse(uploadText);
+      const fileUrl = `https://${spHostname}${data.d?.ServerRelativeUrl || spFolderPath + "/" + safeName}`;
+      uploaded.push({ name: safeName, webUrl: fileUrl, id: data.d?.UniqueId || safeName });
+      console.log(`Uploaded ${safeName} → ${fileUrl}`);
     } else {
       throw new Error(`Failed to upload "${safeName}" (${uploadRes.status}): ${uploadText}`);
     }
