@@ -582,13 +582,15 @@ async function uploadPhotos(photoFiles, projectTitle, env, token) {
   const safeTitle  = (projectTitle || "IC Report").replace(/[^a-zA-Z0-9 _-]/g, "").trim();
   const folderName = `${safeTitle} - ${new Date().toISOString().slice(0, 10)}`;
 
-  // Decode any URL-encoded characters in the folder path (e.g. %20 → space)
-  const parentPath = decodeURIComponent(env.SHAREPOINT_FOLDER_PATH);
+  // SHAREPOINT_FOLDER_PATH should be the path relative to the drive root
+  // (i.e. relative to the Documents library), e.g. "Report Photos"
+  // NOT the full server-relative path like /sites/reports/Documents/Report Photos
+  const parentPath = decodeURIComponent(env.SHAREPOINT_FOLDER_PATH).replace(/^\//, "");
 
   console.log(`Creating folder "${folderName}" under "${parentPath}" on drive ${driveId}`);
 
   const folderRes = await fetch(
-    `https://graph.microsoft.com/v1.0/drives/${driveId}/root:${parentPath}:/children`,
+    `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${parentPath}:/children`,
     {
       method:  "POST",
       headers: { ...headers, "Content-Type": "application/json" },
@@ -601,8 +603,9 @@ async function uploadPhotos(photoFiles, projectTitle, env, token) {
   );
 
   if (!folderRes.ok) {
-    const err = await folderRes.text();
-    throw new Error(`Failed to create photo folder (${folderRes.status}) at "${parentPath}": ${err}`);
+    const errText = await folderRes.text();
+    console.error(`Folder creation failed (${folderRes.status}): ${errText}`);
+    throw new Error(`Failed to create photo folder (${folderRes.status}) at "${parentPath}": ${errText}`);
   }
 
   const folderData    = await folderRes.json();
@@ -615,24 +618,36 @@ async function uploadPhotos(photoFiles, projectTitle, env, token) {
   // Upload each file into the created folder
   const uploaded = [];
   for (const file of validFiles) {
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    console.log(`Uploading ${safeName} (${file.size} bytes) to folder ${folderItemId}`);
-    const res = await fetch(
-      `https://graph.microsoft.com/v1.0/drives/${folderDriveId}/items/${folderItemId}:/${safeName}:/content`,
+    const safeName  = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const mimeType  = file.type || "application/octet-stream";
+    const buffer    = await file.arrayBuffer();
+
+    console.log(`Uploading ${safeName} (${buffer.byteLength} bytes, ${mimeType}) → folder item ${folderItemId}`);
+
+    // Use a clean set of headers for the PUT — don't include Accept:json
+    // as it can confuse the binary upload
+    const uploadRes = await fetch(
+      `https://graph.microsoft.com/v1.0/drives/${folderDriveId}/items/${folderItemId}:/${encodeURIComponent(safeName)}:/content`,
       {
         method:  "PUT",
-        headers: { ...headers, "Content-Type": file.type || "application/octet-stream" },
-        body:    await file.arrayBuffer(),
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": mimeType,
+          "Content-Length": String(buffer.byteLength),
+        },
+        body: buffer,
       }
     );
-    if (res.ok) {
-      const data = await res.json();
+
+    const uploadText = await uploadRes.text();
+    console.log(`Upload response ${uploadRes.status}: ${uploadText.slice(0, 200)}`);
+
+    if (uploadRes.ok) {
+      const data = JSON.parse(uploadText);
       uploaded.push({ name: safeName, webUrl: data.webUrl, id: data.id });
       console.log(`Uploaded ${safeName} → ${data.webUrl}`);
     } else {
-      const errText = await res.text();
-      console.error(`Upload failed for ${safeName}: ${res.status} ${errText}`);
-      throw new Error(`Failed to upload "${safeName}" (${res.status}): ${errText}`);
+      throw new Error(`Failed to upload "${safeName}" (${uploadRes.status}): ${uploadText}`);
     }
   }
 
