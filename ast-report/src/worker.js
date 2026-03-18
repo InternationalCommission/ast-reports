@@ -1,9 +1,11 @@
 /**
  * IC Project Report — Cloudflare Worker
  *
- * POST /          — Submit a report (public, CORS-restricted)
- * GET  /reports   — Fetch all reports for admin viewer (requires Azure AD JWT)
- * GET  /reports/:id — Fetch single report by SharePoint item ID
+ * POST /              — Submit a report (public, CORS-restricted)
+ * GET  /reports       — Fetch all reports for admin viewer (requires Azure AD JWT)
+ * GET  /reports/:id   — Fetch single report by SharePoint item ID
+ * POST /reports/:id/edit-token — Generate edit token (requires Azure AD JWT)
+ * PATCH /reports/:id  — Update report (requires valid edit token)
  *
  * Required Environment Variables (wrangler secret put ...):
  *   AZURE_TENANT_ID         - Azure AD tenant ID
@@ -19,6 +21,7 @@
  *   EMAIL_SENDER            - Licensed M365 mailbox to send from
  *   EMAIL_RECIPIENT         - Where confirmation emails go
  *   ALLOWED_ORIGIN          - Your website origin for CORS (form + admin)
+ *   EDIT_TOKEN_SECRET       - Secret key for signing edit tokens (wrangler secret put)
  */
 
 export default {
@@ -31,6 +34,14 @@ export default {
 
     if (method === "POST" && path === "/")          return handleSubmit(request, env);
     if (method === "GET"  && path === "/reports")   return handleGetReports(request, env, url);
+    if (method === "POST" && path.match(/^\/reports\/[^/]+\/edit-token$/)) {
+      const id = path.split("/reports/")[1].replace("/edit-token", "");
+      return handleEditToken(request, env, id);
+    }
+    if (method === "PATCH" && path.match(/^\/reports\/[^/]+$/)) {
+      const id = path.split("/reports/")[1];
+      return handleUpdateReport(request, env, id);
+    }
     if (method === "GET"  && path.match(/^\/reports\/[^/]+\/photos$/)) {
       const id = path.split("/reports/")[1].replace("/photos", "");
       return handleGetPhotos(request, env, id);
@@ -194,6 +205,113 @@ async function handleGetReport(request, env, id) {
   } catch (err) {
     console.error("GetReport error:", err);
     return corsResponse({ error: err.message }, 500, env);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// POST /reports/:id/edit-token — Generate edit token for a report
+// ────────────────────────────────────────────────────────────────────────────
+
+async function handleEditToken(request, env, id) {
+  const authError = await validateAzureToken(request, env);
+  if (authError) return corsResponse({ error: authError }, 401, env);
+
+  if (!env.EDIT_TOKEN_SECRET) {
+    return corsResponse({ error: "Edit token secret not configured" }, 500, env);
+  }
+
+  try {
+    const expiryMs = 30 * 60 * 1000; // 30 minutes
+    const expires = Date.now() + expiryMs;
+    const dataToSign = `${id}:${expires}`;
+    const signature = await signData(dataToSign, env.EDIT_TOKEN_SECRET);
+    
+    return corsResponse({
+      token: signature,
+      expires: expires,
+      reportId: id
+    }, 200, env);
+  } catch (err) {
+    console.error("EditToken error:", err);
+    return corsResponse({ error: err.message }, 500, env);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Token signing and validation utilities
+// ────────────────────────────────────────────────────────────────────────────
+
+async function signData(data, secret) {
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret);
+  const messageData = encoder.encode(data);
+  const key = await crypto.subtle.importKey(
+    "raw", keyData,
+    { name: "HMAC", hash: "SHA-256" },
+    false, ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, messageData);
+  const hashArray = Array.from(new Uint8Array(signature));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function validateEditToken(reportId, token, expires, secret) {
+  if (!token || !expires || !secret) return false;
+  if (Date.now() > expires) return false;
+  
+  const dataToSign = `${reportId}:${expires}`;
+  const expectedToken = await signData(dataToSign, secret);
+  
+  return token === expectedToken;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// PATCH /reports/:id — Update an existing report
+// ────────────────────────────────────────────────────────────────────────────
+
+async function handleUpdateReport(request, env, id) {
+  if (!env.EDIT_TOKEN_SECRET) {
+    return corsResponse({ error: "Edit token secret not configured" }, 500, env);
+  }
+
+  try {
+    const formData = await request.formData();
+    const token = formData.get("editToken");
+    const expires = formData.get("editExpires");
+    
+    const isValid = await validateEditToken(
+      id,
+      token,
+      expires ? parseInt(expires, 10) : 0,
+      env.EDIT_TOKEN_SECRET
+    );
+    
+    if (!isValid) {
+      return corsResponse({ error: "Invalid or expired edit token" }, 401, env);
+    }
+
+    const fields = extractFields(formData);
+    const photos = formData.getAll("photos");
+
+    const graphToken = await getAccessToken(env);
+
+    const updateResult = await updateSharePointListItem(id, fields, env, graphToken);
+
+    let photoResult = { uploaded: [], errors: [] };
+    if (photos.length > 0) {
+      photoResult = await uploadPhotos(photos, fields, env);
+    }
+
+    return corsResponse({
+      success: true,
+      message: "Report updated successfully",
+      listItemId: id,
+      uploadedFiles: photoResult.uploaded,
+      uploadErrors: photoResult.errors,
+    }, 200, env);
+  } catch (err) {
+    console.error("UpdateReport error:", err);
+    return corsResponse({ success: false, error: err.message }, 500, env);
   }
 }
 
@@ -563,6 +681,53 @@ async function createSharePointListItem(fields, env, token) {
 		}
 	);
 	return { id: createRes.id };
+}
+
+async function updateSharePointListItem(itemId, fields, env, token) {
+	const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" };
+	const { siteId, listId } = await resolveListIds(env, token);
+
+	const updateRes = await graphFetch(
+		`https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${itemId}/fields`,
+		{
+			method: "PATCH",
+			headers,
+			body: JSON.stringify({
+				Title:                       fields.projectTitle || "IC Project Report",
+				Location:                    fields.location,
+				ProjectDateFrom:             fields.projectDateFrom || null,
+				ProjectDateTo:               fields.projectDateTo   || null,
+				Introduction:                fields.introduction,
+				ChurchesParticipated:        toNum(fields.churchesParticipated),
+				Localities:                  toNum(fields.localities),
+				NationalParticipants:        toNum(fields.nationalParticipants),
+				USAParticipants:             toNum(fields.usaParticipants),
+				OtherCountriesParticipants:  toNum(fields.otherCountriesParticipants),
+				TotalVisits:                 toNum(fields.totalVisits),
+				PeopleHeardGospel:           toNum(fields.peopleHeardGospel),
+				ProfessionsOfFaith:          toNum(fields.professionsOfFaith),
+				Rededications:               toNum(fields.rededications),
+				Baptisms:                    toNum(fields.baptisms),
+				NewChurchesPlanted:          toNum(fields.newChurchesPlanted),
+				Testimonies:                 fields.testimoniesJson,
+				TotalFundsSent:              toNum(fields.totalFundsSent),
+				SpentOnMaterials:            toNum(fields.spentOnMaterials),
+				TicketsCost:                 toNum(fields.ticketsCost),
+				FuelCost:                    toNum(fields.fuelCost),
+				AccommodationCost:           toNum(fields.accommodationCost),
+				FoodCost:                    toNum(fields.foodCost),
+				FinancialHelpParticipants:   toNum(fields.financialHelpParticipants),
+				NumParticipantsHelp:         toNum(fields.numParticipantsHelp),
+				RalliesExpenses:             toNum(fields.ralliesExpenses),
+				RalliesDescription:          fields.ralliesDescription,
+				AdditionalExpenses:          toNum(fields.additionalExpenses),
+				AdditionalNeedDescription:   fields.additionalNeedDescription,
+				CoordinatorName:             fields.coordinatorName,
+				CoordinatorEmail:            fields.coordinatorEmail,
+			}),
+		}
+	);
+	return { id: itemId };
 }
 
 // ────────────────────────────────────────────────────────────────────────────

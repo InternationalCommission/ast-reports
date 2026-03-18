@@ -363,6 +363,25 @@
   let nextLink       = null;
   let loading        = false;
 
+  // ── Fetch edit token from worker (requires Azure AD auth) ─────────────────────
+  async function getEditToken(reportId) {
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(`${WORKER_URL}/reports/${reportId}/edit-token`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to get edit token");
+      }
+      return await res.json();
+    } catch (err) {
+      console.error("Failed to get edit token:", err);
+      throw err;
+    }
+  }
+
   // ── Translation state ──────────────────────────────────────────────────────
   let translationEnabled = false;
   let translationCache   = new Map();
@@ -546,14 +565,37 @@
   }
 
   // ── Load reports ──────────────────────────────────────────────────────────
+  let initialLoadComplete = false;
   async function loadReports() {
     if (!currentAccount || loading) return;
-    loading = true; allReports = []; nextLink = null;
+    loading = true; allReports = []; nextLink = null; initialLoadComplete = false;
     document.getElementById("reportList").innerHTML =
       `<div class="loading-state"><div class="spinner-lg"></div><span>Loading…</span></div>`;
     document.getElementById("loadMoreBtn").disabled = true;
     await fetchPage(`${WORKER_URL}/reports?top=${PAGE_SIZE}`);
     loading = false;
+    initialLoadComplete = true;
+    checkUrlForReport();
+  }
+
+  // ── Check URL and sessionStorage for report ID ──────────────────────────────
+  function checkUrlForReport() {
+    if (!initialLoadComplete || !allReports.length) return;
+    const params = new URLSearchParams(window.location.search);
+    const urlReportId = params.get("report");
+    const sessionReportId = sessionStorage.getItem("lastEditedReportId");
+    const reportId = urlReportId || sessionReportId;
+    
+    if (reportId) {
+      const report = allReports.find(r => r.id === reportId);
+      if (report) {
+        showReport(reportId);
+        params.delete("report");
+        const newUrl = window.location.pathname + (params.toString() ? "?" + params.toString() : "");
+        window.history.replaceState({}, "", newUrl);
+        sessionStorage.removeItem("lastEditedReportId");
+      }
+    }
   }
 
   async function loadMore() {
@@ -636,50 +678,62 @@
   }
 
   // ── Open edit form with pre-filled data ─────────────────────────────────────
-  window.openEditForm = function(reportId) {
+  window.openEditForm = async function(reportId) {
     const report = allReports.find(r => r.id === reportId);
     if (!report) {
       showToast("Report not found", true);
       return;
     }
-    const params = new URLSearchParams();
-    params.set("edit", "1");
-    params.set("coordinatorName", report.coordinatorName || "");
-    params.set("coordinatorEmail", report.coordinatorEmail || "");
-    params.set("projectTitle", report.projectTitle || "");
-    params.set("location", report.location || "");
-    if (report.projectDateFrom) params.set("projectDateFrom", report.projectDateFrom.split("T")[0]);
-    if (report.projectDateTo) params.set("projectDateTo", report.projectDateTo.split("T")[0]);
-    params.set("introduction", report.introduction || "");
-    params.set("churchesParticipated", report.churchesParticipated || "");
-    params.set("localities", report.localities || "");
-    params.set("nationalParticipants", report.nationalParticipants || "");
-    params.set("usaParticipants", report.usaParticipants || "");
-    params.set("otherCountriesParticipants", report.otherCountriesParticipants || "");
-    params.set("totalVisits", report.totalVisits || "");
-    params.set("peopleHeardGospel", report.peopleHeardGospel || "");
-    params.set("professionsOfFaith", report.professionsOfFaith || "");
-    params.set("rededications", report.rededications || "");
-    params.set("baptisms", report.baptisms || "");
-    params.set("newChurchesPlanted", report.newChurchesPlanted || "");
-    if (report.testimonies && report.testimonies.length > 0) {
-      params.set("testimoniesJson", JSON.stringify(report.testimonies));
+    
+    // Show loading state
+    showToast("Generating edit link…", false);
+    
+    try {
+      const { token, expires } = await getEditToken(reportId);
+      const params = new URLSearchParams();
+      params.set("edit", "1");
+      params.set("reportId", reportId);
+      params.set("token", token);
+      params.set("expires", expires.toString());
+      params.set("coordinatorName", report.coordinatorName || "");
+      params.set("coordinatorEmail", report.coordinatorEmail || "");
+      params.set("projectTitle", report.projectTitle || "");
+      params.set("location", report.location || "");
+      if (report.projectDateFrom) params.set("projectDateFrom", report.projectDateFrom.split("T")[0]);
+      if (report.projectDateTo) params.set("projectDateTo", report.projectDateTo.split("T")[0]);
+      params.set("introduction", report.introduction || "");
+      params.set("churchesParticipated", report.churchesParticipated || "");
+      params.set("localities", report.localities || "");
+      params.set("nationalParticipants", report.nationalParticipants || "");
+      params.set("usaParticipants", report.usaParticipants || "");
+      params.set("otherCountriesParticipants", report.otherCountriesParticipants || "");
+      params.set("totalVisits", report.totalVisits || "");
+      params.set("peopleHeardGospel", report.peopleHeardGospel || "");
+      params.set("professionsOfFaith", report.professionsOfFaith || "");
+      params.set("rededications", report.rededications || "");
+      params.set("baptisms", report.baptisms || "");
+      params.set("newChurchesPlanted", report.newChurchesPlanted || "");
+      if (report.testimonies && report.testimonies.length > 0) {
+        params.set("testimoniesJson", JSON.stringify(report.testimonies));
+      }
+      params.set("totalFundsSent", report.totalFundsSent || "");
+      params.set("spentOnMaterials", report.spentOnMaterials || "");
+      params.set("ticketsCost", report.ticketsCost || "");
+      params.set("fuelCost", report.fuelCost || "");
+      params.set("accommodationCost", report.accommodationCost || "");
+      params.set("foodCost", report.foodCost || "");
+      params.set("financialHelpParticipants", report.financialHelpParticipants || "");
+      params.set("numParticipantsHelp", report.numParticipantsHelp || "");
+      params.set("ralliesExpenses", report.ralliesExpenses || "");
+      params.set("ralliesDescription", report.ralliesDescription || "");
+      params.set("additionalExpenses", report.additionalExpenses || "");
+      params.set("additionalNeedDescription", report.additionalNeedDescription || "");
+      const formUrl = "form.html?" + params.toString();
+      sessionStorage.setItem("editingReportId", reportId);
+      window.location.href = formUrl;
+    } catch (err) {
+      showToast("Failed to open edit form: " + err.message, true);
     }
-    params.set("totalFundsSent", report.totalFundsSent || "");
-    params.set("spentOnMaterials", report.spentOnMaterials || "");
-    params.set("ticketsCost", report.ticketsCost || "");
-    params.set("fuelCost", report.fuelCost || "");
-    params.set("accommodationCost", report.accommodationCost || "");
-    params.set("foodCost", report.foodCost || "");
-    params.set("financialHelpParticipants", report.financialHelpParticipants || "");
-    params.set("numParticipantsHelp", report.numParticipantsHelp || "");
-    params.set("ralliesExpenses", report.ralliesExpenses || "");
-    params.set("ralliesDescription", report.ralliesDescription || "");
-    params.set("additionalExpenses", report.additionalExpenses || "");
-    params.set("additionalNeedDescription", report.additionalNeedDescription || "");
-    const formUrl = "form.html?" + params.toString();
-    console.log("Opening edit form:", formUrl);
-    window.location.href = formUrl;
   }
 
   // ── Build full report HTML ────────────────────────────────────────────────

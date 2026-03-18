@@ -33,6 +33,28 @@
       gap: 8px;
     }
     .lang-hint.hidden { display: none; }
+    .admin-bar {
+      background: var(--navy);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+    }
+    .admin-bar:not([style*="display: none"]) { display: flex !important; }
+    .back-admin-btn {
+      background: rgba(255,255,255,.15);
+      border: 1px solid rgba(255,255,255,.3);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background .15s;
+      font-family: 'Source Serif 4', serif;
+    }
+    .back-admin-btn:hover { background: rgba(255,255,255,.25); }
     .site-header { background: var(--navy); padding: 40px 24px 36px; text-align: center; position: relative; overflow: hidden; }
     .site-header::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg,transparent,transparent 40px,rgba(200,169,110,.06) 40px,rgba(200,169,110,.06) 41px); }
     .site-header h1 { font-family: 'Playfair Display', serif; font-size: clamp(22px, 5vw, 36px); color: #fff; letter-spacing: .5px; position: relative; }
@@ -132,6 +154,11 @@
   <div class="lang-hint" id="langHint">
     <span id="langHintText">🌐 This page can be translated by your browser. Look for the translate option in your browser's context menu.</span>
     <button type="button" id="langDismiss" title="Dismiss" style="background:none;border:none;color:inherit;cursor:pointer;margin-left:8px;opacity:.7;">✕</button>
+  </div>
+  <div class="admin-bar" id="adminBar" style="display:none;">
+    <button type="button" class="back-admin-btn" id="backAdminBtn">
+      ← Back to Admin
+    </button>
   </div>
   <header class="site-header">
   <h1>IC Project Report</h1>
@@ -394,58 +421,75 @@
 
 <script>
   // ── Configuration ────────────────────────────────────────────────────────
-  // Replace with your deployed Cloudflare Worker URL
   const WORKER_URL = "https://ast-report.alex-wascomb.workers.dev";
 
-  // ── Pre-fill form from URL parameters (for edit mode) ────────────────────
-  (function() {
-    const params = new URLSearchParams(window.location.search);
-    if (params.has("edit") && params.get("edit") === "1") {
-      document.title = "Edit Report — IC Project Report";
-      const headerTitle = document.querySelector(".site-header h1");
-      if (headerTitle) headerTitle.textContent = "Edit Report";
-      const headerSubtitle = document.querySelector(".site-header p");
-      if (headerSubtitle) headerSubtitle.textContent = "Make your changes and resubmit the report";
-      const submitBtn = document.getElementById("submitBtn");
-      if (submitBtn) submitBtn.querySelector(".btn-text").textContent = "Update Report";
-      const numericFields = [
-        "churchesParticipated","localities","nationalParticipants","usaParticipants",
-        "otherCountriesParticipants","totalVisits","peopleHeardGospel","professionsOfFaith",
-        "rededications","baptisms","newChurchesPlanted","totalFundsSent","spentOnMaterials",
-        "ticketsCost","fuelCost","accommodationCost","foodCost","financialHelpParticipants",
-        "numParticipantsHelp","ralliesExpenses","additionalExpenses"
-      ];
-      const textFields = [
-        "coordinatorName","coordinatorEmail","projectTitle","location",
-        "introduction","ralliesDescription","additionalNeedDescription"
-      ];
-      numericFields.forEach(name => {
-        const el = document.getElementById(name);
-        if (el && params.has(name)) el.value = params.get(name);
-      });
-      textFields.forEach(name => {
-        const el = document.getElementById(name);
-        if (el && params.has(name)) el.value = params.get(name);
-      });
-      if (params.has("projectDateFrom")) {
-        const el = document.getElementById("projectDateFrom");
-        if (el) el.value = params.get("projectDateFrom");
-      }
-      if (params.has("projectDateTo")) {
-        const el = document.getElementById("projectDateTo");
-        if (el) el.value = params.get("projectDateTo");
-      }
-      if (params.has("testimoniesJson")) {
-        try {
-          const tes = JSON.parse(params.get("testimoniesJson"));
-          testimonies = [];
-          testimonyCounter = 0;
-          tes.forEach(t => addTestimony(t.author || "", t.text || ""));
-        } catch(e) {
-          console.warn("Could not parse testimonies:", e);
-        }
+  // ── Parse URL parameters at load time ──────────────────────────────────
+  const urlParams = new URLSearchParams(window.location.search);
+  const isEditMode = urlParams.has("edit") && urlParams.get("edit") === "1" 
+                     && urlParams.has("reportId") && urlParams.has("token") && urlParams.has("expires");
+  const EDIT_MODE_REPORT_ID = isEditMode ? urlParams.get("reportId") : null;
+
+  // ── Initialize edit mode UI ─────────────────────────────────────────────
+  (function initEditMode() {
+    if (!EDIT_MODE_REPORT_ID) return;
+    
+    document.title = "Edit Report — IC Project Report";
+    document.getElementById("adminBar").style.display = "flex";
+    document.getElementById("backAdminBtn").onclick = function() {
+      window.location.href = "admin.html?report=" + EDIT_MODE_REPORT_ID;
+    };
+    const headerTitle = document.querySelector(".site-header h1");
+    if (headerTitle) headerTitle.textContent = "Edit Report";
+    const headerSubtitle = document.querySelector(".site-header p");
+    if (headerSubtitle) headerSubtitle.textContent = "Make your changes and resubmit the report";
+    const submitBtn = document.getElementById("submitBtn");
+    if (submitBtn) submitBtn.querySelector(".btn-text").textContent = "Update Report";
+    const numericFields = [
+      "churchesParticipated","localities","nationalParticipants","usaParticipants",
+      "otherCountriesParticipants","totalVisits","peopleHeardGospel","professionsOfFaith",
+      "rededications","baptisms","newChurchesPlanted","totalFundsSent","spentOnMaterials",
+      "ticketsCost","fuelCost","accommodationCost","foodCost","financialHelpParticipants",
+      "numParticipantsHelp","ralliesExpenses","additionalExpenses"
+    ];
+    const textFields = [
+      "coordinatorName","coordinatorEmail","projectTitle","location",
+      "introduction","ralliesDescription","additionalNeedDescription"
+    ];
+    numericFields.forEach(name => {
+      const el = document.getElementById(name);
+      if (el && urlParams.has(name)) el.value = urlParams.get(name);
+    });
+    textFields.forEach(name => {
+      const el = document.getElementById(name);
+      if (el && urlParams.has(name)) el.value = urlParams.get(name);
+    });
+    if (urlParams.has("projectDateFrom")) {
+      const el = document.getElementById("projectDateFrom");
+      if (el) el.value = urlParams.get("projectDateFrom");
+    }
+    if (urlParams.has("projectDateTo")) {
+      const el = document.getElementById("projectDateTo");
+      if (el) el.value = urlParams.get("projectDateTo");
+    }
+    if (urlParams.has("testimoniesJson")) {
+      try {
+        const tes = JSON.parse(urlParams.get("testimoniesJson"));
+        testimonies = [];
+        testimonyCounter = 0;
+        tes.forEach(t => addTestimony(t.author || "", t.text || ""));
+      } catch(e) {
+        console.warn("Could not parse testimonies:", e);
       }
     }
+  })();
+        testimonies = [];
+        testimonyCounter = 0;
+        tes.forEach(t => addTestimony(t.author || "", t.text || ""));
+      } catch(e) {
+        console.warn("Could not parse testimonies:", e);
+      }
+    }
+    return reportId;
   })();
 
   // ── File drag & drop ─────────────────────────────────────────────────────
@@ -579,36 +623,54 @@
 
     submitBtn.disabled = true;
     submitBtn.classList.add("loading");
-    submitBtn.querySelector(".btn-text").textContent = "Submitting…";
+    submitBtn.querySelector(".btn-text").textContent = EDIT_MODE_REPORT_ID ? "Updating…" : "Submitting…";
 
     try {
       const fd = new FormData(form);
       fd.delete("photos");
       selectedFiles.forEach(f => fd.append("photos", f));
 
-      const res  = await fetch(WORKER_URL, { method: "POST", body: fd });
-      const data = await res.json();
+      let res, data;
+      if (EDIT_MODE_REPORT_ID) {
+        fd.append("reportId", EDIT_MODE_REPORT_ID);
+        fd.append("editToken", urlParams.get("token") || "");
+        fd.append("editExpires", urlParams.get("expires") || "");
+        res = await fetch(WORKER_URL + "/reports/" + EDIT_MODE_REPORT_ID, {
+          method: "PATCH",
+          body: fd
+        });
+        data = await res.json();
+      } else {
+        res = await fetch(WORKER_URL, { method: "POST", body: fd });
+        data = await res.json();
+      }
 
-      if (data.success) {
-        showToast("✓ Report submitted successfully!", false);
+      if (data.success || res.ok) {
+        sessionStorage.setItem("lastEditedReportId", EDIT_MODE_REPORT_ID || data.listItemId || "");
+        const message = EDIT_MODE_REPORT_ID ? "✓ Report updated successfully!" : "✓ Report submitted successfully!";
+        showToast(message, false);
+        if (EDIT_MODE_REPORT_ID) {
+          sessionStorage.removeItem("editingReportId");
+          window.location.href = "admin.html?report=" + EDIT_MODE_REPORT_ID;
+          return;
+        }
         form.reset();
         selectedFiles = [];
         renderFileList();
-        // Reset testimonies to one blank block
         testimonies = [];
         testimonyCounter = 0;
         addTestimony();
       } else {
-        const errMsg = data.errors?.map(e => e.step).join(", ") || "Unknown error";
-        showToast(`⚠ Submitted with issues: ${errMsg}`, true);
+        const errMsg = data.errors?.map(e => e.step).join(", ") || data.error || "Unknown error";
+        showToast(`⚠ ${EDIT_MODE_REPORT_ID ? "Update" : "Submission"} failed: ${errMsg}`, true);
       }
     } catch (err) {
       console.error(err);
-      showToast("✕ Submission failed. Please try again.", true);
+      showToast("✕ " + (EDIT_MODE_REPORT_ID ? "Update" : "Submission") + " failed. Please try again.", true);
     } finally {
       submitBtn.disabled = false;
       submitBtn.classList.remove("loading");
-      submitBtn.querySelector(".btn-text").textContent = "Submit Report";
+      submitBtn.querySelector(".btn-text").textContent = EDIT_MODE_REPORT_ID ? "Update Report" : "Submit Report";
     }
   });
 
