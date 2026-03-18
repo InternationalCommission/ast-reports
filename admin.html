@@ -212,14 +212,27 @@
     }
     .translated-indicator::before { content: '🌐'; }
 
-    .print-btn { position: fixed; bottom: 28px; right: 28px; background: var(--navy); color: #fff; border: none; padding: 12px 20px; border-radius: 30px; font-family: 'Source Serif 4', serif; font-size: 14px; cursor: pointer; box-shadow: 0 4px 16px rgba(26,58,92,.3); transition: background .2s, transform .15s; display: none; align-items: center; gap: 8px; }
-    .print-btn:hover { background: #254e7a; transform: translateY(-1px); }
-    #printBtn.visible { display: flex; }
+    .print-btn { 
+      background: rgba(255,255,255,.15); 
+      border: 1px solid rgba(255,255,255,.3); 
+      color: #fff; 
+      padding: 6px 14px; 
+      border-radius: 3px; 
+      font-size: 13px; 
+      cursor: pointer; 
+      display: inline-flex; 
+      align-items: center; 
+      gap: 6px;
+      transition: background .15s;
+      font-family: inherit;
+    }
+    .print-btn:hover { background: rgba(255,255,255,.25); }
 
     @media print {
-      .topbar, .sidebar, #authGate, #printBtn { display: none !important; }
+      .topbar, .sidebar, #authGate, .rh-actions { display: none !important; }
       .detail-pane { overflow: visible; }
       body, .app-body { overflow: visible; height: auto; display: block; }
+      .report-header { position: static !important; }
     }
     @media (max-width: 768px) {
       :root { --sidebar-w: 100%; }
@@ -293,8 +306,6 @@
   </div>
 </div>
 
-<button class="print-btn" id="printBtn">🖨 Print Report</button>
-
 <script>
   window.addEventListener("DOMContentLoaded", () => {
     // Guard: make sure MSAL loaded from CDN before proceeding
@@ -311,7 +322,6 @@
     document.getElementById("signOutBtn").addEventListener("click", () => signOut());
     document.getElementById("refreshBtn").addEventListener("click", () => loadReports());
     document.getElementById("loadMoreBtn").addEventListener("click",() => loadMore());
-    document.getElementById("printBtn").addEventListener("click",   () => window.print());
     document.getElementById("searchInput").addEventListener("input",() => filterReports());
     document.getElementById("translateBtn").addEventListener("click",() => toggleTranslation());
 
@@ -540,7 +550,6 @@
       `<div style="padding:24px 18px;color:var(--muted);font-size:13px;font-style:italic;">Sign in to load reports.</div>`;
     document.getElementById("detailPane").innerHTML =
       `<div class="empty-state"><div class="icon">📋</div><p>Select a report to view details</p></div>`;
-    document.getElementById("printBtn").classList.remove("visible");
     allReports = []; filteredList = []; activeId = null;
     document.getElementById("reportCount").textContent = "";
   }
@@ -673,7 +682,6 @@
     renderSidebar();
     document.getElementById("detailPane").innerHTML = buildReportHtml(report);
     document.getElementById("detailPane").scrollTop = 0;
-    document.getElementById("printBtn").classList.add("visible");
     loadPhotos(id);
   }
 
@@ -804,6 +812,9 @@
         <div class="rh-actions" style="display:flex;gap:8px;margin-bottom:12px;">
           <button type="button" onclick="openEditForm('${r.id}')" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:3px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;">
             ✏️ Edit Report
+          </button>
+          <button type="button" onclick="window.print()" class="print-btn" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:3px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;">
+            🖨 Print
           </button>
         </div>
         <div class="rh-title">${escHtml(r.projectTitle || "IC Project Report")}</div>
