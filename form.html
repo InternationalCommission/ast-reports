@@ -482,15 +482,6 @@
       }
     }
   })();
-        testimonies = [];
-        testimonyCounter = 0;
-        tes.forEach(t => addTestimony(t.author || "", t.text || ""));
-      } catch(e) {
-        console.warn("Could not parse testimonies:", e);
-      }
-    }
-    return reportId;
-  })();
 
   // ── File drag & drop ─────────────────────────────────────────────────────
   const dropZone  = document.getElementById("dropZone");
