@@ -695,9 +695,9 @@ async function uploadPhotos(photoFiles, projectTitle, env, graphToken, spToken) 
       let fileUrl;
       
       if (fileSize > CHUNK_SIZE) {
-        fileUrl = await chunkedUpload(folderDriveId, folderItemId, folderWebUrl, safeName, mimeType, buffer, spToken);
+        fileUrl = await chunkedUpload(folderDriveId, folderItemId, folderWebUrl, safeName, mimeType, buffer, spToken, env);
       } else {
-        fileUrl = await simpleUpload(folderDriveId, folderItemId, folderWebUrl, safeName, mimeType, buffer, spToken);
+        fileUrl = await simpleUpload(folderDriveId, folderItemId, folderWebUrl, safeName, mimeType, buffer, spToken, env);
       }
       
       uploaded.push({ name: safeName, webUrl: fileUrl });
@@ -718,18 +718,18 @@ async function uploadPhotos(photoFiles, projectTitle, env, graphToken, spToken) 
 // Simple upload for small files (< 5MB)
 // ────────────────────────────────────────────────────────────────────────────
 
-async function simpleUpload(driveId, folderId, folderWebUrl, fileName, mimeType, buffer, token) {
+async function simpleUpload(driveId, folderId, folderWebUrl, fileName, mimeType, buffer, token, env) {
   console.log(`>>> SIMPLE UPLOAD START folder=${folderId} file=${fileName} size=${buffer.byteLength}`);
-  return uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, token);
+  return uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, token, env);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
 // Chunked upload for large files using Graph API upload session
 // ────────────────────────────────────────────────────────────────────────────
 
-async function chunkedUpload(driveId, folderId, folderWebUrl, fileName, mimeType, buffer, token) {
+async function chunkedUpload(driveId, folderId, folderWebUrl, fileName, mimeType, buffer, token, env) {
   console.log(`>>> CHUNKED UPLOAD START folder=${folderId} file=${fileName} size=${buffer.byteLength}`);
-  return uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, token);
+  return uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, token, env);
 }
 
 function buildSharePointUploadContext(folderWebUrl, fileName) {
@@ -746,22 +746,46 @@ function buildSharePointUploadContext(folderWebUrl, fileName) {
   };
 }
 
-async function uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, token) {
+async function uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer, token, env) {
   const { siteOrigin, folderServerRelativeUrl, testUrl, uploadUrl } = buildSharePointUploadContext(folderWebUrl, fileName);
-
-  console.log(`>>> Folder path: ${folderServerRelativeUrl}`);
-  console.log(`>>> Testing SharePoint: ${testUrl}`);
-
-  const headers = {
+  const initialHeaders = {
     Authorization: `Bearer ${token}`,
     Accept: "application/json;odata=verbose",
   };
 
+  console.log(`>>> Folder path: ${folderServerRelativeUrl}`);
+  return performSharePointUploadAttempt(
+    {
+      folderWebUrl,
+      siteOrigin,
+      testUrl,
+      uploadUrl,
+      fileName,
+      mimeType,
+      buffer,
+      env,
+    },
+    initialHeaders,
+    false
+  );
+}
+
+function encodeODataString(value) {
+  return String(value).replace(/'/g, "''");
+}
+
+async function performSharePointUploadAttempt(context, headers, usedV1Fallback) {
+  const { folderWebUrl, siteOrigin, testUrl, uploadUrl, fileName, mimeType, buffer } = context;
+
+  console.log(`>>> Testing SharePoint: ${testUrl}`);
   const testRes = await fetch(testUrl, { headers });
   console.log(`>>> Test result: ${testRes.status}`);
 
   if (!testRes.ok) {
     const text = await testRes.text().catch(() => "");
+    if (testRes.status === 401 && !usedV1Fallback) {
+      return retrySharePointUploadWithV1Token(context);
+    }
     if (testRes.status === 401) {
       console.error(`>>> SHAREPOINT AUTH FAILED - Token may not have SharePoint scope or consent`);
     }
@@ -783,6 +807,9 @@ async function uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer,
 
   if (!uploadRes.ok) {
     const text = await uploadRes.text().catch(() => "");
+    if (uploadRes.status === 401 && !usedV1Fallback) {
+      return retrySharePointUploadWithV1Token(context);
+    }
     console.error(`>>> UPLOAD ERROR: ${text.slice(0, 500)}`);
     throw new Error(`HTTP ${uploadRes.status}: ${text.slice(0, 200)}`);
   }
@@ -792,6 +819,21 @@ async function uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer,
   const webUrl = serverRelativeUrl ? `${siteOrigin}${serverRelativeUrl}` : `${folderWebUrl}/${encodeURIComponent(fileName)}`;
   console.log(`>>> UPLOAD SUCCESS: ${webUrl}`);
   return webUrl;
+}
+
+async function retrySharePointUploadWithV1Token(context) {
+  const { env } = context;
+  const hostname = new URL(env.SHAREPOINT_SITE_URL).hostname;
+  console.warn(`>>> SharePoint REST returned 401, retrying with a v1 resource token`);
+  const fallbackToken = await fetchTokenV1(env.AZURE_TENANT_ID, env.AZURE_CLIENT_ID, env.AZURE_CLIENT_SECRET, `https://${hostname}`);
+  return performSharePointUploadAttempt(
+    context,
+    {
+      Authorization: `Bearer ${fallbackToken}`,
+      Accept: "application/json;odata=verbose",
+    },
+    true
+  );
 }
 
 function encodeODataString(value) {
