@@ -735,8 +735,8 @@ async function chunkedUpload(driveId, folderId, folderWebUrl, fileName, mimeType
 function buildSharePointUploadContext(folderWebUrl, fileName) {
   const folderUrl = new URL(folderWebUrl);
   const folderServerRelativeUrl = decodeURIComponent(folderUrl.pathname);
-  const encodedFolderPath = encodeODataString(folderServerRelativeUrl);
-  const encodedFileName = encodeODataString(fileName);
+  const encodedFolderPath = escapeODataStringLiteral(folderServerRelativeUrl);
+  const encodedFileName = escapeODataStringLiteral(fileName);
 
   return {
     siteOrigin: folderUrl.origin,
@@ -770,7 +770,7 @@ async function uploadFileViaSharePoint(folderWebUrl, fileName, mimeType, buffer,
   );
 }
 
-function encodeODataString(value) {
+function escapeODataStringLiteral(value) {
   return String(value).replace(/'/g, "''");
 }
 
@@ -834,10 +834,6 @@ async function retrySharePointUploadWithV1Token(context) {
     },
     true
   );
-}
-
-function encodeODataString(value) {
-  return String(value).replace(/'/g, "''");
 }
 
 // ────────────────────────────────────────────────────────────────────────────
