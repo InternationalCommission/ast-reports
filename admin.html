@@ -165,10 +165,12 @@
 
     /* ── Report detail ── */
     .report-header { background: var(--navy); padding: 32px 40px; position: sticky; top: 0; z-index: 10; }
+    .report-header .rh-actions { display: flex; gap: 8px; margin-bottom: 12px; }
     .report-header .rh-title { font-family: 'Playfair Display', serif; font-size: 24px; color: #fff; margin-bottom: 6px; }
     .report-header .rh-meta  { color: #a8c4e0; font-size: 14px; }
     .report-header .rh-coordinator { margin-top: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .report-header .rh-coordinator span { background: rgba(255,255,255,.1); border-radius: 20px; padding: 4px 12px; font-size: 13px; color: rgba(255,255,255,.85); }
+    .report-header .rh-actions button:hover { background: rgba(255,255,255,.25) !important; }
 
     .report-body { padding: 36px 40px; }
     .section-title { font-family: 'Playfair Display', serif; font-size: 17px; color: var(--navy); border-bottom: 2px solid var(--gold); padding-bottom: 8px; margin-bottom: 20px; margin-top: 36px; }
@@ -369,8 +371,10 @@
   // ── Translation API (MyMemory - free, no API key required) ─────────────────
   async function translateText(text, sourceLang = "auto", targetLang = "en") {
     if (!text || !text.trim()) return text;
-    const cacheKey = `${sourceLang}:${targetLang}:${text.substring(0, 100)}`;
-    if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
+    const cacheKey = `${sourceLang}:${targetLang}:${text}`;
+    if (translationCache.has(cacheKey)) {
+      return translationCache.get(cacheKey);
+    }
     try {
       const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sourceLang}|${targetLang}`;
       const res = await fetch(url);
@@ -380,9 +384,10 @@
         translationCache.set(cacheKey, translation);
         return translation;
       }
+      console.warn("Translation API issue:", data.responseStatus, data);
       return text;
     } catch (err) {
-      console.warn("Translation error:", err);
+      console.error("Translation error:", err);
       return text;
     }
   }
@@ -392,18 +397,18 @@
     const translateField = async (val) => val ? await translateText(String(val)) : val;
     const translateTestimonies = async (testimonies) => {
       if (!Array.isArray(testimonies)) return testimonies;
-      return Promise.all(testimonies.map(async (t) => ({
+      const translated = await Promise.all(testimonies.map(async (t) => ({
         ...t,
         text: t.text ? await translateText(t.text) : t.text,
         author: t.author ? await translateText(t.author) : t.author,
       })));
+      return translated;
     };
     return {
       ...r,
       projectTitle: await translateField(r.projectTitle),
       location: await translateField(r.location),
       introduction: await translateField(r.introduction),
-      coordinatorName: await translateField(r.coordinatorName),
       testimonies: await translateTestimonies(r.testimonies),
       ralliesDescription: await translateField(r.ralliesDescription),
       additionalNeedDescription: await translateField(r.additionalNeedDescription),
@@ -630,6 +635,53 @@
     loadPhotos(id);
   }
 
+  // ── Open edit form with pre-filled data ─────────────────────────────────────
+  window.openEditForm = function(reportId) {
+    const report = allReports.find(r => r.id === reportId);
+    if (!report) {
+      showToast("Report not found", true);
+      return;
+    }
+    const params = new URLSearchParams();
+    params.set("edit", "1");
+    params.set("coordinatorName", report.coordinatorName || "");
+    params.set("coordinatorEmail", report.coordinatorEmail || "");
+    params.set("projectTitle", report.projectTitle || "");
+    params.set("location", report.location || "");
+    if (report.projectDateFrom) params.set("projectDateFrom", report.projectDateFrom.split("T")[0]);
+    if (report.projectDateTo) params.set("projectDateTo", report.projectDateTo.split("T")[0]);
+    params.set("introduction", report.introduction || "");
+    params.set("churchesParticipated", report.churchesParticipated || "");
+    params.set("localities", report.localities || "");
+    params.set("nationalParticipants", report.nationalParticipants || "");
+    params.set("usaParticipants", report.usaParticipants || "");
+    params.set("otherCountriesParticipants", report.otherCountriesParticipants || "");
+    params.set("totalVisits", report.totalVisits || "");
+    params.set("peopleHeardGospel", report.peopleHeardGospel || "");
+    params.set("professionsOfFaith", report.professionsOfFaith || "");
+    params.set("rededications", report.rededications || "");
+    params.set("baptisms", report.baptisms || "");
+    params.set("newChurchesPlanted", report.newChurchesPlanted || "");
+    if (report.testimonies && report.testimonies.length > 0) {
+      params.set("testimoniesJson", JSON.stringify(report.testimonies));
+    }
+    params.set("totalFundsSent", report.totalFundsSent || "");
+    params.set("spentOnMaterials", report.spentOnMaterials || "");
+    params.set("ticketsCost", report.ticketsCost || "");
+    params.set("fuelCost", report.fuelCost || "");
+    params.set("accommodationCost", report.accommodationCost || "");
+    params.set("foodCost", report.foodCost || "");
+    params.set("financialHelpParticipants", report.financialHelpParticipants || "");
+    params.set("numParticipantsHelp", report.numParticipantsHelp || "");
+    params.set("ralliesExpenses", report.ralliesExpenses || "");
+    params.set("ralliesDescription", report.ralliesDescription || "");
+    params.set("additionalExpenses", report.additionalExpenses || "");
+    params.set("additionalNeedDescription", report.additionalNeedDescription || "");
+    const formUrl = "form.html?" + params.toString();
+    console.log("Opening edit form:", formUrl);
+    window.location.href = formUrl;
+  }
+
   // ── Build full report HTML ────────────────────────────────────────────────
   function buildReportHtml(r) {
     const dateRange  = r.projectDateFrom
@@ -695,6 +747,11 @@
 
     return `
       <div class="report-header">
+        <div class="rh-actions" style="display:flex;gap:8px;margin-bottom:12px;">
+          <button type="button" onclick="openEditForm('${r.id}')" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:3px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;">
+            ✏️ Edit Report
+          </button>
+        </div>
         <div class="rh-title">${escHtml(r.projectTitle || "IC Project Report")}</div>
         <div class="rh-meta">
           ${escHtml(r.location || "")}${dateRange ? ` &nbsp;·&nbsp; ${dateRange}` : ""}

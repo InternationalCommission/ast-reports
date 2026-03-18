@@ -397,6 +397,57 @@
   // Replace with your deployed Cloudflare Worker URL
   const WORKER_URL = "https://ast-report.alex-wascomb.workers.dev";
 
+  // ── Pre-fill form from URL parameters (for edit mode) ────────────────────
+  (function() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("edit") && params.get("edit") === "1") {
+      document.title = "Edit Report — IC Project Report";
+      const headerTitle = document.querySelector(".site-header h1");
+      if (headerTitle) headerTitle.textContent = "Edit Report";
+      const headerSubtitle = document.querySelector(".site-header p");
+      if (headerSubtitle) headerSubtitle.textContent = "Make your changes and resubmit the report";
+      const submitBtn = document.getElementById("submitBtn");
+      if (submitBtn) submitBtn.querySelector(".btn-text").textContent = "Update Report";
+      const numericFields = [
+        "churchesParticipated","localities","nationalParticipants","usaParticipants",
+        "otherCountriesParticipants","totalVisits","peopleHeardGospel","professionsOfFaith",
+        "rededications","baptisms","newChurchesPlanted","totalFundsSent","spentOnMaterials",
+        "ticketsCost","fuelCost","accommodationCost","foodCost","financialHelpParticipants",
+        "numParticipantsHelp","ralliesExpenses","additionalExpenses"
+      ];
+      const textFields = [
+        "coordinatorName","coordinatorEmail","projectTitle","location",
+        "introduction","ralliesDescription","additionalNeedDescription"
+      ];
+      numericFields.forEach(name => {
+        const el = document.getElementById(name);
+        if (el && params.has(name)) el.value = params.get(name);
+      });
+      textFields.forEach(name => {
+        const el = document.getElementById(name);
+        if (el && params.has(name)) el.value = params.get(name);
+      });
+      if (params.has("projectDateFrom")) {
+        const el = document.getElementById("projectDateFrom");
+        if (el) el.value = params.get("projectDateFrom");
+      }
+      if (params.has("projectDateTo")) {
+        const el = document.getElementById("projectDateTo");
+        if (el) el.value = params.get("projectDateTo");
+      }
+      if (params.has("testimoniesJson")) {
+        try {
+          const tes = JSON.parse(params.get("testimoniesJson"));
+          testimonies = [];
+          testimonyCounter = 0;
+          tes.forEach(t => addTestimony(t.author || "", t.text || ""));
+        } catch(e) {
+          console.warn("Could not parse testimonies:", e);
+        }
+      }
+    }
+  })();
+
   // ── File drag & drop ─────────────────────────────────────────────────────
   const dropZone  = document.getElementById("dropZone");
   const fileInput = document.getElementById("photos");
