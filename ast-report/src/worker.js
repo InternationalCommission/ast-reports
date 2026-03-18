@@ -29,6 +29,10 @@ export default {
 
     if (method === "POST" && path === "/")          return handleSubmit(request, env);
     if (method === "GET"  && path === "/reports")   return handleGetReports(request, env, url);
+    if (method === "GET"  && path.match(/^\/reports\/[^/]+\/photos$/)) {
+      const id = path.split("/reports/")[1].replace("/photos", "");
+      return handleGetPhotos(request, env, id);
+    }
     if (method === "GET"  && path.startsWith("/reports/")) {
       return handleGetReport(request, env, path.split("/reports/")[1]);
     }
@@ -54,11 +58,22 @@ async function handleSubmit(request, env) {
 
     const token = await getAccessToken(env);
 
+    // Run all three in parallel
     const [listItemResult, uploadResults, emailResult] = await Promise.allSettled([
       createSharePointListItem(fields, env, token),
       uploadPhotos(photos, fields.projectTitle, env, token),
       sendConfirmationEmail(fields, env, token),
     ]);
+
+    // If both list item and uploads succeeded, patch the folder URL back onto
+    // the list item so the admin viewer can find the photos later
+    if (listItemResult.status === "fulfilled" && uploadResults.status === "fulfilled") {
+      const { folderWebUrl, driveId, folderItemId } = uploadResults.value;
+      if (folderWebUrl && listItemResult.value?.id) {
+        await patchPhotoFolder(listItemResult.value.id, folderWebUrl, driveId, folderItemId, env, token)
+          .catch(e => console.warn("Could not patch photo folder URL:", e.message));
+      }
+    }
 
     const errors = [];
     if (listItemResult.status === "rejected")
@@ -73,7 +88,7 @@ async function handleSubmit(request, env) {
         success:       errors.length === 0,
         message:       errors.length === 0 ? "Report submitted successfully." : "Report submitted with some issues.",
         listItemId:    listItemResult.value?.id ?? null,
-        uploadedFiles: uploadResults.value ?? [],
+        uploadedFiles: uploadResults.value?.uploaded ?? [],
         errors,
       },
       errors.length === 0 ? 200 : 207,
@@ -97,19 +112,41 @@ async function handleGetReports(request, env, url) {
     const token = await getAccessToken(env);
     const { siteId, listId } = await resolveListIds(env, token);
 
-    const top  = url.searchParams.get("top")  || "50";
-    const skip = url.searchParams.get("skip") || "0";
+    const top    = url.searchParams.get("top")    || "50";
+    const cursor = url.searchParams.get("cursor") || null;
 
-    const headers  = { Authorization: `Bearer ${token}`, Accept: "application/json" };
-    const endpoint = `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`
-      + `?expand=fields($select=${sharePointFields.join(",")})`
-      + `&$top=${top}&$skip=${skip}`
-      + `&$orderby=fields/SubmittedAt desc`;
+    // Prefer header: lets Graph query non-indexed columns without erroring.
+    // Results may occasionally be inconsistent on very large lists, but is
+    // fine for typical report volumes.
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      Prefer: "HonorNonIndexedQueriesWarningMayFailRandomly",
+    };
+
+    // Fetch all fields without $select — avoids 400s from missing columns.
+    // No $orderby — SubmittedAt is not indexed; we sort client-side below.
+    const endpoint = cursor
+      ? decodeURIComponent(cursor)
+      : `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`
+          + `?expand=fields`
+          + `&$top=${top}`;
 
     const res   = await graphFetch(endpoint, { headers });
-    const items = (res.value || []).map(item => normalizeItem(item));
 
-    return corsResponse({ items, nextLink: res["@odata.nextLink"] || null }, 200, env);
+    // Sort descending by SubmittedAt client-side since the column isn't indexed
+    const items = (res.value || [])
+      .map(item => normalizeItem(item))
+      .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
+
+    // Convert SharePoint's nextLink into a worker-relative cursor URL so the
+    // admin never calls SharePoint directly and all requests stay authenticated.
+    const spNextLink = res["@odata.nextLink"] || null;
+    const workerNextLink = spNextLink
+      ? `${new URL(request.url).origin}/reports?cursor=${encodeURIComponent(spNextLink)}`
+      : null;
+
+    return corsResponse({ items, nextLink: workerNextLink }, 200, env);
   } catch (err) {
     console.error("GetReports error:", err);
     return corsResponse({ error: err.message }, 500, env);
@@ -128,10 +165,13 @@ async function handleGetReport(request, env, id) {
     const token = await getAccessToken(env);
     const { siteId, listId } = await resolveListIds(env, token);
 
-    const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
-    const item    = await graphFetch(
-      `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${id}`
-        + `?expand=fields($select=${sharePointFields.join(",")})`,
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      Prefer: "HonorNonIndexedQueriesWarningMayFailRandomly",
+    };
+    const item = await graphFetch(
+      `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${id}?expand=fields`,
       { headers }
     );
 
@@ -194,9 +234,12 @@ async function validateAzureToken(request, env) {
     return "Token expired";
   }
 
-  // Issuer — Azure AD v2.0 tokens
-  const expectedIss = `https://login.microsoftonline.com/${env.AZURE_TENANT_ID}/v2.0`;
-  if (payload.iss !== expectedIss) {
+  // Issuer — accept both Azure AD v1.0 (sts.windows.net) and v2.0 (login.microsoftonline.com)
+  const validIssuers = [
+    `https://login.microsoftonline.com/${env.AZURE_TENANT_ID}/v2.0`,
+    `https://sts.windows.net/${env.AZURE_TENANT_ID}/`,
+  ];
+  if (!validIssuers.includes(payload.iss)) {
     return `Invalid issuer: ${payload.iss}`;
   }
 
@@ -386,7 +429,84 @@ function normalizeItem(item) {
     coordinatorName:            f.CoordinatorName,
     coordinatorEmail:           f.CoordinatorEmail,
     submittedAt:                f.SubmittedAt,
+    // Photo folder info — populated after upload
+    photoFolderUrl:             f.PhotoFolderUrl   || null,
+    photoDriveId:               f.PhotoDriveId     || null,
+    photoFolderItemId:          f.PhotoFolderItemId|| null,
   };
+}
+
+// ── Patch photo folder info back onto the list item after upload ──────────────
+async function patchPhotoFolder(itemId, folderWebUrl, driveId, folderItemId, env, token) {
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" };
+  const { siteId, listId } = await resolveListIds(env, token);
+  await graphFetch(
+    `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${itemId}/fields`,
+    {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({
+        PhotoFolderUrl:    folderWebUrl,
+        PhotoDriveId:      driveId,
+        PhotoFolderItemId: folderItemId,
+      }),
+    }
+  );
+}
+
+// ── GET /reports/:id/photos — list photos in a report's folder ────────────────
+async function handleGetPhotos(request, env, id) {
+  const authError = await validateAzureToken(request, env);
+  if (authError) return corsResponse({ error: authError }, 401, env);
+
+  try {
+    const token = await getAccessToken(env);
+    const { siteId, listId } = await resolveListIds(env, token);
+    const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+
+    // Fetch the list item to get the folder drive/item IDs
+    const item = await graphFetch(
+      `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${id}?expand=fields($select=PhotoDriveId,PhotoFolderItemId,PhotoFolderUrl)`,
+      { headers }
+    );
+
+    const driveId      = item.fields?.PhotoDriveId;
+    const folderItemId = item.fields?.PhotoFolderItemId;
+    const folderUrl    = item.fields?.PhotoFolderUrl;
+
+    if (!driveId || !folderItemId) {
+      return corsResponse({ photos: [], folderUrl: null }, 200, env);
+    }
+
+    // List children of the folder
+    const childrenRes = await graphFetch(
+      `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${folderItemId}/children`
+        + `?$select=id,name,webUrl,thumbnails,file`,
+      { headers }
+    );
+
+    // Request thumbnails in the same call for faster rendering
+    const photos = await Promise.all(
+      (childrenRes.value || [])
+        .filter(f => f.file) // files only, not subfolders
+        .map(async f => {
+          let thumbnail = null;
+          try {
+            const thumbRes = await graphFetch(
+              `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${f.id}/thumbnails/0/medium`,
+              { headers }
+            );
+            thumbnail = thumbRes.url || null;
+          } catch { /* thumbnail unavailable */ }
+          return { id: f.id, name: f.name, webUrl: f.webUrl, thumbnail };
+        })
+    );
+
+    return corsResponse({ photos, folderUrl }, 200, env);
+  } catch (err) {
+    console.error("GetPhotos error:", err);
+    return corsResponse({ error: err.message }, 500, env);
+  }
 }
 
 async function createSharePointListItem(fields, env, token) {
@@ -445,7 +565,7 @@ async function createSharePointListItem(fields, env, token) {
 
 async function uploadPhotos(photoFiles, projectTitle, env, token) {
   const validFiles = photoFiles.filter(f => f?.size > 0 && f?.name);
-  if (!validFiles.length) return [];
+  if (!validFiles.length) return { uploaded: [], folderPath: null, folderWebUrl: null };
 
   const headers  = { Authorization: `Bearer ${token}`, Accept: "application/json" };
   const hostname = new URL(env.SHAREPOINT_SITE_URL).hostname;
@@ -457,30 +577,53 @@ async function uploadPhotos(photoFiles, projectTitle, env, token) {
 
   const safeTitle  = (projectTitle || "IC Report").replace(/[^a-zA-Z0-9 _-]/g, "").trim();
   const folderName = `${safeTitle} — ${new Date().toISOString().slice(0, 10)}`;
-  const folderPath = `${env.SHAREPOINT_FOLDER_PATH}/${folderName}`;
 
-  await fetch(
-    `https://graph.microsoft.com/v1.0/drives/${driveId}/root:${folderPath}`,
+  // Create the subfolder using POST to children — more reliable than PATCH
+  const parentPath = env.SHAREPOINT_FOLDER_PATH;
+  const folderRes  = await fetch(
+    `https://graph.microsoft.com/v1.0/drives/${driveId}/root:${parentPath}:/children`,
     {
-      method: "PATCH",
+      method:  "POST",
       headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ name: folderName, folder: {}, "@microsoft.graph.conflictBehavior": "rename" }),
+      body: JSON.stringify({
+        name:   folderName,
+        folder: {},
+        "@microsoft.graph.conflictBehavior": "rename",
+      }),
     }
-  ).catch(() => {});
+  );
 
+  if (!folderRes.ok) {
+    const err = await folderRes.text();
+    throw new Error(`Failed to create photo folder (${folderRes.status}): ${err}`);
+  }
+
+  const folderData    = await folderRes.json();
+  const folderWebUrl  = folderData.webUrl;
+  const folderDriveId = folderData.parentReference?.driveId || driveId;
+  const folderItemId  = folderData.id;
+
+  // Upload each file into the created folder
   const uploaded = [];
   for (const file of validFiles) {
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const res = await fetch(
-      `https://graph.microsoft.com/v1.0/drives/${driveId}/root:${folderPath}/${safeName}:/content`,
-      { method: "PUT", headers: { ...headers, "Content-Type": file.type || "application/octet-stream" }, body: await file.arrayBuffer() }
+      `https://graph.microsoft.com/v1.0/drives/${folderDriveId}/items/${folderItemId}:/${safeName}:/content`,
+      {
+        method:  "PUT",
+        headers: { ...headers, "Content-Type": file.type || "application/octet-stream" },
+        body:    await file.arrayBuffer(),
+      }
     );
     if (res.ok) {
       const data = await res.json();
-      uploaded.push({ name: safeName, webUrl: data.webUrl });
+      uploaded.push({ name: safeName, webUrl: data.webUrl, id: data.id });
+    } else {
+      console.warn(`Upload failed for ${safeName}: ${res.status} ${await res.text()}`);
     }
   }
-  return uploaded;
+
+  return { uploaded, folderWebUrl, driveId: folderDriveId, folderItemId };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -488,6 +631,8 @@ async function uploadPhotos(photoFiles, projectTitle, env, token) {
 // ────────────────────────────────────────────────────────────────────────────
 
 async function sendConfirmationEmail(fields, env, token) {
+  const isTestMode = env.TEST_MODE === "true";
+
   const totalCoordTrip =
     (toNum(fields.ticketsCost)       || 0) +
     (toNum(fields.fuelCost)          || 0) +
@@ -506,8 +651,17 @@ async function sendConfirmationEmail(fields, env, token) {
       </div>`)
     .join("");
 
+  // ── Test mode banner (injected at top of email body) ──────────────────────
+  const testBanner = isTestMode ? `
+  <div style="background:#f5a623;padding:14px 40px;border-bottom:3px solid #c8820a;">
+    <p style="margin:0;font-family:Georgia,serif;font-size:14px;font-weight:bold;color:#1a1a1a;">
+      ⚠ TEST MODE — This email would normally go to: ${env.EMAIL_RECIPIENT}
+    </p>
+  </div>` : "";
+
   const emailBody = `
 <html><body style="font-family:Georgia,serif;color:#1a1a1a;max-width:680px;margin:0 auto;">
+  ${testBanner}
   <div style="background:#1a3a5c;padding:32px 40px;">
     <h1 style="color:#fff;margin:0;font-size:22px;letter-spacing:1px;">IC PROJECT REPORT RECEIVED</h1>
     <p style="color:#a8c4e0;margin:8px 0 0;">Submitted ${new Date(fields.submittedAt).toLocaleString("en-US",{dateStyle:"long",timeStyle:"short"})}</p>
@@ -550,9 +704,15 @@ async function sendConfirmationEmail(fields, env, token) {
     </table>
   </div>
   <div style="padding:20px 40px;background:#1a3a5c;color:#a8c4e0;font-size:12px;">
-    <p style="margin:0;">Submitted by ${fields.coordinatorName || "coordinator"} · IC Project Report System</p>
+    <p style="margin:0;">Submitted by ${fields.coordinatorName || "coordinator"} · IC Project Report System${isTestMode ? " · TEST MODE" : ""}</p>
   </div>
 </body></html>`;
+
+  // ── Routing: test mode sends only to TEST_EMAIL_RECIPIENT, no CC ──────────
+  const recipient = isTestMode ? env.TEST_EMAIL_RECIPIENT : env.EMAIL_RECIPIENT;
+  const subject   = isTestMode
+    ? `[TEST] IC Project Report: ${fields.projectTitle || "New Submission"} — ${new Date().toLocaleDateString("en-US")}`
+    : `IC Project Report: ${fields.projectTitle || "New Submission"} — ${new Date().toLocaleDateString("en-US")}`;
 
   const res = await fetch(
     `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(env.EMAIL_SENDER)}/sendMail`,
@@ -561,10 +721,11 @@ async function sendConfirmationEmail(fields, env, token) {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         message: {
-          subject:      `IC Project Report: ${fields.projectTitle || "New Submission"} — ${new Date().toLocaleDateString("en-US")}`,
+          subject,
           body:         { contentType: "HTML", content: emailBody },
-          toRecipients: [{ emailAddress: { address: env.EMAIL_RECIPIENT } }],
-          ...(fields.coordinatorEmail && {
+          toRecipients: [{ emailAddress: { address: recipient } }],
+          // In test mode, suppress CC so coordinators don't receive test emails
+          ...(!isTestMode && fields.coordinatorEmail && {
             ccRecipients: [{ emailAddress: { address: fields.coordinatorEmail, name: fields.coordinatorName || undefined } }],
           }),
         },
@@ -573,7 +734,7 @@ async function sendConfirmationEmail(fields, env, token) {
     }
   );
   if (!res.ok) throw new Error(`sendMail failed (${res.status}): ${await res.text()}`);
-  return { sent: true };
+  return { sent: true, testMode: isTestMode, recipient };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
