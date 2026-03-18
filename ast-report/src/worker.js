@@ -836,6 +836,10 @@ async function retrySharePointUploadWithV1Token(context) {
   );
 }
 
+function encodeODataString(value) {
+  return String(value).replace(/'/g, "''");
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Confirmation email
 // ────────────────────────────────────────────────────────────────────────────
