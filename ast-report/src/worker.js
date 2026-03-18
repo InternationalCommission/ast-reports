@@ -776,6 +776,99 @@ async function uploadFileViaGraphSession(driveId, folderId, fileName, mimeType, 
   throw new Error('Graph upload session ended without a completed file');
 }
 
+async function fallbackToGraphUpload(context, reason) {
+  const { driveId, folderId, fileName, mimeType, buffer, graphToken, preferChunkedGraphUpload } = context;
+
+  if (!graphToken || !driveId || !folderId) {
+    throw new Error(`${reason}: Graph fallback unavailable`);
+  }
+
+  console.warn(`>>> ${reason}; falling back to Microsoft Graph drive upload`);
+
+  if (preferChunkedGraphUpload) {
+    return uploadFileViaGraphSession(driveId, folderId, fileName, mimeType, buffer, graphToken);
+  }
+
+  return uploadFileViaGraphPut(driveId, folderId, fileName, mimeType, buffer, graphToken);
+}
+
+async function uploadFileViaGraphPut(driveId, folderId, fileName, mimeType, buffer, graphToken) {
+  const uploadUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${folderId}:/${encodeURIComponent(fileName)}:/content`;
+  console.log(`>>> GRAPH SIMPLE UPLOAD: ${uploadUrl}`);
+
+  const res = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${graphToken}`,
+      Accept: "application/json",
+      "Content-Type": mimeType,
+    },
+    body: buffer,
+  });
+
+  if (!res.ok) {
+    throw new Error(`Graph simple upload failed (${res.status}): ${(await res.text().catch(() => "")).slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  return data.webUrl;
+}
+
+async function uploadFileViaGraphSession(driveId, folderId, fileName, mimeType, buffer, graphToken) {
+  const createUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${folderId}:/${encodeURIComponent(fileName)}:/createUploadSession`;
+  console.log(`>>> GRAPH CHUNKED CREATE SESSION: ${createUrl}`);
+
+  const sessionRes = await fetch(createUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${graphToken}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      item: {
+        "@microsoft.graph.conflictBehavior": "replace",
+        name: fileName,
+      },
+    }),
+  });
+
+  if (!sessionRes.ok) {
+    throw new Error(`Graph upload session failed (${sessionRes.status}): ${(await sessionRes.text().catch(() => "")).slice(0, 200)}`);
+  }
+
+  const { uploadUrl } = await sessionRes.json();
+  const chunkSize = 5 * 1024 * 1024;
+
+  for (let start = 0; start < buffer.byteLength; start += chunkSize) {
+    const end = Math.min(start + chunkSize, buffer.byteLength);
+    const chunk = buffer.slice(start, end);
+    const contentRange = `bytes ${start}-${end - 1}/${buffer.byteLength}`;
+    console.log(`>>> GRAPH CHUNK ${contentRange}`);
+
+    const chunkRes = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Length": String(chunk.byteLength),
+        "Content-Range": contentRange,
+        "Content-Type": mimeType,
+      },
+      body: chunk,
+    });
+
+    if (!(chunkRes.status === 202 || chunkRes.ok)) {
+      throw new Error(`Graph chunk upload failed (${chunkRes.status}): ${(await chunkRes.text().catch(() => "")).slice(0, 200)}`);
+    }
+
+    if (chunkRes.ok) {
+      const data = await chunkRes.json();
+      return data.webUrl;
+    }
+  }
+
+  throw new Error(`Graph upload session ended without a completed file`);
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Confirmation email
 // ────────────────────────────────────────────────────────────────────────────
