@@ -21,6 +21,18 @@
     body { font-family: 'Source Serif 4', Georgia, serif; background: var(--paper); color: var(--ink); min-height: 100vh; }
 
     /* Header */
+    .lang-hint {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      padding: 10px 20px;
+      text-align: center;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .lang-hint.hidden { display: none; }
     .site-header { background: var(--navy); padding: 40px 24px 36px; text-align: center; position: relative; overflow: hidden; }
     .site-header::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg,transparent,transparent 40px,rgba(200,169,110,.06) 40px,rgba(200,169,110,.06) 41px); }
     .site-header h1 { font-family: 'Playfair Display', serif; font-size: clamp(22px, 5vw, 36px); color: #fff; letter-spacing: .5px; position: relative; }
@@ -116,7 +128,12 @@
 </head>
 <body>
 
-<header class="site-header">
+  <!-- Translation hint banner -->
+  <div class="lang-hint" id="langHint">
+    <span id="langHintText">🌐 This page can be translated by your browser. Look for the translate option in your browser's context menu.</span>
+    <button type="button" id="langDismiss" title="Dismiss" style="background:none;border:none;color:inherit;cursor:pointer;margin-left:8px;opacity:.7;">✕</button>
+  </div>
+  <header class="site-header">
   <h1>IC Project Report</h1>
   <div class="gold-line"></div>
   <p>Submit your project report — statistics, testimonies &amp; financial documentation</p>
@@ -552,6 +569,16 @@
     setTimeout(() => t.classList.add("show"), 10);
     setTimeout(() => t.classList.remove("show"), 5500);
   }
+
+  // ── Language hint dismiss ───────────────────────────────────────────────────
+  const langHint = document.getElementById("langHint");
+  if (localStorage.getItem("langHintDismissed")) {
+    langHint.classList.add("hidden");
+  }
+  document.getElementById("langDismiss").addEventListener("click", () => {
+    langHint.classList.add("hidden");
+    localStorage.setItem("langHintDismissed", "1");
+  });
 </script>
 </body>
 </html>
