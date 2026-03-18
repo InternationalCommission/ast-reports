@@ -576,8 +576,14 @@ async function uploadPhotos(photoFiles, projectTitle, env, token) {
   const sitePath = new URL(env.SHAREPOINT_SITE_URL).pathname;
 
   const siteRes  = await graphFetch(`https://graph.microsoft.com/v1.0/sites/${hostname}:${sitePath}`, { headers });
+
+  // Log all available drives so we can identify the correct one
+  const drivesRes = await graphFetch(`https://graph.microsoft.com/v1.0/sites/${siteRes.id}/drives?$select=id,name,webUrl`, { headers });
+  console.log(`Available drives: ${JSON.stringify(drivesRes.value.map(d => ({ id: d.id, name: d.name, url: d.webUrl })))}`);
+
   const driveRes = await graphFetch(`https://graph.microsoft.com/v1.0/sites/${siteRes.id}/drive`, { headers });
   const driveId  = driveRes.id;
+  console.log(`Using default drive: ${driveId} (${driveRes.name}) at ${driveRes.webUrl}`);
 
   const safeTitle  = (projectTitle || "IC Report").replace(/[^a-zA-Z0-9 _-]/g, "").trim();
   const folderName = `${safeTitle} - ${new Date().toISOString().slice(0, 10)}`;
@@ -587,33 +593,46 @@ async function uploadPhotos(photoFiles, projectTitle, env, token) {
   // NOT the full server-relative path like /sites/reports/Documents/Report Photos
   const parentPath = decodeURIComponent(env.SHAREPOINT_FOLDER_PATH).replace(/^\//, "");
 
-  console.log(`Creating folder "${folderName}" under "${parentPath}" on drive ${driveId}`);
+  console.log(`Resolving folder "${folderName}" under "${parentPath}" on drive ${driveId}`);
 
-  const folderRes = await fetch(
-    `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${parentPath}:/children`,
-    {
-      method:  "POST",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name:   folderName,
-        folder: {},
-        "@microsoft.graph.conflictBehavior": "rename",
-      }),
-    }
+  // Try to use an existing folder first — avoids creating duplicates like "folder 1"
+  let folderData = null;
+  const existingRes = await fetch(
+    `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${parentPath}/${encodeURIComponent(folderName)}`,
+    { headers }
   );
 
-  if (!folderRes.ok) {
-    const errText = await folderRes.text();
-    console.error(`Folder creation failed (${folderRes.status}): ${errText}`);
-    throw new Error(`Failed to create photo folder (${folderRes.status}) at "${parentPath}": ${errText}`);
+  if (existingRes.ok) {
+    folderData = await existingRes.json();
+    console.log(`Using existing folder: id=${folderData.id} url=${folderData.webUrl}`);
+  } else {
+    // Folder doesn't exist — create it
+    const folderRes = await fetch(
+      `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${parentPath}:/children`,
+      {
+        method:  "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name:   folderName,
+          folder: {},
+          "@microsoft.graph.conflictBehavior": "fail",
+        }),
+      }
+    );
+
+    if (!folderRes.ok) {
+      const errText = await folderRes.text();
+      console.error(`Folder creation failed (${folderRes.status}): ${errText}`);
+      throw new Error(`Failed to create photo folder (${folderRes.status}) at "${parentPath}": ${errText}`);
+    }
+
+    folderData = await folderRes.json();
+    console.log(`Folder created: id=${folderData.id} url=${folderData.webUrl}`);
   }
 
-  const folderData    = await folderRes.json();
   const folderWebUrl  = folderData.webUrl;
   const folderDriveId = folderData.parentReference?.driveId || driveId;
   const folderItemId  = folderData.id;
-
-  console.log(`Folder created: id=${folderItemId} url=${folderWebUrl}`);
 
   // Upload each file into the created folder
   const uploaded = [];
@@ -640,7 +659,7 @@ async function uploadPhotos(photoFiles, projectTitle, env, token) {
     );
 
     const uploadText = await uploadRes.text();
-    console.log(`Upload response ${uploadRes.status}: ${uploadText.slice(0, 200)}`);
+    console.log(`Upload response ${uploadRes.status} for ${safeName}: ${uploadText.slice(0, 500)}`);
 
     if (uploadRes.ok) {
       const data = JSON.parse(uploadText);
