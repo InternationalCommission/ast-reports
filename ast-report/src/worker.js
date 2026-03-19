@@ -181,12 +181,48 @@ async function handleGetReports(request, env, url) {
           + `&$filter=IsRecycled eq false`
           + `&$top=${top}`;
 
-    const res   = await graphFetch(endpoint, { headers });
+    let res;
+    let graphFilterFailed = false;
+    try {
+      res = await graphFetch(endpoint, { headers });
+    } catch (filterError) {
+      // If filter fails (e.g., IsRecycled column not found), fetch all and filter client-side
+      console.error("Filter failed, falling back to client-side filtering:", filterError.message);
+      graphFilterFailed = true;
+      const fallbackEndpoint = cursor
+        ? decodeURIComponent(cursor)
+        : `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`
+            + `?expand=fields`
+            + `&$top=${top}`;
+      res = await graphFetch(fallbackEndpoint, { headers });
+      // Log available fields for debugging
+      if (res.value?.length > 0) {
+        const firstItemFields = res.value[0].fields;
+        const fieldNames = firstItemFields ? Object.keys(firstItemFields) : [];
+        console.log("Available fields:", JSON.stringify(fieldNames));
+        console.log("First item raw fields:", JSON.stringify(firstItemFields));
+      }
+    }
 
     // Sort descending by SubmittedAt client-side since the column isn't indexed
-    const items = (res.value || [])
-      .map(item => normalizeItem(item))
-      .sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime());
+    let items = (res.value || [])
+      .map(item => normalizeItem(item));
+
+    // If Graph filter failed, check if IsRecycled exists and filter client-side
+    if (graphFilterFailed && items.length > 0) {
+      const rawFields = res.value[0]?.fields;
+      if (rawFields && 'IsRecycled' in rawFields) {
+        console.log("IsRecycled found in fields - applying client-side filter");
+        items = items.filter(item => !item.isRecycled);
+      } else {
+        console.warn("IsRecycled field NOT found in SharePoint - showing all items");
+      }
+    } else if (!graphFilterFailed) {
+      // Graph filter worked, but still filter in case of inconsistencies
+      items = items.filter(item => !item.isRecycled);
+    }
+
+    items.sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime());
 
     // Convert SharePoint's nextLink into a worker-relative cursor URL so the
     // admin never calls SharePoint directly and all requests stay authenticated.
@@ -721,11 +757,40 @@ async function handleGetRecycleBin(request, env) {
 			+ `?expand=fields`
 			+ `&$filter=IsRecycled eq true`;
 
-		const res = await graphFetch(endpoint, { headers });
+		let res;
+		let graphFilterFailed = false;
+		try {
+			res = await graphFetch(endpoint, { headers });
+		} catch (filterError) {
+			console.error("Recycle bin filter failed, falling back to client-side filtering:", filterError.message);
+			graphFilterFailed = true;
+			const fallbackEndpoint = `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`
+				+ `?expand=fields`
+				+ `&$top=5000`;
+			res = await graphFetch(fallbackEndpoint, { headers });
+			if (res.value?.length > 0) {
+				const firstItemFields = res.value[0].fields;
+				const fieldNames = firstItemFields ? Object.keys(firstItemFields) : [];
+				console.log("Available fields:", JSON.stringify(fieldNames));
+			}
+		}
 
-		const items = (res.value || [])
-			.map(item => normalizeItem(item))
-			.sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime());
+		let items = (res.value || [])
+			.map(item => normalizeItem(item));
+
+		if (graphFilterFailed && items.length > 0) {
+			const rawFields = res.value[0]?.fields;
+			if (rawFields && 'IsRecycled' in rawFields) {
+				console.log("IsRecycled found - applying client-side filter for recycle bin");
+				items = items.filter(item => item.isRecycled);
+			} else {
+				console.warn("IsRecycled field NOT found - showing all items in recycle bin");
+			}
+		} else if (!graphFilterFailed) {
+			items = items.filter(item => item.isRecycled);
+		}
+
+		items.sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime());
 
 		return corsResponse({ items, roles: roleCheck.roles }, 200, env);
 	} catch (err) {
