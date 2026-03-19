@@ -120,6 +120,9 @@ Add-ColumnIfMissing -InternalName "PhotoFolderServerRelativePath" -DisplayName "
 Add-ColumnIfMissing -InternalName "PhotoDriveId"                  -DisplayName "Photo Drive ID"                    -Type "Text"
 Add-ColumnIfMissing -InternalName "PhotoFolderItemId"             -DisplayName "Photo Folder Item ID"              -Type "Text"
 
+# Section 6 — Recycle Bin (soft delete)
+Add-ColumnIfMissing -InternalName "IsRecycled" -DisplayName "Is Recycled" -Type "Boolean"
+
 # ── Done ──────────────────────────────────────────────────────────────────────
 Write-Host "`n─────────────────────────────────────────"
 Write-Host "Done. All columns processed." -ForegroundColor Green

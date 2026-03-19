@@ -3,9 +3,14 @@
  *
  * POST /              — Submit a report (public, CORS-restricted)
  * GET  /reports       — Fetch all reports for admin viewer (requires Azure AD JWT)
+ * GET  /reports/recycle-bin — Fetch recycled reports (requires SuperAdmin role)
  * GET  /reports/:id   — Fetch single report by SharePoint item ID
  * POST /reports/:id/edit-token — Generate edit token (requires Azure AD JWT)
- * PATCH /reports/:id  — Update report (requires valid edit token)
+ * PATCH /reports/:id  — Update report (requires valid edit token + ReadWrite/SuperAdmin role)
+ * POST /reports/:id/recycle — Move report to recycle bin (requires ReadWrite/SuperAdmin role)
+ * POST /reports/:id/restore — Restore report from recycle bin (requires SuperAdmin role)
+ * DELETE /reports/:id/permanent — Permanently delete report (requires SuperAdmin role)
+ * GET  /reports/:id/photos — List photos in report's folder
  *
  * Required Environment Variables (wrangler secret put ...):
  *   AZURE_TENANT_ID         - Azure AD tenant ID
@@ -22,6 +27,9 @@
  *   EMAIL_RECIPIENT         - Where confirmation emails go
  *   ALLOWED_ORIGIN          - Your website origin for CORS (form + admin)
  *   EDIT_TOKEN_SECRET       - Secret key for signing edit tokens (wrangler secret put)
+ *   SUPER_ADMIN_GROUP_ID    - Azure AD group ID for Super Admin role
+ *   READWRITE_GROUP_ID      - Azure AD group ID for Read/Write role
+ *   READONLY_GROUP_ID       - Azure AD group ID for Read-only role
  */
 
 export default {
@@ -34,6 +42,7 @@ export default {
 
     if (method === "POST" && path === "/")          return handleSubmit(request, env);
     if (method === "GET"  && path === "/reports")   return handleGetReports(request, env, url);
+    if (method === "GET"  && path === "/reports/recycle-bin") return handleGetRecycleBin(request, env);
     if (method === "POST" && path.match(/^\/reports\/[^/]+\/edit-token$/)) {
       const id = path.split("/reports/")[1].replace("/edit-token", "");
       return handleEditToken(request, env, id);
@@ -41,6 +50,18 @@ export default {
     if (method === "PATCH" && path.match(/^\/reports\/[^/]+$/)) {
       const id = path.split("/reports/")[1];
       return handleUpdateReport(request, env, id);
+    }
+    if (method === "POST" && path.match(/^\/reports\/[^/]+\/recycle$/)) {
+      const id = path.split("/reports/")[1].replace("/recycle", "");
+      return handleRecycleReport(request, env, id);
+    }
+    if (method === "POST" && path.match(/^\/reports\/[^/]+\/restore$/)) {
+      const id = path.split("/reports/")[1].replace("/restore", "");
+      return handleRestoreReport(request, env, id);
+    }
+    if (method === "DELETE" && path.match(/^\/reports\/[^/]+\/permanent$/)) {
+      const id = path.split("/reports/")[1].replace("/permanent", "");
+      return handlePermanentDelete(request, env, id);
     }
     if (method === "GET"  && path.match(/^\/reports\/[^/]+\/photos$/)) {
       const id = path.split("/reports/")[1].replace("/photos", "");
@@ -152,10 +173,12 @@ async function handleGetReports(request, env, url) {
 
     // Fetch all fields without $select — avoids 400s from missing columns.
     // No $orderby — SubmittedAt is not indexed; we sort client-side below.
+    // Filter to exclude recycled items.
     const endpoint = cursor
       ? decodeURIComponent(cursor)
       : `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`
           + `?expand=fields`
+          + `&$filter=IsRecycled eq false`
           + `&$top=${top}`;
 
     const res   = await graphFetch(endpoint, { headers });
@@ -273,6 +296,9 @@ async function handleUpdateReport(request, env, id) {
   if (!env.EDIT_TOKEN_SECRET) {
     return corsResponse({ error: "Edit token secret not configured" }, 500, env);
   }
+
+  const roleCheck = await requireRole(request, env, ["SuperAdmin", "ReadWrite"]);
+  if (roleCheck.error) return corsResponse({ error: roleCheck.error }, 403, env);
 
   try {
     const formData = await request.formData();
@@ -406,6 +432,41 @@ async function validateAzureToken(request, env) {
   }
 
   return null; // ✓ valid
+}
+
+function getUserRoles(payload, env) {
+  const groups = payload.groups || [];
+  const roles = [];
+  if (groups.includes(env.SUPER_ADMIN_GROUP_ID)) roles.push("SuperAdmin");
+  if (groups.includes(env.READWRITE_GROUP_ID)) roles.push("ReadWrite");
+  if (groups.includes(env.READONLY_GROUP_ID)) roles.push("ReadOnly");
+  return roles;
+}
+
+async function requireRole(request, env, requiredRoles) {
+  const authHeader = request.headers.get("Authorization") || "";
+  if (!authHeader.startsWith("Bearer ")) return { error: "Missing Bearer token", roles: [] };
+
+  const token = authHeader.slice(7).trim();
+  const parts = token.split(".");
+  if (parts.length !== 3) return { error: "Malformed JWT", roles: [] };
+
+  let header, payload;
+  try {
+    header  = JSON.parse(b64urlDecode(parts[0]));
+    payload = JSON.parse(b64urlDecode(parts[1]));
+  } catch {
+    return { error: "Could not decode JWT", roles: [] };
+  }
+
+  const roles = getUserRoles(payload, env);
+  const hasRole = requiredRoles.some(role => roles.includes(role));
+
+  if (!hasRole) {
+    return { error: `Access denied. Required roles: ${requiredRoles.join(" or ")}`, roles };
+  }
+
+  return { error: null, roles };
 }
 
 function b64urlDecode(str) {
@@ -567,6 +628,8 @@ function normalizeItem(item) {
     photoFolderServerRelativePath:   f.PhotoFolderServerRelativePath || null,
     photoDriveId:                    f.PhotoDriveId || null,
     photoFolderItemId:               f.PhotoFolderItemId || null,
+    // Recycle bin status
+    isRecycled:                 f.IsRecycled || false,
   };
 }
 
@@ -629,6 +692,153 @@ async function handleGetPhotos(request, env, id) {
 		return corsResponse({ photos, folderUrl }, 200, env);
 	} catch (err) {
 		console.error("GetPhotos error:", err);
+		return corsResponse({ error: err.message }, 500, env);
+	}
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// GET /reports/recycle-bin — Return all recycled reports (SuperAdmin only)
+// ────────────────────────────────────────────────────────────────────────────
+
+async function handleGetRecycleBin(request, env) {
+	const authError = await validateAzureToken(request, env);
+	if (authError) return corsResponse({ error: authError }, 401, env);
+
+	const roleCheck = await requireRole(request, env, ["SuperAdmin"]);
+	if (roleCheck.error) return corsResponse({ error: roleCheck.error }, 403, env);
+
+	try {
+		const token = await getAccessToken(env);
+		const { siteId, listId } = await resolveListIds(env, token);
+
+		const headers = {
+			Authorization: `Bearer ${token}`,
+			Accept: "application/json",
+			Prefer: "HonorNonIndexedQueriesWarningMayFailRandomly",
+		};
+
+		const endpoint = `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`
+			+ `?expand=fields`
+			+ `&$filter=IsRecycled eq true`;
+
+		const res = await graphFetch(endpoint, { headers });
+
+		const items = (res.value || [])
+			.map(item => normalizeItem(item))
+			.sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime());
+
+		return corsResponse({ items, roles: roleCheck.roles }, 200, env);
+	} catch (err) {
+		console.error("GetRecycleBin error:", err);
+		return corsResponse({ error: err.message }, 500, env);
+	}
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// POST /reports/:id/recycle — Move report to recycle bin (ReadWrite+)
+// ────────────────────────────────────────────────────────────────────────────
+
+async function handleRecycleReport(request, env, id) {
+	const authError = await validateAzureToken(request, env);
+	if (authError) return corsResponse({ error: authError }, 401, env);
+
+	const roleCheck = await requireRole(request, env, ["SuperAdmin", "ReadWrite"]);
+	if (roleCheck.error) return corsResponse({ error: roleCheck.error }, 403, env);
+
+	try {
+		const token = await getAccessToken(env);
+		const { siteId, listId } = await resolveListIds(env, token);
+
+		const headers = {
+			Authorization: `Bearer ${token}`,
+			"Content-Type": "application/json",
+			Accept: "application/json",
+		};
+
+		await graphFetch(
+			`https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${id}/fields`,
+			{
+				method: "PATCH",
+				headers,
+				body: JSON.stringify({ IsRecycled: true }),
+			}
+		);
+
+		return corsResponse({ success: true, message: "Report moved to recycle bin" }, 200, env);
+	} catch (err) {
+		console.error("RecycleReport error:", err);
+		return corsResponse({ error: err.message }, 500, env);
+	}
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// POST /reports/:id/restore — Restore report from recycle bin (SuperAdmin only)
+// ────────────────────────────────────────────────────────────────────────────
+
+async function handleRestoreReport(request, env, id) {
+	const authError = await validateAzureToken(request, env);
+	if (authError) return corsResponse({ error: authError }, 401, env);
+
+	const roleCheck = await requireRole(request, env, ["SuperAdmin"]);
+	if (roleCheck.error) return corsResponse({ error: roleCheck.error }, 403, env);
+
+	try {
+		const token = await getAccessToken(env);
+		const { siteId, listId } = await resolveListIds(env, token);
+
+		const headers = {
+			Authorization: `Bearer ${token}`,
+			"Content-Type": "application/json",
+			Accept: "application/json",
+		};
+
+		await graphFetch(
+			`https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${id}/fields`,
+			{
+				method: "PATCH",
+				headers,
+				body: JSON.stringify({ IsRecycled: false }),
+			}
+		);
+
+		return corsResponse({ success: true, message: "Report restored from recycle bin" }, 200, env);
+	} catch (err) {
+		console.error("RestoreReport error:", err);
+		return corsResponse({ error: err.message }, 500, env);
+	}
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// DELETE /reports/:id/permanent — Permanently delete report (SuperAdmin only)
+// ────────────────────────────────────────────────────────────────────────────
+
+async function handlePermanentDelete(request, env, id) {
+	const authError = await validateAzureToken(request, env);
+	if (authError) return corsResponse({ error: authError }, 401, env);
+
+	const roleCheck = await requireRole(request, env, ["SuperAdmin"]);
+	if (roleCheck.error) return corsResponse({ error: roleCheck.error }, 403, env);
+
+	try {
+		const token = await getAccessToken(env);
+		const { siteId, listId } = await resolveListIds(env, token);
+
+		const headers = {
+			Authorization: `Bearer ${token}`,
+			Accept: "application/json",
+		};
+
+		await graphFetch(
+			`https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${id}`,
+			{
+				method: "DELETE",
+				headers,
+			}
+		);
+
+		return corsResponse({ success: true, message: "Report permanently deleted" }, 200, env);
+	} catch (err) {
+		console.error("PermanentDelete error:", err);
 		return corsResponse({ error: err.message }, 500, env);
 	}
 }

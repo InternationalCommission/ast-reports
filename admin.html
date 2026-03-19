@@ -290,7 +290,10 @@
 <!-- ── App body ── -->
 <div class="app-body">
   <div class="sidebar">
-    <div class="sidebar-header">Reports</div>
+    <div class="sidebar-header" style="display:flex;justify-content:space-between;align-items:center;">
+      <span id="sidebarTitle">Reports</span>
+      <button id="recycleBinBtn" onclick="toggleRecycleBin()" style="display:none;background:none;border:1px solid rgba(26,58,92,.3);color:var(--navy);padding:2px 8px;border-radius:3px;font-size:11px;cursor:pointer;" title="View Recycle Bin">♻️ Recycle Bin</button>
+    </div>
     <div class="report-list" id="reportList">
       <div style="padding:24px 18px;color:var(--muted);font-size:13px;font-style:italic;">Sign in to load reports.</div>
     </div>
@@ -330,12 +333,50 @@
   const TENANT_ID       = "3e34eb62-b83a-4aa8-8ba8-d0959d15e612";
   const ADMIN_CLIENT_ID = "66d5787b-f69b-468a-af0b-6791dee76928";
 
+  // Azure AD Group IDs for role-based access control
+  const GROUP_IDS = {
+    SuperAdmin: "a21edf30-1be1-4a2c-b13b-411e130d41e2",
+    ReadWrite: "2a94d6d7-85d8-482b-92a1-7dda91f3daba",
+    ReadOnly: "ba1c0013-5cbb-4b5a-b625-19ae165953e5",
+  };
+
   // When using a single app registration, the app implicitly has access to its
   // own scopes — no "API permissions" grant is needed in the portal. Azure will
   // prompt the user for consent on first sign-in automatically.
   const API_SCOPE = `api://${ADMIN_CLIENT_ID}/Reports.Read`;
 
   const PAGE_SIZE = 25;
+
+  // ── Role helpers ────────────────────────────────────────────────────────────
+  function getUserRoles() {
+    const idToken = msalInstance.getActiveAccount()?.idTokenClaims || {};
+    const groups = idToken.groups || [];
+    const roles = [];
+    if (groups.includes(GROUP_IDS.SuperAdmin)) roles.push("SuperAdmin");
+    if (groups.includes(GROUP_IDS.ReadWrite)) roles.push("ReadWrite");
+    if (groups.includes(GROUP_IDS.ReadOnly)) roles.push("ReadOnly");
+    return roles;
+  }
+
+  function hasRole(role) {
+    return getUserRoles().includes(role);
+  }
+
+  function canEdit() {
+    return hasRole("SuperAdmin") || hasRole("ReadWrite");
+  }
+
+  function canRecycle() {
+    return hasRole("SuperAdmin") || hasRole("ReadWrite");
+  }
+
+  function canRestore() {
+    return hasRole("SuperAdmin");
+  }
+
+  function canAccessRecycleBin() {
+    return hasRole("SuperAdmin");
+  }
 
   // ── MSAL setup ────────────────────────────────────────────────────────────
   const msalInstance = new msal.PublicClientApplication({
@@ -372,6 +413,8 @@
   let activeId       = null;
   let nextLink       = null;
   let loading        = false;
+  let recycleBinReports = [];
+  let showingRecycleBin = false;
 
   // ── Fetch edit token from worker (requires Azure AD auth) ─────────────────────
   async function getEditToken(reportId) {
@@ -528,6 +571,11 @@
     document.getElementById("userChip").style.display = "flex";
     document.getElementById("signOutBtn").style.display = "block";
 
+    // Show recycle bin button for Super Admins
+    if (canAccessRecycleBin()) {
+      document.getElementById("recycleBinBtn").style.display = "inline-block";
+    }
+
     loadReports();
   }
 
@@ -546,13 +594,174 @@
     document.getElementById("userChip").style.display   = "none";
     document.getElementById("signOutBtn").style.display = "none";
     document.getElementById("authGate").style.display   = "flex";
+    document.getElementById("recycleBinBtn").style.display = "none";
     document.getElementById("reportList").innerHTML =
       `<div style="padding:24px 18px;color:var(--muted);font-size:13px;font-style:italic;">Sign in to load reports.</div>`;
     document.getElementById("detailPane").innerHTML =
       `<div class="empty-state"><div class="icon">📋</div><p>Select a report to view details</p></div>`;
     allReports = []; filteredList = []; activeId = null;
+    recycleBinReports = []; showingRecycleBin = false;
     document.getElementById("reportCount").textContent = "";
   }
+
+  // ── Recycle Bin ─────────────────────────────────────────────────────────────
+  window.toggleRecycleBin = async function() {
+    if (!canAccessRecycleBin()) return;
+    
+    showingRecycleBin = !showingRecycleBin;
+    const btn = document.getElementById("recycleBinBtn");
+    
+    if (showingRecycleBin) {
+      btn.textContent = "📄 Reports";
+      btn.style.background = "var(--navy)";
+      btn.style.color = "#fff";
+      document.getElementById("sidebarTitle").textContent = "Recycle Bin";
+      await loadRecycleBin();
+    } else {
+      btn.textContent = "♻️ Recycle Bin";
+      btn.style.background = "none";
+      btn.style.color = "var(--navy)";
+      document.getElementById("sidebarTitle").textContent = "Reports";
+      renderSidebar();
+      if (activeId) {
+        const report = filteredList.find(r => r.id === activeId);
+        if (report) {
+          document.getElementById("detailPane").innerHTML = buildReportHtml(report);
+          loadPhotos(activeId);
+        }
+      }
+    }
+  };
+
+  async function loadRecycleBin() {
+    if (loading) return;
+    loading = true;
+    document.getElementById("reportList").innerHTML =
+      `<div class="loading-state"><div class="spinner-lg"></div><span>Loading recycle bin…</span></div>`;
+    
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(`${WORKER_URL}/reports/recycle-bin`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      
+      recycleBinReports = data.items || [];
+      renderRecycleBinSidebar();
+    } catch (err) {
+      document.getElementById("reportList").innerHTML =
+        `<div style="padding:20px;color:var(--red);font-size:13px;">Error: ${escHtml(err.message)}</div>`;
+    }
+    loading = false;
+  }
+
+  function renderRecycleBinSidebar() {
+    const list = document.getElementById("reportList");
+    document.getElementById("reportCount").textContent =
+      `${recycleBinReports.length} recycled report${recycleBinReports.length !== 1 ? "s" : ""}`;
+
+    if (!recycleBinReports.length) {
+      list.innerHTML = `<div style="padding:24px 18px;color:var(--muted);font-size:13px;text-align:center;">Recycle bin is empty.</div>`;
+      return;
+    }
+
+    list.innerHTML = recycleBinReports.map(r => {
+      const date = r.submittedAt ? new Date(r.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+      return `<div class="report-card${r.id === activeId ? " active" : ""}" onclick="showRecycleBinReport('${r.id}')" style="border-left:3px solid var(--muted);">
+        <div class="rc-title">${escHtml(r.projectTitle || "Untitled Report")}</div>
+        <div class="rc-loc">${escHtml(r.location || "")}</div>
+        ${date ? `<div class="rc-date">Deleted: ${date}</div>` : ""}
+      </div>`;
+    }).join("");
+  }
+
+  window.showRecycleBinReport = function(id) {
+    const report = recycleBinReports.find(r => r.id === id);
+    if (!report) return;
+    activeId = id;
+    document.getElementById("detailPane").innerHTML = buildRecycleBinReportHtml(report);
+    document.getElementById("detailPane").scrollTop = 0;
+  };
+
+  function buildRecycleBinReportHtml(r) {
+    const dateRange = r.projectDateFrom
+      ? (r.projectDateTo ? `${fmt(r.projectDateFrom)} – ${fmt(r.projectDateTo)}` : fmt(r.projectDateFrom))
+      : "";
+
+    return `
+      <div class="report-header" style="background:var(--muted);">
+        <div class="rh-actions" style="display:flex;gap:8px;margin-bottom:12px;">
+          ${canRestore() ? `<button type="button" onclick="restoreReport('${r.id}')" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:3px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;">
+            ↩️ Restore
+          </button>` : ""}
+        </div>
+        <div class="rh-title" style="opacity:.7;">${escHtml(r.projectTitle || "IC Project Report")}</div>
+        <div class="rh-meta" style="opacity:.7;">
+          ${escHtml(r.location || "")}${dateRange ? ` &nbsp;·&nbsp; ${dateRange}` : ""}
+        </div>
+        <div class="rh-coordinator">
+          ${r.coordinatorName  ? `<span style="background:rgba(255,255,255,.2);">👤 ${escHtml(r.coordinatorName)}</span>`  : ""}
+          ${r.coordinatorEmail ? `<span style="background:rgba(255,255,255,.2);">✉ ${escHtml(r.coordinatorEmail)}</span>` : ""}
+        </div>
+      </div>
+      <div class="report-body" style="opacity:.7;">
+        <p style="color:var(--muted);font-style:italic;padding:20px;text-align:center;background:var(--paper);border-radius:4px;">
+          This report is in the recycle bin and hidden from the main list.<br>
+          ${canRestore() ? `<button onclick="restoreReport('${r.id}')" style="margin-top:12px;padding:8px 16px;background:var(--green);color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:13px;">↩️ Restore Report</button>` : ""}
+        </p>
+      </div>`;
+  }
+
+  window.restoreReport = async function(reportId) {
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(`${WORKER_URL}/reports/${reportId}/restore`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      
+      showToast("Report restored successfully");
+      await loadRecycleBin();
+      await loadReports();
+    } catch (err) {
+      showToast("Failed to restore: " + err.message, true);
+    }
+  };
+
+  window.recycleReport = async function(reportId) {
+    if (!canRecycle()) {
+      showToast("You don't have permission to recycle reports", true);
+      return;
+    }
+    
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(`${WORKER_URL}/reports/${reportId}/recycle`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      
+      showToast("Report moved to recycle bin");
+      allReports = allReports.filter(r => r.id !== reportId);
+      filteredList = filteredList.filter(r => r.id !== reportId);
+      if (activeId === reportId) {
+        activeId = null;
+        document.getElementById("detailPane").innerHTML =
+          `<div class="empty-state"><div class="icon">📋</div><p>Report moved to recycle bin</p></div>`;
+      }
+      renderSidebar();
+    } catch (err) {
+      showToast("Failed to recycle: " + err.message, true);
+    }
+  };
 
   // ── Acquire access token for the API ─────────────────────────────────────
   async function getAccessToken() {
@@ -810,9 +1019,12 @@
     return `
       <div class="report-header">
         <div class="rh-actions" style="display:flex;gap:8px;margin-bottom:12px;">
-          <button type="button" onclick="openEditForm('${r.id}')" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:3px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;">
+          ${canEdit() ? `<button type="button" onclick="openEditForm('${r.id}')" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:3px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;">
             ✏️ Edit Report
-          </button>
+          </button>` : ""}
+          ${canRecycle() ? `<button type="button" onclick="recycleReport('${r.id}')" style="background:rgba(155,35,53,.3);border:1px solid rgba(155,35,53,.5);color:#fff;padding:6px 14px;border-radius:3px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;" title="Move to Recycle Bin">
+            🗑️ Recycle
+          </button>` : ""}
           <button type="button" onclick="window.print()" class="print-btn" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:3px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;">
             🖨 Print
           </button>

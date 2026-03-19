@@ -150,3 +150,47 @@ Set via `wrangler secret put`:
 - `ALLOWED_ORIGIN` - Website origin for CORS
 - `TEST_MODE` - "true" to send emails to TEST_EMAIL_RECIPIENT
 - `TEST_EMAIL_RECIPIENT` - Override recipient in test mode
+- `EDIT_TOKEN_SECRET` - Secret key for signing edit tokens
+- `SUPER_ADMIN_GROUP_ID` - Azure AD group ID for Super Admin role
+- `READWRITE_GROUP_ID` - Azure AD group ID for Read/Write role
+- `READONLY_GROUP_ID` - Azure AD group ID for Read-only role
+
+---
+
+## Role-Based Access Control
+
+### Roles and Permissions
+
+| Role | View | Edit | Recycle | Restore | Perm. Delete |
+|------|------|------|---------|---------|-------------|
+| Read-only | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Read/Write | ✓ | ✓ | ✓ | ✗ | ✗ |
+| Super Admin | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+### Azure AD Group IDs (Current)
+
+| Role | Group ID |
+|------|----------|
+| Super Admin | `a21edf30-1be1-4a2c-b13b-411e130d41e2` |
+| Read/Write | `2a94d6d7-85d8-482b-92a1-7dda91f3daba` |
+| Read-only | `ba1c0013-5cbb-4b5a-b625-19ae165953e5` |
+
+### API Endpoints
+
+| Method | Endpoint | Role Required | Description |
+|--------|----------|---------------|-------------|
+| GET | `/reports` | Any authenticated | List active reports |
+| GET | `/reports/recycle-bin` | SuperAdmin | List recycled reports |
+| GET | `/reports/:id` | Any authenticated | Get single report |
+| PATCH | `/reports/:id` | ReadWrite+ | Update report |
+| POST | `/reports/:id/recycle` | ReadWrite+ | Move to recycle bin |
+| POST | `/reports/:id/restore` | SuperAdmin | Restore from recycle bin |
+| DELETE | `/reports/:id/permanent` | SuperAdmin | Permanently delete |
+
+### Recycle Bin Feature
+
+Reports can be soft-deleted (recycled) instead of permanently deleted:
+- Recycled reports are hidden from the main list
+- They appear in the Recycle Bin (SuperAdmin only)
+- Reports can be restored or permanently deleted
+- SharePoint column `IsRecycled` tracks status
