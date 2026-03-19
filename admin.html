@@ -735,7 +735,7 @@
       
       showToast("Report restored successfully");
       await loadRecycleBin();
-      filterReports();
+      if (!showingRecycleBin) filterReports();
     } catch (err) {
       showToast("Failed to restore: " + err.message, true);
     }
