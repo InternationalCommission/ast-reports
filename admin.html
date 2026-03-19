@@ -349,15 +349,12 @@
 
   // ── Role helpers ────────────────────────────────────────────────────────────
   function getUserRoles() {
-    const idToken = msalInstance.getActiveAccount()?.idTokenClaims || {};
+    const idToken = currentAccount?.idTokenClaims || {};
     const groups = idToken.groups || [];
     const roles = [];
-    console.log("[DEBUG] Token claims groups:", groups);
-    console.log("[DEBUG] Expected Group IDs:", GROUP_IDS);
     if (groups.includes(GROUP_IDS.SuperAdmin)) roles.push("SuperAdmin");
     if (groups.includes(GROUP_IDS.ReadWrite)) roles.push("ReadWrite");
     if (groups.includes(GROUP_IDS.ReadOnly)) roles.push("ReadOnly");
-    console.log("[DEBUG] Resolved roles:", roles);
     return roles;
   }
 
@@ -565,11 +562,6 @@
   function onSignInSuccess(account) {
     currentAccount = account;
     document.getElementById("authGate").style.display = "none";
-
-    // Debug: log full token claims
-    const claims = account.idTokenClaims || {};
-    console.log("[DEBUG] Full idTokenClaims:", JSON.stringify(claims, null, 2));
-    console.log("[DEBUG] Account object keys:", Object.keys(account));
 
     // Populate user chip
     const name     = account.name || account.username || "Admin";
