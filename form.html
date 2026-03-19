@@ -21,18 +21,6 @@
     body { font-family: 'Source Serif 4', Georgia, serif; background: var(--paper); color: var(--ink); min-height: 100vh; }
 
     /* Header */
-    .lang-hint {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: #fff;
-      padding: 10px 20px;
-      text-align: center;
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-    .lang-hint.hidden { display: none; }
     .admin-bar {
       background: var(--navy);
       padding: 12px 24px;
@@ -150,11 +138,6 @@
 </head>
 <body>
 
-  <!-- Translation hint banner -->
-  <div class="lang-hint" id="langHint">
-    <span id="langHintText">🌐 This page can be translated by your browser. Look for the translate option in your browser's context menu.</span>
-    <button type="button" id="langDismiss" title="Dismiss" style="background:none;border:none;color:inherit;cursor:pointer;margin-left:8px;opacity:.7;">✕</button>
-  </div>
   <div class="admin-bar" id="adminBar" style="display:none;">
     <button type="button" class="back-admin-btn" id="backAdminBtn">
       ← Back to Admin
@@ -695,16 +678,6 @@
     setTimeout(() => t.classList.add("show"), 10);
     setTimeout(() => t.classList.remove("show"), 5500);
   }
-
-  // ── Language hint dismiss ───────────────────────────────────────────────────
-  const langHint = document.getElementById("langHint");
-  if (localStorage.getItem("langHintDismissed")) {
-    langHint.classList.add("hidden");
-  }
-  document.getElementById("langDismiss").addEventListener("click", () => {
-    langHint.classList.add("hidden");
-    localStorage.setItem("langHintDismissed", "1");
-  });
 </script>
 </body>
 </html>
