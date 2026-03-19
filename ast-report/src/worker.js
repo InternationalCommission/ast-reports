@@ -467,15 +467,19 @@ async function validateAzureToken(request, env) {
     return "Signature verification failed";
   }
 
+  console.log("[DEBUG] Token payload:", JSON.stringify(payload, null, 2));
   return null; // ✓ valid
 }
 
 function getUserRoles(payload, env) {
   const groups = payload.groups || [];
   const roles = [];
+  console.log("[DEBUG] Token groups claim:", groups);
+  console.log("[DEBUG] Expected Group IDs - SuperAdmin:", env.SUPER_ADMIN_GROUP_ID, "ReadWrite:", env.READWRITE_GROUP_ID, "ReadOnly:", env.READONLY_GROUP_ID);
   if (groups.includes(env.SUPER_ADMIN_GROUP_ID)) roles.push("SuperAdmin");
   if (groups.includes(env.READWRITE_GROUP_ID)) roles.push("ReadWrite");
   if (groups.includes(env.READONLY_GROUP_ID)) roles.push("ReadOnly");
+  console.log("[DEBUG] Resolved roles:", roles);
   return roles;
 }
 

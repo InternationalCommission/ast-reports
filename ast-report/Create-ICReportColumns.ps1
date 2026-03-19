@@ -19,7 +19,7 @@ param(
 
 # Connect
 Write-Host "`nConnecting to SharePoint..." -ForegroundColor Cyan
-Connect-PnPOnline -Url $SiteUrl -ClientId $ClientId -Tenant $TenantId -Interactive
+Connect-PnPOnline -Url $SiteUrl -ClientId $ClientId -Interactive
 Write-Host "Connected." -ForegroundColor Green
 
 # Helper: add a column if it doesn't already exist

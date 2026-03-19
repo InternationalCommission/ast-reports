@@ -352,9 +352,12 @@
     const idToken = msalInstance.getActiveAccount()?.idTokenClaims || {};
     const groups = idToken.groups || [];
     const roles = [];
+    console.log("[DEBUG] Token claims groups:", groups);
+    console.log("[DEBUG] Expected Group IDs:", GROUP_IDS);
     if (groups.includes(GROUP_IDS.SuperAdmin)) roles.push("SuperAdmin");
     if (groups.includes(GROUP_IDS.ReadWrite)) roles.push("ReadWrite");
     if (groups.includes(GROUP_IDS.ReadOnly)) roles.push("ReadOnly");
+    console.log("[DEBUG] Resolved roles:", roles);
     return roles;
   }
 
