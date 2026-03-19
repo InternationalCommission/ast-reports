@@ -566,6 +566,11 @@
     currentAccount = account;
     document.getElementById("authGate").style.display = "none";
 
+    // Debug: log full token claims
+    const claims = account.idTokenClaims || {};
+    console.log("[DEBUG] Full idTokenClaims:", JSON.stringify(claims, null, 2));
+    console.log("[DEBUG] Account object keys:", Object.keys(account));
+
     // Populate user chip
     const name     = account.name || account.username || "Admin";
     const initials = name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
