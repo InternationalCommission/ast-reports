@@ -725,9 +725,17 @@
       
       if (!res.ok) throw new Error(data.error || res.statusText);
       
+      const reportRes = await fetch(`${WORKER_URL}/reports/${reportId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const restoredReport = await reportRes.json();
+      
+      allReports.unshift(restoredReport);
+      allReports.sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime());
+      
       showToast("Report restored successfully");
       await loadRecycleBin();
-      await loadReports();
+      filterReports();
     } catch (err) {
       showToast("Failed to restore: " + err.message, true);
     }
