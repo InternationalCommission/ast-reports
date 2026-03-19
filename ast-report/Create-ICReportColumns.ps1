@@ -3,8 +3,11 @@
 # Creates all required columns on the IC Project Reports list
 # Requires: PnP.PowerShell module
 #
-# Install the module if needed:
-#   Install-Module PnP.PowerShell -Scope CurrentUser
+# Install the module if needed (run as Administrator):
+#   Install-Module -Name PnP.PowerShell -AllowClobber
+#
+# If you get execution policy errors, run:
+#   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 #
 # Run:
 #   .\Create-ICReportColumns.ps1
@@ -17,9 +20,14 @@ param(
     [string]$TenantId = "3e34eb62-b83a-4aa8-d0959d15e612"
 )
 
-# Connect
+# Import module and connect
 Write-Host "`nConnecting to SharePoint..." -ForegroundColor Cyan
-Connect-PnPOnline -Url $SiteUrl -ClientId $ClientId -Interactive
+Import-Module -Name PnP.PowerShell -ErrorAction SilentlyContinue
+if (-not (Get-Command Connect-PnPOnline -ErrorAction SilentlyContinue)) {
+    Write-Host "Error: PnP.PowerShell module not found. Run: Install-Module -Name PnP.PowerShell -AllowClobber" -ForegroundColor Red
+    exit 1
+}
+Connect-PnPOnline -Url $SiteUrl -ClientId $ClientId -Tenant $TenantId -Interactive
 Write-Host "Connected." -ForegroundColor Green
 
 # Helper: add a column if it doesn't already exist
@@ -28,7 +36,8 @@ function Add-ColumnIfMissing {
         [string]$InternalName,
         [string]$DisplayName,
         [string]$Type,
-        [bool]$Required = $false
+        [bool]$Required = $false,
+        [string[]]$Choices = @()
     )
 
     $existing = Get-PnPField -List $ListName -Identity $InternalName -ErrorAction SilentlyContinue
@@ -57,6 +66,12 @@ function Add-ColumnIfMissing {
             "Boolean" {
                 Add-PnPField -List $ListName -InternalName $InternalName -DisplayName $DisplayName -Type Boolean -Required:$Required | Out-Null
             }
+            "Choice" {
+                $field = Add-PnPField -List $ListName -InternalName $InternalName -DisplayName $DisplayName -Type Choice -Required:$Required
+                $field.Choices = $Choices
+                $field.Update()
+                Invoke-PnPQuery
+            }
         }
         Write-Host "  OK    $InternalName" -ForegroundColor Green
     }
@@ -69,18 +84,18 @@ function Add-ColumnIfMissing {
 Write-Host "`nCreating columns on list: '$ListName'" -ForegroundColor Cyan
 
 # Section 1 - Project Info
-Add-ColumnIfMissing -InternalName "Location" -DisplayName "Location" -Type "Text"
+Add-ColumnIfMissing -InternalName "City" -DisplayName "City / Cities" -Type "Text"
+Add-ColumnIfMissing -InternalName "Country" -DisplayName "Country" -Type "Text"
+Add-ColumnIfMissing -InternalName "Area" -DisplayName "Area" -Type "Choice" -Choices @("Latin America","Western Europe","Eastern Europe","Africa","North Africa / Middle East (N.A.M.E.)","South Asia","Asia","Oceania")
 Add-ColumnIfMissing -InternalName "ProjectDateFrom" -DisplayName "Project Date From" -Type "DateTime"
 Add-ColumnIfMissing -InternalName "ProjectDateTo" -DisplayName "Project Date To" -Type "DateTime"
 Add-ColumnIfMissing -InternalName "Introduction" -DisplayName "Introduction" -Type "Note"
 
 # Section 2 - Statistics
 Add-ColumnIfMissing -InternalName "ChurchesParticipated" -DisplayName "Churches Participated" -Type "Number"
-Add-ColumnIfMissing -InternalName "Localities" -DisplayName "Localities" -Type "Number"
 Add-ColumnIfMissing -InternalName "NationalParticipants" -DisplayName "National Participants" -Type "Number"
 Add-ColumnIfMissing -InternalName "USAParticipants" -DisplayName "USA Participants" -Type "Number"
 Add-ColumnIfMissing -InternalName "OtherCountriesParticipants" -DisplayName "Other Countries Participants" -Type "Number"
-Add-ColumnIfMissing -InternalName "TotalVisits" -DisplayName "Total Visits" -Type "Number"
 Add-ColumnIfMissing -InternalName "PeopleHeardGospel" -DisplayName "People Who Heard the Gospel" -Type "Number"
 Add-ColumnIfMissing -InternalName "ProfessionsOfFaith" -DisplayName "Professions of Faith" -Type "Number"
 Add-ColumnIfMissing -InternalName "Rededications" -DisplayName "Rededications to Christ" -Type "Number"

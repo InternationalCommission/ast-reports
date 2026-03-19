@@ -188,14 +188,34 @@
         <h2>Introduction</h2>
       </div>
       <div class="section-body">
-        <div class="grid-2" style="margin-bottom:18px;">
+        <div class="grid-3" style="margin-bottom:18px;">
           <div class="field" style="margin-bottom:0;">
             <label for="projectTitle">Project / Ministry Name <span class="req">*</span></label>
-            <input type="text" id="projectTitle" name="projectTitle" placeholder="e.g. N2N Evangelism Ministry" required />
+            <input type="text" id="projectTitle" name="projectTitle" placeholder="e.g. Evangelism Outreach" required />
           </div>
           <div class="field" style="margin-bottom:0;">
-            <label for="location">Location (City, Country) <span class="req">*</span></label>
-            <input type="text" id="location" name="location" placeholder="e.g. Timisoara, Romania" required />
+            <label for="city">City / Cities <span class="req">*</span></label>
+            <input type="text" id="city" name="city" placeholder="e.g. Metro City" required />
+          </div>
+          <div class="field" style="margin-bottom:0;">
+            <label for="country">Country <span class="req">*</span></label>
+            <input type="text" id="country" name="country" placeholder="e.g. Country Name" required />
+          </div>
+        </div>
+        <div class="grid-2" style="margin-bottom:18px;">
+          <div class="field" style="margin-bottom:0;">
+            <label for="area">Area <span class="req">*</span></label>
+            <select id="area" name="area" required style="width:100%;padding:10px 13px;font-family:'Source Serif 4',serif;font-size:15px;color:var(--ink);background:#fff;border:1px solid var(--border);border-radius:3px;">
+              <option value="">Select area</option>
+              <option value="Latin America">Latin America</option>
+              <option value="Western Europe">Western Europe</option>
+              <option value="Eastern Europe">Eastern Europe</option>
+              <option value="Africa">Africa</option>
+              <option value="North Africa / Middle East (N.A.M.E.)">North Africa / Middle East (N.A.M.E.)</option>
+              <option value="South Asia">South Asia</option>
+              <option value="Asia">Asia</option>
+              <option value="Oceania">Oceania</option>
+            </select>
           </div>
         </div>
         <div class="grid-2" style="margin-bottom:18px;">
@@ -210,7 +230,7 @@
         </div>
         <div class="field">
           <label for="introduction">General Impression &amp; Key Highlights <span class="req">*</span></label>
-          <textarea id="introduction" name="introduction" rows="7" placeholder="Share your general impression of the project, along with any specific information that you think is important and exciting…" required></textarea>
+          <textarea id="introduction" name="introduction" rows="7" placeholder="Share your general impression of the project and any key highlights or outcomes…" required></textarea>
         </div>
       </div>
     </div>
@@ -222,14 +242,10 @@
         <h2>Statistics</h2>
       </div>
       <div class="section-body">
-        <div class="grid-4">
+        <div class="grid-3">
           <div class="field">
             <label for="churchesParticipated"># of Churches</label>
             <input type="number" id="churchesParticipated" name="churchesParticipated" min="0" placeholder="0" />
-          </div>
-          <div class="field">
-            <label for="localities"># of Localities</label>
-            <input type="number" id="localities" name="localities" min="0" placeholder="0" />
           </div>
           <div class="field">
             <label for="nationalParticipants"># of National Participants</label>
@@ -242,10 +258,6 @@
           <div class="field">
             <label for="otherCountriesParticipants"># of Other Country Participants</label>
             <input type="number" id="otherCountriesParticipants" name="otherCountriesParticipants" min="0" placeholder="0" />
-          </div>
-          <div class="field">
-            <label for="totalVisits"># of Visits</label>
-            <input type="number" id="totalVisits" name="totalVisits" min="0" placeholder="0" />
           </div>
           <div class="field">
             <label for="peopleHeardGospel"># of People Who Heard the Gospel</label>
@@ -454,14 +466,14 @@
     const submitBtn = document.getElementById("submitBtn");
     if (submitBtn) submitBtn.querySelector(".btn-text").textContent = "Update Report";
     const numericFields = [
-      "churchesParticipated","localities","nationalParticipants","usaParticipants",
-      "otherCountriesParticipants","totalVisits","peopleHeardGospel","professionsOfFaith",
+      "churchesParticipated","nationalParticipants","usaParticipants",
+      "otherCountriesParticipants","peopleHeardGospel","professionsOfFaith",
       "rededications","baptisms","newChurchesPlanted","totalFundsSent","spentOnMaterials",
       "ticketsCost","fuelCost","accommodationCost","foodCost","financialHelpParticipants",
       "numParticipantsHelp","ralliesExpenses","additionalExpenses"
     ];
     const textFields = [
-      "coordinatorName","coordinatorEmail","projectTitle","location",
+      "coordinatorName","coordinatorEmail","projectTitle","city","country",
       "introduction","ralliesDescription","additionalNeedDescription"
     ];
     numericFields.forEach(name => {
@@ -472,6 +484,10 @@
       const el = document.getElementById(name);
       if (el && urlParams.has(name)) el.value = urlParams.get(name);
     });
+    if (urlParams.has("area")) {
+      const el = document.getElementById("area");
+      if (el) el.value = urlParams.get("area");
+    }
     if (urlParams.has("projectDateFrom")) {
       const el = document.getElementById("projectDateFrom");
       if (el) el.value = urlParams.get("projectDateFrom");

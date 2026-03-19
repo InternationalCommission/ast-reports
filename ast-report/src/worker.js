@@ -551,33 +551,33 @@ function extractFields(formData) {
     coordinatorName:  f("coordinatorName"),
     coordinatorEmail: f("coordinatorEmail"),
     projectTitle:    f("projectTitle"),
-    location:        f("location"),
+    city:            f("city"),
+    country:         f("country"),
+    area:            f("area"),
     projectDateFrom: f("projectDateFrom"),
     projectDateTo:   f("projectDateTo"),
     introduction:    f("introduction"),
-    churchesParticipated:        f("churchesParticipated"),
-    localities:                  f("localities"),
-    nationalParticipants:        f("nationalParticipants"),
+    churchesParticipated:       f("churchesParticipated"),
+    nationalParticipants:       f("nationalParticipants"),
     usaParticipants:             f("usaParticipants"),
-    otherCountriesParticipants:  f("otherCountriesParticipants"),
-    totalVisits:                 f("totalVisits"),
-    peopleHeardGospel:           f("peopleHeardGospel"),
-    professionsOfFaith:          f("professionsOfFaith"),
-    rededications:               f("rededications"),
-    baptisms:                    f("baptisms"),
-    newChurchesPlanted:          f("newChurchesPlanted"),
+    otherCountriesParticipants: f("otherCountriesParticipants"),
+    peopleHeardGospel:          f("peopleHeardGospel"),
+    professionsOfFaith:         f("professionsOfFaith"),
+    rededications:              f("rededications"),
+    baptisms:                   f("baptisms"),
+    newChurchesPlanted:         f("newChurchesPlanted"),
     testimonies,
     testimoniesJson: JSON.stringify(testimonies),
-    totalFundsSent:              f("totalFundsSent"),
-    spentOnMaterials:            f("spentOnMaterials"),
-    ticketsCost:                 f("ticketsCost"),
-    fuelCost:                    f("fuelCost"),
-    accommodationCost:           f("accommodationCost"),
-    foodCost:                    f("foodCost"),
-    financialHelpParticipants:   f("financialHelpParticipants"),
-    numParticipantsHelp:         f("numParticipantsHelp"),
-    ralliesExpenses:             f("ralliesExpenses"),
-    ralliesDescription:          f("ralliesDescription"),
+    totalFundsSent:             f("totalFundsSent"),
+    spentOnMaterials:           f("spentOnMaterials"),
+    ticketsCost:                f("ticketsCost"),
+    fuelCost:                   f("fuelCost"),
+    accommodationCost:          f("accommodationCost"),
+    foodCost:                   f("foodCost"),
+    financialHelpParticipants:  f("financialHelpParticipants"),
+    numParticipantsHelp:        f("numParticipantsHelp"),
+    ralliesExpenses:            f("ralliesExpenses"),
+    ralliesDescription:        f("ralliesDescription"),
     additionalExpenses:          f("additionalExpenses"),
     additionalNeedDescription:   f("additionalNeedDescription"),
     submittedAt: new Date().toISOString(),
@@ -589,9 +589,9 @@ function extractFields(formData) {
 // ────────────────────────────────────────────────────────────────────────────
 
 const sharePointFields = [
-  "Title","Location","ProjectDateFrom","ProjectDateTo","Introduction",
-  "ChurchesParticipated","Localities","NationalParticipants","USAParticipants",
-  "OtherCountriesParticipants","TotalVisits","PeopleHeardGospel",
+  "Title","City","Country","Area","ProjectDateFrom","ProjectDateTo","Introduction",
+  "ChurchesParticipated","NationalParticipants","USAParticipants",
+  "OtherCountriesParticipants","PeopleHeardGospel",
   "ProfessionsOfFaith","Rededications","Baptisms","NewChurchesPlanted",
   "Testimonies",
   "TotalFundsSent","SpentOnMaterials","TicketsCost","FuelCost",
@@ -632,16 +632,16 @@ function normalizeItem(item) {
     id:           item.id,
     createdAt:    item.createdDateTime,
     projectTitle:               f.Title,
-    location:                   f.Location,
+    city:                      f.City,
+    country:                   f.Country,
+    area:                      f.Area,
     projectDateFrom:            f.ProjectDateFrom,
     projectDateTo:              f.ProjectDateTo,
     introduction:               f.Introduction,
     churchesParticipated:       f.ChurchesParticipated,
-    localities:                 f.Localities,
     nationalParticipants:       f.NationalParticipants,
     usaParticipants:            f.USAParticipants,
     otherCountriesParticipants: f.OtherCountriesParticipants,
-    totalVisits:                f.TotalVisits,
     peopleHeardGospel:          f.PeopleHeardGospel,
     professionsOfFaith:         f.ProfessionsOfFaith,
     rededications:              f.Rededications,
@@ -924,16 +924,16 @@ async function createSharePointListItem(fields, env, token) {
 			body: JSON.stringify({
 				fields: {
 					Title:                       fields.projectTitle || "IC Project Report",
-					Location:                    fields.location,
+					City:                        fields.city,
+					Country:                     fields.country,
+					Area:                        fields.area,
 					ProjectDateFrom:             fields.projectDateFrom || null,
 					ProjectDateTo:               fields.projectDateTo   || null,
 					Introduction:                fields.introduction,
 					ChurchesParticipated:        toNum(fields.churchesParticipated),
-					Localities:                  toNum(fields.localities),
 					NationalParticipants:        toNum(fields.nationalParticipants),
 					USAParticipants:             toNum(fields.usaParticipants),
 					OtherCountriesParticipants:  toNum(fields.otherCountriesParticipants),
-					TotalVisits:                 toNum(fields.totalVisits),
 					PeopleHeardGospel:           toNum(fields.peopleHeardGospel),
 					ProfessionsOfFaith:          toNum(fields.professionsOfFaith),
 					Rededications:               toNum(fields.rededications),
@@ -973,16 +973,16 @@ async function updateSharePointListItem(itemId, fields, env, token) {
 			headers,
 			body: JSON.stringify({
 				Title:                       fields.projectTitle || "IC Project Report",
-				Location:                    fields.location,
+				City:                        fields.city,
+				Country:                     fields.country,
+				Area:                        fields.area,
 				ProjectDateFrom:             fields.projectDateFrom || null,
 				ProjectDateTo:               fields.projectDateTo   || null,
 				Introduction:                fields.introduction,
 				ChurchesParticipated:        toNum(fields.churchesParticipated),
-				Localities:                  toNum(fields.localities),
 				NationalParticipants:        toNum(fields.nationalParticipants),
 				USAParticipants:             toNum(fields.usaParticipants),
 				OtherCountriesParticipants:  toNum(fields.otherCountriesParticipants),
-				TotalVisits:                 toNum(fields.totalVisits),
 				PeopleHeardGospel:           toNum(fields.peopleHeardGospel),
 				ProfessionsOfFaith:          toNum(fields.professionsOfFaith),
 				Rededications:               toNum(fields.rededications),
@@ -1091,17 +1091,15 @@ async function sendConfirmationEmail(fields, env, token) {
   </div>
   <div style="padding:32px 40px;background:#f9f7f4;">
     <h2 style="color:#1a3a5c;border-bottom:2px solid #c8a96e;padding-bottom:8px;">${fields.projectTitle || "IC Project Report"}</h2>
-    <p style="color:#555;margin-top:-8px;margin-bottom:20px;">${fields.location}${dateRange ? ` &nbsp;·&nbsp; ${dateRange}` : ""}</p>
+    <p style="color:#555;margin-top:-8px;margin-bottom:20px;">${fields.city || ""}${fields.country ? `, ${fields.country}` : ""}${fields.area ? ` &nbsp;·&nbsp; ${fields.area}` : ""}${dateRange ? ` &nbsp;·&nbsp; ${dateRange}` : ""}</p>
     <h3 style="color:#1a3a5c;margin-top:24px;">Introduction</h3>
     <p style="white-space:pre-wrap;">${fields.introduction}</p>
     <h3 style="color:#1a3a5c;margin-top:28px;border-bottom:1px solid #ddd;padding-bottom:6px;">Statistics</h3>
     <table style="width:100%;border-collapse:collapse;font-size:14px;">
       ${statRow("# of Churches Who Participated",         fields.churchesParticipated)}
-      ${statRow("# of Localities",                        fields.localities)}
       ${statRow("# of National Project Participants",     fields.nationalParticipants)}
       ${statRow("# of USA Participants",                  fields.usaParticipants)}
       ${statRow("# of Participants From Other Countries", fields.otherCountriesParticipants)}
-      ${statRow("# of Visits",                            fields.totalVisits)}
       ${statRow("# of People Who Heard the Gospel",       fields.peopleHeardGospel)}
       ${statRow("# of Professions of Faith",              fields.professionsOfFaith)}
       ${statRow("# of Rededications to Christ",           fields.rededications)}

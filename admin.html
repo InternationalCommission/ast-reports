@@ -270,7 +270,7 @@
   <div class="topbar-divider"></div>
   <div class="search-wrap">
     <span class="search-icon">🔍</span>
-    <input type="text" id="searchInput" placeholder="Search by title, location, or coordinator…" />
+    <input type="text" id="searchInput" placeholder="Search by title, city, country, or coordinator…" />
   </div>
   <div class="topbar-right">
     <span class="report-count" id="reportCount"></span>
@@ -479,7 +479,9 @@
     return {
       ...r,
       projectTitle: await translateField(r.projectTitle),
-      location: await translateField(r.location),
+      city: await translateField(r.city),
+      country: await translateField(r.country),
+      area: await translateField(r.area),
       introduction: await translateField(r.introduction),
       testimonies: await translateTestimonies(r.testimonies),
       ralliesDescription: await translateField(r.ralliesDescription),
@@ -669,9 +671,10 @@
 
     list.innerHTML = recycleBinReports.map(r => {
       const date = r.submittedAt ? new Date(r.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+      const location = [r.city, r.country].filter(Boolean).join(", ");
       return `<div class="report-card${r.id === activeId ? " active" : ""}" onclick="showRecycleBinReport('${r.id}')" style="border-left:3px solid var(--muted);">
         <div class="rc-title">${escHtml(r.projectTitle || "Untitled Report")}</div>
-        <div class="rc-loc">${escHtml(r.location || "")}</div>
+        <div class="rc-loc">${escHtml(location)}</div>
         ${date ? `<div class="rc-date">Deleted: ${date}</div>` : ""}
       </div>`;
     }).join("");
@@ -689,6 +692,7 @@
     const dateRange = r.projectDateFrom
       ? (r.projectDateTo ? `${fmt(r.projectDateFrom)} – ${fmt(r.projectDateTo)}` : fmt(r.projectDateFrom))
       : "";
+    const location = [r.city, r.country].filter(Boolean).join(", ");
 
     return `
       <div class="report-header" style="background:var(--muted);">
@@ -699,7 +703,7 @@
         </div>
         <div class="rh-title" style="opacity:.7;">${escHtml(r.projectTitle || "IC Project Report")}</div>
         <div class="rh-meta" style="opacity:.7;">
-          ${escHtml(r.location || "")}${dateRange ? ` &nbsp;·&nbsp; ${dateRange}` : ""}
+          ${escHtml(location)}${r.area ? ` &nbsp;·&nbsp; ${escHtml(r.area)}` : ""}${dateRange ? ` &nbsp;·&nbsp; ${dateRange}` : ""}
         </div>
         <div class="rh-coordinator">
           ${r.coordinatorName  ? `<span style="background:rgba(255,255,255,.2);">👤 ${escHtml(r.coordinatorName)}</span>`  : ""}
@@ -857,7 +861,8 @@
     filteredList = q
       ? allReports.filter(r =>
           (r.projectTitle    || "").toLowerCase().includes(q) ||
-          (r.location        || "").toLowerCase().includes(q) ||
+          (r.city           || "").toLowerCase().includes(q) ||
+          (r.country        || "").toLowerCase().includes(q) ||
           (r.coordinatorName || "").toLowerCase().includes(q))
       : [...allReports];
     renderSidebar();
@@ -877,9 +882,10 @@
     list.innerHTML = filteredList.map(r => {
       const date   = r.submittedAt ? new Date(r.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
       const tCount = (r.testimonies || []).length;
+      const location = [r.city, r.country].filter(Boolean).join(", ");
       return `<div class="report-card${r.id === activeId ? " active" : ""}" onclick="showReport('${r.id}')">
         <div class="rc-title">${escHtml(r.projectTitle || "Untitled Report")}</div>
-        <div class="rc-loc">${escHtml(r.location || "")}</div>
+        <div class="rc-loc">${escHtml(location)}</div>
         ${date ? `<div class="rc-date">${date}</div>` : ""}
         ${tCount ? `<span class="rc-badge">📖 ${tCount} testimon${tCount === 1 ? "y" : "ies"}</span>` : ""}
       </div>`;
@@ -923,16 +929,16 @@
       params.set("coordinatorName", report.coordinatorName || "");
       params.set("coordinatorEmail", report.coordinatorEmail || "");
       params.set("projectTitle", report.projectTitle || "");
-      params.set("location", report.location || "");
+      params.set("city", report.city || "");
+      params.set("country", report.country || "");
+      params.set("area", report.area || "");
       if (report.projectDateFrom) params.set("projectDateFrom", report.projectDateFrom.split("T")[0]);
       if (report.projectDateTo) params.set("projectDateTo", report.projectDateTo.split("T")[0]);
       params.set("introduction", report.introduction || "");
       params.set("churchesParticipated", report.churchesParticipated || "");
-      params.set("localities", report.localities || "");
       params.set("nationalParticipants", report.nationalParticipants || "");
       params.set("usaParticipants", report.usaParticipants || "");
       params.set("otherCountriesParticipants", report.otherCountriesParticipants || "");
-      params.set("totalVisits", report.totalVisits || "");
       params.set("peopleHeardGospel", report.peopleHeardGospel || "");
       params.set("professionsOfFaith", report.professionsOfFaith || "");
       params.set("rededications", report.rededications || "");
@@ -983,16 +989,14 @@
 
     const stats = [
       ["# Churches Participated",         r.churchesParticipated],
-      ["# Localities",                     r.localities],
       ["# National Participants",          r.nationalParticipants],
       ["# USA Participants",               r.usaParticipants],
       ["# Other Country Participants",     r.otherCountriesParticipants],
-      ["# of Visits",                      r.totalVisits],
-      ["# People Who Heard the Gospel",    r.peopleHeardGospel],
-      ["# Professions of Faith",           r.professionsOfFaith],
-      ["# Rededications to Christ",        r.rededications],
-      ["# Baptisms",                       r.baptisms],
-      ["# New Churches Planted",           r.newChurchesPlanted],
+      ["# People Who Heard the Gospel",   r.peopleHeardGospel],
+      ["# Professions of Faith",          r.professionsOfFaith],
+      ["# Rededications to Christ",       r.rededications],
+      ["# Baptisms",                      r.baptisms],
+      ["# New Churches Planted",          r.newChurchesPlanted],
     ];
 
     const statsHtml = `<div class="stats-grid">
@@ -1039,7 +1043,7 @@
         </div>
         <div class="rh-title">${escHtml(r.projectTitle || "IC Project Report")}</div>
         <div class="rh-meta">
-          ${escHtml(r.location || "")}${dateRange ? ` &nbsp;·&nbsp; ${dateRange}` : ""}
+          ${[r.city, r.country].filter(Boolean).join(", ")}${r.area ? ` &nbsp;·&nbsp; ${escHtml(r.area)}` : ""}${dateRange ? ` &nbsp;·&nbsp; ${dateRange}` : ""}
           ${submittedOn ? ` &nbsp;·&nbsp; Submitted ${submittedOn}` : ""}
         </div>
         <div class="rh-coordinator">
