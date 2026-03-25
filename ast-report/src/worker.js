@@ -21,8 +21,6 @@
  *   SHAREPOINT_SITE_URL     - e.g. https://yourorg.sharepoint.com/sites/yoursite
  *   SHAREPOINT_LIST_NAME    - Target list name, e.g. "IC Project Reports"
  *   SHAREPOINT_FOLDER_PATH  - Server-relative folder for photo uploads
- *   AZURE_FUNCTION_UPLOAD_URL - HTTP endpoint for the SharePoint upload Azure Function
- *   AZURE_FUNCTION_UPLOAD_KEY - Function key for the SharePoint upload Azure Function
  *   EMAIL_SENDER            - Licensed M365 mailbox to send from
  *   EMAIL_RECIPIENT         - Where confirmation emails go
  *   ALLOWED_ORIGIN          - Your website origin for CORS (form + admin)
@@ -1010,43 +1008,300 @@ async function updateSharePointListItem(itemId, fields, env, token) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Photo upload
+// Photo upload (chunked upload to SharePoint)
 // ────────────────────────────────────────────────────────────────────────────
 
 async function uploadPhotos(photoFiles, fields, env) {
 	const validFiles = photoFiles.filter(file => file?.size > 0 && file?.name);
 	if (!validFiles.length) return { uploaded: [], errors: [], folderWebUrl: null, folderServerRelativePath: null };
 
-	if (!env.AZURE_FUNCTION_UPLOAD_URL) {
-		throw new Error('AZURE_FUNCTION_UPLOAD_URL is required when uploads are included');
-	}
+	console.log(`[uploadPhotos] Starting upload of ${validFiles.length} file(s)`);
 
-	const payload = new FormData();
-	payload.append('projectTitle', fields.projectTitle || 'IC Project Report');
-	payload.append('submittedAt', fields.submittedAt || new Date().toISOString());
-	payload.append('sharePointFolderPath', env.SHAREPOINT_FOLDER_PATH || '');
+	const sharePointSiteUrl = env.SHAREPOINT_SITE_URL;
+	console.log('[uploadPhotos] Getting access token...');
+	const sharePointToken = await getSharePointToken(env);
+	console.log('[uploadPhotos] Access token obtained');
 
-	for (const file of validFiles) {
-		payload.append('photos', file, file.name);
-	}
+	console.log('[uploadPhotos] Getting request digest...');
+	const requestDigest = await getSharePointRequestDigest(sharePointSiteUrl, sharePointToken);
+	console.log('[uploadPhotos] Request digest obtained');
 
-	const response = await fetch(env.AZURE_FUNCTION_UPLOAD_URL, {
-		method: 'POST',
-		headers: getUploadFunctionHeaders(env),
-		body: payload,
+	const folderName = buildFolderName(fields.projectTitle, fields.submittedAt);
+	const parentFolderPath = env.SHAREPOINT_FOLDER_PATH || '';
+	console.log(`[uploadPhotos] Ensuring folder exists: ${parentFolderPath}/${folderName}`);
+	const folderServerRelativePath = await ensureSharePointFolder({
+		sharePointSiteUrl,
+		sharePointToken,
+		requestDigest,
+		parentFolderPath,
+		folderName,
 	});
+	console.log(`[uploadPhotos] Folder ready: ${folderServerRelativePath}`);
 
-	const result = await parseJsonResponse(response);
-	if (!response.ok) {
-		throw new Error(`Azure Function upload failed (${response.status}): ${result?.error || result?.message || 'Unknown error'}`);
+	const uploaded = [];
+	const errors = [];
+
+	for (let i = 0; i < validFiles.length; i++) {
+		const file = validFiles[i];
+		const safeFileName = sanitizeFileName(file.name);
+		console.log(`[uploadPhotos] Uploading file ${i + 1}/${validFiles.length}: ${safeFileName} (${file.size} bytes)`);
+
+		try {
+			const arrayBuffer = await file.arrayBuffer();
+			const buffer = new Uint8Array(arrayBuffer);
+
+			const fileInfo = await uploadPhotoChunked({
+				sharePointSiteUrl,
+				sharePointToken,
+				folderServerRelativePath,
+				fileName: safeFileName,
+				contentType: file.type || 'application/octet-stream',
+				buffer,
+			});
+
+			console.log(`[uploadPhotos] File uploaded successfully: ${safeFileName}`);
+			uploaded.push({
+				name: safeFileName,
+				webUrl: `${new URL(sharePointSiteUrl).origin}${fileInfo.ServerRelativeUrl}`,
+			});
+		} catch (error) {
+			console.error(`[uploadPhotos] Upload failed for ${safeFileName}:`, error.message);
+			errors.push({ file: safeFileName, error: error.message });
+		}
 	}
+
+	console.log(`[uploadPhotos] Complete: ${uploaded.length} uploaded, ${errors.length} errors`);
 
 	return {
-		uploaded: Array.isArray(result?.uploaded) ? result.uploaded : [],
-		errors: Array.isArray(result?.errors) ? result.errors : [],
-		folderWebUrl: result?.folderWebUrl || null,
-		folderServerRelativePath: result?.folderServerRelativePath || null,
+		uploaded,
+		errors,
+		folderWebUrl: `${new URL(sharePointSiteUrl).origin}${folderServerRelativePath}`,
+		folderServerRelativePath,
 	};
+}
+
+async function getSharePointToken(env) {
+	const response = await fetch(`https://login.microsoftonline.com/${env.AZURE_TENANT_ID}/oauth2/v2.0/token`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+		body: new URLSearchParams({
+			grant_type: 'client_credentials',
+			client_id: env.AZURE_CLIENT_ID,
+			client_secret: env.AZURE_CLIENT_SECRET,
+			scope: `${new URL(env.SHAREPOINT_SITE_URL).origin}/.default`,
+		}),
+	});
+
+	if (!response.ok) {
+		const error = await response.text();
+		console.error('[getSharePointToken] Failed:', error);
+		throw new Error(`Token fetch failed (${response.status}): ${error}`);
+	}
+
+	const payload = await response.json();
+	return payload.access_token;
+}
+
+async function getSharePointRequestDigest(sharePointSiteUrl, token) {
+	const response = await fetch(`${sharePointSiteUrl}/_api/contextinfo`, {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${token}`,
+			Accept: 'application/json;odata=nometadata',
+		},
+	});
+
+	if (!response.ok) {
+		const error = await response.text();
+		console.error('[getSharePointRequestDigest] Failed:', error);
+		throw new Error(`Context info failed (${response.status}): ${error}`);
+	}
+
+	const payload = await response.json();
+	const digest = payload?.FormDigestValue || payload?.d?.GetContextWebInformation?.FormDigestValue;
+	if (!digest) throw new Error('SharePoint request digest missing');
+	return digest;
+}
+
+async function ensureSharePointFolder({ sharePointSiteUrl, sharePointToken, requestDigest, parentFolderPath, folderName }) {
+	const folderPath = normalizePath(`${parentFolderPath}/${folderName}`);
+
+	const checkResponse = await fetch(
+		`${sharePointSiteUrl}/_api/web/GetFolderByServerRelativePath(decodedUrl='${escapeOData(folderPath)}')`,
+		{
+			headers: {
+				Authorization: `Bearer ${sharePointToken}`,
+				Accept: 'application/json;odata=nometadata',
+			},
+		}
+	);
+
+	if (checkResponse.ok) {
+		console.log(`[ensureSharePointFolder] Folder exists: ${folderPath}`);
+		return folderPath;
+	}
+
+	console.log(`[ensureSharePointFolder] Creating folder: ${folderPath}`);
+	const createResponse = await fetch(
+		`${sharePointSiteUrl}/_api/web/GetFolderByServerRelativePath(decodedUrl='${escapeOData(parentFolderPath)}')/Folders/addUsingPath(decodedUrl='${escapeOData(folderName)}')`,
+		{
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${sharePointToken}`,
+				Accept: 'application/json;odata=nometadata',
+				'X-RequestDigest': requestDigest,
+			},
+		}
+	);
+
+	if (!createResponse.ok && createResponse.status !== 409) {
+		const error = await createResponse.text();
+		console.error('[ensureSharePointFolder] Create failed:', error);
+		throw new Error(`Folder create failed (${createResponse.status}): ${error}`);
+	}
+
+	console.log(`[ensureSharePointFolder] Folder created/exists: ${folderPath}`);
+	return folderPath;
+}
+
+async function uploadPhotoChunked({ sharePointSiteUrl, sharePointToken, folderServerRelativePath, fileName, contentType, buffer }) {
+	const CHUNK_SIZE = 327680;
+	const SMALL_FILE_THRESHOLD = 4194304;
+
+	console.log(`[uploadPhotoChunked] ${fileName}: ${buffer.length} bytes, threshold: ${SMALL_FILE_THRESHOLD}, chunkSize: ${CHUNK_SIZE}`);
+
+	if (buffer.length <= SMALL_FILE_THRESHOLD) {
+		return uploadPhotoSimple({ sharePointSiteUrl, sharePointToken, folderServerRelativePath, fileName, contentType, buffer });
+	}
+
+	const sessionUrl = `${sharePointSiteUrl}/_api/web/GetFolderByServerRelativePath(decodedUrl='${escapeOData(folderServerRelativePath)}')/Files/CreateUploadSession(FileName='${escapeOData(fileName)}')`;
+	console.log(`[uploadPhotoChunked] Creating session: ${sessionUrl}`);
+
+	const sessionResponse = await fetch(sessionUrl, {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${sharePointToken}`,
+			Accept: 'application/json;odata=nometadata',
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({ deferCommit: false }),
+	});
+
+	if (!sessionResponse.ok) {
+		const error = await sessionResponse.text();
+		console.error('[uploadPhotoChunked] Session create failed:', error);
+		throw new Error(`CreateUploadSession failed (${sessionResponse.status}): ${error}`);
+	}
+
+	const sessionData = await sessionResponse.json();
+	const uploadUrl = sessionData.uploadUrl;
+	console.log(`[uploadPhotoChunked] Session created, uploadUrl received`);
+
+	let offset = 0;
+	const fileSize = buffer.length;
+	let chunkNum = 0;
+
+	while (offset < fileSize) {
+		chunkNum++;
+		const end = Math.min(offset + CHUNK_SIZE, fileSize) - 1;
+		const chunk = buffer.slice(offset, end + 1);
+		const contentRange = `bytes ${offset}-${end}/${fileSize}`;
+
+		console.log(`[uploadPhotoChunked] Uploading chunk ${chunkNum}: ${contentRange}`);
+
+		const putResponse = await fetch(uploadUrl, {
+			method: 'PUT',
+			headers: {
+				Authorization: `Bearer ${sharePointToken}`,
+				'Content-Length': chunk.length,
+				'Content-Range': contentRange,
+			},
+			body: chunk,
+		});
+
+		console.log(`[uploadPhotoChunked] Chunk ${chunkNum} response: ${putResponse.status}`);
+
+		if (putResponse.status !== 202 && putResponse.status !== 201 && putResponse.status !== 200) {
+			const error = await putResponse.text();
+			console.error(`[uploadPhotoChunked] Chunk failed:`, error);
+			throw new Error(`Chunk upload failed (${putResponse.status}): ${error}`);
+		}
+
+		if (putResponse.status === 201 || putResponse.status === 200) {
+			console.log(`[uploadPhotoChunked] Final chunk received, upload complete`);
+			break;
+		}
+
+		const rangeHeader = putResponse.headers.get('nextExpectedRanges');
+		if (rangeHeader) {
+			const match = rangeHeader.match(/(\d+)-/);
+			if (match) {
+				offset = parseInt(match[1], 10);
+			} else {
+				offset += chunk.length;
+			}
+		} else {
+			offset += chunk.length;
+		}
+	}
+
+	const finalResponse = await fetch(uploadUrl, {
+		method: 'GET',
+		headers: { Authorization: `Bearer ${sharePointToken}` },
+	});
+
+	if (!finalResponse.ok) {
+		throw new Error(`Failed to get uploaded file info (${finalResponse.status})`);
+	}
+
+	return finalResponse.json();
+}
+
+async function uploadPhotoSimple({ sharePointSiteUrl, sharePointToken, folderServerRelativePath, fileName, contentType, buffer }) {
+	console.log(`[uploadPhotoSimple] ${fileName}: ${buffer.length} bytes (simple upload)`);
+
+	const response = await fetch(
+		`${sharePointSiteUrl}/_api/web/GetFolderByServerRelativePath(decodedUrl='${escapeOData(folderServerRelativePath)}')/Files/AddUsingPath(decodedurl='${escapeOData(fileName)}',overwrite=true)`,
+		{
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${sharePointToken}`,
+				Accept: 'application/json;odata=nometadata',
+				'Content-Type': contentType,
+				'X-RequestDigest': await getSharePointRequestDigest(sharePointSiteUrl, sharePointToken),
+			},
+			body: buffer,
+		}
+	);
+
+	if (!response.ok) {
+		const error = await response.text();
+		console.error('[uploadPhotoSimple] Failed:', error);
+		throw new Error(`SharePoint upload failed (${response.status}): ${error}`);
+	}
+
+	return response.json();
+}
+
+function buildFolderName(projectTitle, submittedAt) {
+	const safeTitle = String(projectTitle || 'IC Report').replace(/[^a-zA-Z0-9 _-]/g, '').trim() || 'IC Report';
+	const safeDate = new Date(submittedAt);
+	const datePart = Number.isNaN(safeDate.getTime()) ? new Date().toISOString().slice(0, 10) : safeDate.toISOString().slice(0, 10);
+	return `${safeTitle} - ${datePart}`;
+}
+
+function sanitizeFileName(fileName) {
+	return String(fileName || 'upload.bin').replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
+function normalizePath(pathValue) {
+	const normalized = String(pathValue || '').trim().replace(/\\/g, '/').replace(/\/+/g, '/');
+	if (!normalized) return '';
+	return normalized.startsWith('/') ? normalized : `/${normalized}`;
+}
+
+function escapeOData(value) {
+	return String(value || '').replace(/'/g, "''");
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -1180,25 +1435,7 @@ async function sharePointFetchJson(url, token, options = {}) {
 	return res.status === 204 ? null : res.json();
 }
 
-function getUploadFunctionHeaders(env) {
-	const headers = { Accept: 'application/json' };
-	if (env.AZURE_FUNCTION_UPLOAD_KEY) headers['x-functions-key'] = env.AZURE_FUNCTION_UPLOAD_KEY;
-	return headers;
-}
 
-async function parseJsonResponse(response) {
-	const text = await response.text();
-	if (!text) return null;
-	try {
-		return JSON.parse(text);
-	} catch {
-		return { message: text.slice(0, 500) };
-	}
-}
-
-function escapeODataString(value) {
-	return String(value || '').replace(/'/g, "''");
-}
 
 function buildSharePointFileUrl(siteUrl, serverRelativeUrl) {
 	if (!serverRelativeUrl) return null;
