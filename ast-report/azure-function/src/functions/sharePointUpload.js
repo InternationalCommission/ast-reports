@@ -163,6 +163,17 @@ async function ensureFolder({ sharePointSiteUrl, sharePointToken, requestDigest,
 }
 
 async function uploadFile({ sharePointSiteUrl, sharePointToken, requestDigest, folderServerRelativePath, fileName, contentType, buffer }) {
+	const CHUNK_SIZE = 327680;
+	const SMALL_FILE_THRESHOLD = 4194304;
+
+	if (buffer.length <= SMALL_FILE_THRESHOLD) {
+		return uploadFileSimple({ sharePointSiteUrl, sharePointToken, requestDigest, folderServerRelativePath, fileName, contentType, buffer });
+	}
+
+	return uploadFileChunked({ sharePointSiteUrl, sharePointToken, folderServerRelativePath, fileName, contentType, buffer, chunkSize: CHUNK_SIZE });
+}
+
+async function uploadFileSimple({ sharePointSiteUrl, sharePointToken, requestDigest, folderServerRelativePath, fileName, contentType, buffer }) {
 	const response = await fetch(
 		`${sharePointSiteUrl}/_api/web/GetFolderByServerRelativePath(decodedUrl='${escapeODataString(folderServerRelativePath)}')/Files/AddUsingPath(decodedurl='${escapeODataString(fileName)}',overwrite=true)`,
 		{
@@ -182,6 +193,82 @@ async function uploadFile({ sharePointSiteUrl, sharePointToken, requestDigest, f
 	}
 
 	return response.json();
+}
+
+async function uploadFileChunked({ sharePointSiteUrl, sharePointToken, folderServerRelativePath, fileName, contentType, buffer, chunkSize }) {
+	const createSessionResponse = await fetch(
+		`${sharePointSiteUrl}/_api/web/GetFolderByServerRelativePath(decodedUrl='${escapeODataString(folderServerRelativePath)}')/Files/CreateUploadSession(FileName='${escapeODataString(fileName)}')`,
+		{
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${sharePointToken}`,
+				Accept: 'application/json;odata=nometadata',
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				deferCommit: false,
+			}),
+		}
+	);
+
+	if (!createSessionResponse.ok) {
+		throw new Error(`CreateUploadSession failed (${createSessionResponse.status}): ${await createSessionResponse.text()}`);
+	}
+
+	const sessionData = await createSessionResponse.json();
+	const uploadUrl = sessionData.uploadUrl;
+
+	let offset = 0;
+	const fileSize = buffer.length;
+
+	while (offset < fileSize) {
+		const end = Math.min(offset + chunkSize, fileSize) - 1;
+		const chunk = buffer.slice(offset, end + 1);
+		const contentRange = `bytes ${offset}-${end}/${fileSize}`;
+
+		const putResponse = await fetch(uploadUrl, {
+			method: 'PUT',
+			headers: {
+				Authorization: `Bearer ${sharePointToken}`,
+				'Content-Length': chunk.length,
+				'Content-Range': contentRange,
+			},
+			body: chunk,
+		});
+
+		if (putResponse.status !== 202 && putResponse.status !== 201 && putResponse.status !== 200) {
+			throw new Error(`Chunk upload failed at offset ${offset} (${putResponse.status}): ${await putResponse.text()}`);
+		}
+
+		if (putResponse.status === 201 || putResponse.status === 200) {
+			break;
+		}
+
+		const rangeHeader = putResponse.headers.get('nextExpectedRanges');
+		if (rangeHeader) {
+			const match = rangeHeader.match(/(\d+)-/);
+			if (match) {
+				offset = parseInt(match[1], 10);
+			} else {
+				offset += chunk.length;
+			}
+		} else {
+			offset += chunk.length;
+		}
+	}
+
+	const finalResponse = await fetch(uploadUrl, {
+		method: 'GET',
+		headers: {
+			Authorization: `Bearer ${sharePointToken}`,
+		},
+	});
+
+	if (!finalResponse.ok) {
+		throw new Error(`Failed to get uploaded file info (${finalResponse.status})`);
+	}
+
+	return finalResponse.json();
 }
 
 function buildFolderName(projectTitle, submittedAt) {
