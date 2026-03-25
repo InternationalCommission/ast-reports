@@ -15,7 +15,9 @@
  * Required Environment Variables (wrangler secret put ...):
  *   AZURE_TENANT_ID         - Azure AD tenant ID
  *   AZURE_CLIENT_ID         - App registration client ID (backend + API scope audience)
- *   AZURE_CLIENT_SECRET     - App registration client secret (used for SharePoint/Graph)
+ *   AZURE_CLIENT_SECRET     - App registration client secret (fallback for SharePoint/Graph)
+ *   AZURE_CLIENT_CERTIFICATE - PEM-encoded private key or PFX for SharePoint (recommended)
+ *   AZURE_CLIENT_CERTIFICATE_PASSWORD - Password for PFX certificate (optional for PEM)
  *   ADMIN_CLIENT_ID         - App registration client ID for the admin SPA
  *                             (can be the same as AZURE_CLIENT_ID if using one app)
  *   SHAREPOINT_SITE_URL     - e.g. https://yourorg.sharepoint.com/sites/yoursite
@@ -1081,6 +1083,22 @@ async function uploadPhotos(photoFiles, fields, env) {
 }
 
 async function getSharePointToken(env) {
+	const scope = `${new URL(env.SHAREPOINT_SITE_URL).origin}/.default`;
+
+	if (env.AZURE_CLIENT_CERTIFICATE && env.AZURE_CLIENT_CERTIFICATE_PASSWORD) {
+		console.log('[getSharePointToken] Using certificate authentication');
+		return getSharePointTokenWithCert(env, scope);
+	}
+
+	if (env.AZURE_CLIENT_SECRET) {
+		console.log('[getSharePointToken] Using client secret authentication');
+		return getSharePointTokenWithSecret(env, scope);
+	}
+
+	throw new Error('Either AZURE_CLIENT_CERTIFICATE or AZURE_CLIENT_SECRET is required');
+}
+
+async function getSharePointTokenWithSecret(env, scope) {
 	const response = await fetch(`https://login.microsoftonline.com/${env.AZURE_TENANT_ID}/oauth2/v2.0/token`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -1088,18 +1106,151 @@ async function getSharePointToken(env) {
 			grant_type: 'client_credentials',
 			client_id: env.AZURE_CLIENT_ID,
 			client_secret: env.AZURE_CLIENT_SECRET,
-			scope: `${new URL(env.SHAREPOINT_SITE_URL).origin}/.default`,
+			scope,
 		}),
 	});
 
 	if (!response.ok) {
 		const error = await response.text();
-		console.error('[getSharePointToken] Failed:', error);
+		console.error('[getSharePointToken] Secret auth failed:', error);
 		throw new Error(`Token fetch failed (${response.status}): ${error}`);
 	}
 
 	const payload = await response.json();
 	return payload.access_token;
+}
+
+async function getSharePointTokenWithCert(env, scope) {
+	try {
+		const now = Math.floor(Date.now() / 1000);
+
+		const thumbprint = await getCertThumbprint(env.AZURE_CLIENT_CERTIFICATE);
+		console.log('[getSharePointToken] Certificate thumbprint:', thumbprint);
+
+		const header = {
+			alg: 'RS256',
+			typ: 'JWT',
+			x5t: thumbprint,
+		};
+
+		const jti = generateUUID();
+		console.log('[getSharePointToken] Generated JWT ID:', jti);
+
+		const payload = {
+			aud: `https://login.microsoftonline.com/${env.AZURE_TENANT_ID}/v2.0`,
+			exp: now + 3600,
+			iss: env.AZURE_CLIENT_ID,
+			jti,
+			nbf: now,
+			sub: env.AZURE_CLIENT_ID,
+		};
+
+		const signingInput = base64UrlEncode(JSON.stringify(header)) + '.' + base64UrlEncode(JSON.stringify(payload));
+		console.log('[getSharePointToken] Signing JWT...');
+
+		const signature = await signJwt(signingInput, env.AZURE_CLIENT_CERTIFICATE, env.AZURE_CLIENT_CERTIFICATE_PASSWORD);
+		const assertion = signingInput + '.' + signature;
+
+		console.log('[getSharePointToken] Requesting token with certificate assertion');
+
+		const response = await fetch(`https://login.microsoftonline.com/${env.AZURE_TENANT_ID}/oauth2/v2.0/token`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			body: new URLSearchParams({
+				grant_type: 'client_credentials',
+				client_id: env.AZURE_CLIENT_ID,
+				client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+				client_assertion: assertion,
+				scope,
+			}),
+		});
+
+		if (!response.ok) {
+			const error = await response.text();
+			console.error('[getSharePointToken] Certificate auth failed:', error);
+			throw new Error(`Certificate token fetch failed (${response.status}): ${error}`);
+		}
+
+		const result = await response.json();
+		console.log('[getSharePointToken] Certificate auth successful, token received');
+		return result.access_token;
+	} catch (error) {
+		console.error('[getSharePointToken] Certificate auth error:', error.message, error.stack);
+		throw error;
+	}
+}
+
+async function getCertThumbprint(pemCert) {
+	const certBase64 = pemCert
+		.replace(/-----BEGIN CERTIFICATE-----/, '')
+		.replace(/-----END CERTIFICATE-----/, '')
+		.replace(/\s/g, '');
+
+	const certDer = Uint8Array.from(atob(certBase64), c => c.charCodeAt(0));
+
+	const hashBuffer = await crypto.subtle.digest('SHA-1', certDer);
+	const hashArray = Array.from(new Uint8Array(hashBuffer));
+	const thumbprintHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+	return base64UrlEncode(Uint8Array.from(thumbprintHex, c => c.charCodeAt(0)));
+}
+
+function generateUUID() {
+	const bytes = new Uint8Array(16);
+	crypto.getRandomValues(bytes);
+	bytes[6] = (bytes[6] & 0x0f) | 0x40;
+	bytes[8] = (bytes[8] & 0x3f) | 0x80;
+	const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+	return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
+
+async function signJwt(input, pemPrivateKey, password) {
+	const pkcs8Der = decodePkcs8Pem(pemPrivateKey, password);
+
+	const key = await crypto.subtle.importKey(
+		'pkcs8',
+		pkcs8Der,
+		{ name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+		false,
+		['sign']
+	);
+
+	const encoder = new TextEncoder();
+	const signature = await crypto.subtle.sign(
+		'RSASSA-PKCS1-v1_5',
+		key,
+		encoder.encode(input)
+	);
+
+	return base64UrlEncode(new Uint8Array(signature));
+}
+
+function decodePkcs8Pem(pem, password) {
+	let pemContents = pem
+		.replace(/-----BEGIN PRIVATE KEY-----/, '')
+		.replace(/-----END PRIVATE KEY-----/, '')
+		.replace(/-----BEGIN RSA PRIVATE KEY-----/, '')
+		.replace(/-----END RSA PRIVATE KEY-----/, '')
+		.replace(/-----BEGIN ENCRYPTED PRIVATE KEY-----/, '')
+		.replace(/-----END ENCRYPTED PRIVATE KEY-----/, '')
+		.replace(/\s/g, '');
+
+	const encrypted = pem.includes('ENCRYPTED PRIVATE KEY');
+
+	if (encrypted) {
+		const encryptedBytes = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+		return encryptedBytes;
+	}
+
+	return Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+}
+
+function base64UrlEncode(data) {
+	const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+	let binary = '';
+	for (let i = 0; i < bytes.length; i++) {
+		binary += String.fromCharCode(bytes[i]);
+	}
+	return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
 async function getSharePointRequestDigest(sharePointSiteUrl, token) {
