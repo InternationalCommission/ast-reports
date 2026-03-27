@@ -723,26 +723,36 @@ async function handleGetPhotos(request, env, id) {
 			return corsResponse({ photos: [], folderUrl }, 200, env);
 		}
 
-		const sitePath = new URL(env.SHAREPOINT_SITE_URL).pathname;
-		const relativePath = folderServerRelativePath.replace(new RegExp(`^${sitePath}`), '').replace(/^\//, '');
-		// Split path and encode each segment separately to preserve slashes for Graph API
-		const pathSegments = relativePath.split('/').map(s => encodeURIComponent(s));
-		const graphPath = pathSegments.join('/');
-		const childrenRes = await graphFetch(
-			`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${graphPath}:/children?$select=name,webUrl,lastModifiedDateTime,size,file`,
-			{ headers }
+		const sharePointToken = await getUserToken(env, 'sharepoint');
+		const spoHeaders = { Authorization: `Bearer ${sharePointToken}`, Accept: 'application/json;odata=verbose' };
+		const spoSiteUrl = env.SHAREPOINT_SITE_URL;
+		const encodedPath = folderServerRelativePath.split('/').map(p => encodeURIComponent(p)).join('/');
+		
+		const filesRes = await fetch(
+			`${spoSiteUrl}/_api/web/getfolderbyserverrelativeurl('${encodedPath}')/files`,
+			{ headers: spoHeaders }
 		);
-
-		const photos = (childrenRes.value || [])
-			.filter(child => child.file)
-			.map(file => ({
-				id: file.id || file.name,
-				name: file.name,
-				webUrl: file.webUrl,
-				thumbnail: file.thumbnailUrl || null,
-				lastModified: file.lastModifiedDateTime || null,
-				size: file.size || null,
-			}));
+		
+		let files = [];
+		if (filesRes.ok) {
+			const filesData = await filesRes.json();
+			files = filesData.d?.results || filesData.value || [];
+		}
+		
+		const photos = files.map(file => {
+			const origin = new URL(env.SHAREPOINT_SITE_URL).origin;
+			const serverRelativeUrl = file.ServerRelativeUrl || file.name;
+			const webUrl = serverRelativeUrl ? `${origin}${serverRelativeUrl}` : null;
+			
+			return {
+				id: file.UniqueId || file.Name,
+				name: file.Name,
+				webUrl,
+				thumbnail: webUrl,
+				lastModified: file.TimeLastModified || null,
+				size: file.Length || null,
+			};
+		});
 
 		return corsResponse({ photos, folderUrl }, 200, env);
 	} catch (err) {
@@ -1173,8 +1183,23 @@ async function uploadPhotoPowerAutomate({ webhookUrl, siteUrl, folderPath, fileN
 
 async function ensureSharePointFolder({ siteUrl, sharePointToken, folderPath }) {
 	console.log(`[ensureSharePointFolder] Checking if folder exists: ${folderPath}`);
+	
+	// Strip site path prefix since SharePoint REST API is already at that site
+	const sitePath = new URL(siteUrl).pathname;
+	let relativePath = folderPath;
+	if (relativePath.startsWith(sitePath)) {
+		relativePath = relativePath.slice(sitePath.length);
+		if (!relativePath.startsWith('/')) relativePath = '/' + relativePath;
+	}
+	
+	// Encode spaces but preserve slashes
+	const encodedPath = relativePath.split('/').map(p => encodeURIComponent(p)).join('/');
+	console.log(`[ensureSharePointFolder] Original path: ${folderPath}`);
+	console.log(`[ensureSharePointFolder] Relative path: ${relativePath}`);
+	console.log(`[ensureSharePointFolder] Encoded path: ${encodedPath}`);
+	
 	const checkResponse = await fetch(
-		`${siteUrl}/_api/web/getfolderbyserverrelativeurl('${folderPath}')`,
+		`${siteUrl}/_api/web/getfolderbyserverrelativeurl('${encodedPath}')`,
 		{
 			headers: {
 				Authorization: `Bearer ${sharePointToken}`,
@@ -1184,14 +1209,15 @@ async function ensureSharePointFolder({ siteUrl, sharePointToken, folderPath }) 
 	);
 
 	if (checkResponse.ok) {
-		console.log(`[ensureSharePointFolder] Folder exists: ${folderPath}`);
+		console.log(`[ensureSharePointFolder] Folder exists: ${relativePath}`);
 		return folderPath;
 	}
 
-	console.log(`[ensureSharePointFolder] Creating folder: ${folderPath}`);
+	console.log(`[ensureSharePointFolder] Creating folder: ${relativePath}`);
 	const requestDigest = await getSharePointRequestDigest(siteUrl, sharePointToken);
 
-	const createUrl = `${siteUrl}/_api/web/folders/addUsingPath(decodedUrl='${folderPath}')`;
+	// Use relative path for folder creation
+	const createUrl = `${siteUrl}/_api/web/folders/addUsingPath(decodedUrl='${relativePath}')`;
 	console.log(`[ensureSharePointFolder] Using URL: ${createUrl}`);
 
 	const createResponse = await fetch(createUrl, {
@@ -1248,7 +1274,18 @@ async function uploadPhotoSPO({ siteUrl, sharePointToken, folderServerRelativePa
 	const requestDigest = await getSharePointRequestDigest(siteUrl, sharePointToken);
 	console.log(`[uploadPhotoSPO] Got digest: ${requestDigest.substring(0, 50)}...`);
 	
-	const encodedFolderPath = encodeURIComponent(fullFolderPath);
+	// Strip site path prefix since SharePoint REST API is already at that site
+	const sitePath = new URL(siteUrl).pathname;
+	let relativePath = fullFolderPath;
+	if (relativePath.startsWith(sitePath)) {
+		relativePath = relativePath.slice(sitePath.length);
+		if (!relativePath.startsWith('/')) relativePath = '/' + relativePath;
+	}
+	
+	// Encode spaces but preserve slashes
+	const encodedFolderPath = relativePath.split('/').map(p => encodeURIComponent(p)).join('/');
+	console.log(`[uploadPhotoSPO] Original path: ${fullFolderPath}`);
+	console.log(`[uploadPhotoSPO] Relative path: ${relativePath}`);
 	console.log(`[uploadPhotoSPO] encodedFolderPath: ${encodedFolderPath}`);
 	
 	const fileUrl = `${siteUrl}/_api/web/getfolderbyserverrelativeurl('${encodedFolderPath}')/files/addUsingPath(decodedurl='${fileName}',overwrite=true)`;
