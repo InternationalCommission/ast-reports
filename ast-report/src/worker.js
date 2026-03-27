@@ -725,9 +725,11 @@ async function handleGetPhotos(request, env, id) {
 
 		const sitePath = new URL(env.SHAREPOINT_SITE_URL).pathname;
 		const relativePath = folderServerRelativePath.replace(new RegExp(`^${sitePath}`), '').replace(/^\//, '');
-		const encodedPath = encodeURIComponent(relativePath);
+		// Split path and encode each segment separately to preserve slashes for Graph API
+		const pathSegments = relativePath.split('/').map(s => encodeURIComponent(s));
+		const graphPath = pathSegments.join('/');
 		const childrenRes = await graphFetch(
-			`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodedPath}:/children?$select=name,webUrl,lastModifiedDateTime,size,file`,
+			`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${graphPath}:/children?$select=name,webUrl,lastModifiedDateTime,size,file`,
 			{ headers }
 		);
 
@@ -1051,9 +1053,9 @@ async function uploadPhotos(photoFiles, fields, env) {
 	const folderName = buildFolderName(fields.projectTitle, fields.submittedAt);
 	console.log(`[uploadPhotos] Folder name: ${folderName}`);
 
-	const folderServerRelativePath = baseFolderPath;
+	const folderServerRelativePath = normalizePath(`${baseFolderPath}/${folderName}`);
 	
-	console.log(`[uploadPhotos] Uploading files to: ${folderServerRelativePath}`);
+	console.log(`[uploadPhotos] Full folder path: ${folderServerRelativePath}`);
 
 	const uploaded = [];
 	const errors = [];
@@ -1077,6 +1079,7 @@ async function uploadPhotos(photoFiles, fields, env) {
 					fileName: prefixedFileName,
 					contentType: file.type || 'application/octet-stream',
 					buffer,
+					projectTitle: folderName,
 				});
 			} else {
 				const sharePointToken = await getUserToken(env, 'sharepoint');
@@ -1113,10 +1116,15 @@ async function uploadPhotos(photoFiles, fields, env) {
 	};
 }
 
-async function uploadPhotoPowerAutomate({ webhookUrl, siteUrl, folderPath, fileName, contentType, buffer }) {
+async function uploadPhotoPowerAutomate({ webhookUrl, siteUrl, folderPath, fileName, contentType, buffer, projectTitle }) {
 	console.log(`[uploadPhotoPowerAutomate] ${fileName}: ${buffer.length} bytes via Power Automate`);
 	
-	const base64Content = btoa(String.fromCharCode(...buffer));
+	// Convert buffer to base64 without spreading (avoid stack overflow for large files)
+	let binary = '';
+	for (let i = 0; i < buffer.length; i++) {
+		binary += String.fromCharCode(buffer[i]);
+	}
+	const base64Content = btoa(binary);
 	
 	// Strip site path from folderPath - SharePoint only needs relative path
 	const sitePath = new URL(siteUrl).pathname;
@@ -1134,6 +1142,7 @@ async function uploadPhotoPowerAutomate({ webhookUrl, siteUrl, folderPath, fileN
 		contentType: contentType,
 		folderPath: relativeFolderPath,
 		siteUrl: siteUrl,
+		projectTitle: projectTitle,
 	};
 	
 	console.log(`[uploadPhotoPowerAutomate] Sending to webhook: ${webhookUrl.substring(0, 50)}...`);
