@@ -502,11 +502,11 @@
   }
   function renderFileList() {
     fileList.innerHTML = selectedFiles.map((f, i) => `
-      <div class="file-item">
+      <div class="file-item" onclick="event.stopPropagation()">
         <span>🖼</span>
         <span>${f.name}</span>
         <span style="color:var(--muted);font-size:12px;">(${(f.size/1024).toFixed(0)} KB)</span>
-        <button type="button" class="remove-file" onclick="removeFile(${i})" title="Remove">✕</button>
+        <button type="button" class="remove-file" onclick="event.stopPropagation();removeFile(${i})" title="Remove">✕</button>
       </div>`).join("");
   }
   window.removeFile = (i) => { selectedFiles.splice(i, 1); renderFileList(); };
