@@ -218,17 +218,52 @@ async function handleGetReports(request, env, url) {
     let items = (res.value || [])
       .map(item => normalizeItem(item));
 
-    // If Graph filter failed, check if IsRecycled exists and filter client-side
+    // If Graph filter failed, try to get Is Recycled values via SharePoint REST API
     if (graphFilterFailed && items.length > 0) {
       const rawFields = res.value[0]?.fields;
-      if (rawFields && ('Is Recycled' in rawFields || 'IsRecycled' in rawFields)) {
-        console.log("Is Recycled found in fields - applying client-side filter");
-        items = items.filter(item => !item.isRecycled);
-      } else {
-        console.warn("Is Recycled field NOT found in SharePoint - showing all items");
+      const hasIsRecycledField = rawFields && ('Is Recycled' in rawFields || 'IsRecycled' in rawFields || 'Is_x0020_Recycled' in rawFields);
+      
+      if (!hasIsRecycledField) {
+        // Try SharePoint REST API to get the field values
+        try {
+          const spoToken = await getUserToken(env, 'sharepoint');
+          const spoSiteUrl = env.SHAREPOINT_SITE_URL;
+          const listName = env.SHAREPOINT_LIST_NAME || 'AST Reports';
+          
+          // Get items with Is Recycled field via SharePoint REST API
+			const spoRes = await fetch(
+					`${spoSiteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,IsRecycled&$top=5000`,
+					{ headers: { Authorization: `Bearer ${spoToken}`, Accept: 'application/json;odata=verbose' } }
+				);
+				
+				if (spoRes.ok) {
+					const spoData = await spoRes.json();
+					const spoItems = spoData.d?.results || [];
+					console.log(`SharePoint REST API returned ${spoItems.length} items with Is Recycled field`);
+					if (spoItems.length > 0) {
+						console.log(`First item fields: ${JSON.stringify(spoItems[0])}`);
+					}
+					
+					// Create a map of item ID to Is Recycled status
+					const recycledMap = {};
+					for (const item of spoItems) {
+						recycledMap[String(item.Id)] = item.IsRecycled === true;
+					}
+					console.log(`Recycled map: ${JSON.stringify(recycledMap)}`);
+					
+					// Update isRecycled from the map
+					items = items.map(item => ({
+						...item,
+						isRecycled: recycledMap[item.id] ?? item.isRecycled
+					}));
+				}
+        } catch (spoError) {
+          console.error("SharePoint REST API fallback failed:", spoError.message);
+        }
       }
+      
+      items = items.filter(item => !item.isRecycled);
     } else if (!graphFilterFailed) {
-      // Graph filter worked, but still filter in case of inconsistencies
       items = items.filter(item => !item.isRecycled);
     }
 
@@ -679,7 +714,7 @@ function normalizeItem(item) {
     photoDriveId:                    f.PhotoDriveId || null,
     photoFolderItemId:               f.PhotoFolderItemId || null,
     // Recycle bin status (column is "Is Recycled" with space, internal name may vary)
-    isRecycled:                 f['Is Recycled'] ?? f.IsRecycled ?? false,
+    isRecycled:                 f['Is Recycled'] ?? f.IsRecycled ?? f['Is_x0020_Recycled'] ?? false,
   };
 }
 
@@ -809,12 +844,45 @@ async function handleGetRecycleBin(request, env) {
 
 		if (graphFilterFailed && items.length > 0) {
 			const rawFields = res.value[0]?.fields;
-			if (rawFields && ('Is Recycled' in rawFields || 'IsRecycled' in rawFields)) {
-				console.log("Is Recycled found - applying client-side filter for recycle bin");
-				items = items.filter(item => item.isRecycled);
-			} else {
-				console.warn("Is Recycled field NOT found - showing all items in recycle bin");
+			const hasIsRecycledField = rawFields && ('Is Recycled' in rawFields || 'IsRecycled' in rawFields || 'Is_x0020_Recycled' in rawFields);
+			
+			if (!hasIsRecycledField) {
+				// Try SharePoint REST API to get the field values
+				try {
+					const spoToken = await getUserToken(env, 'sharepoint');
+					const spoSiteUrl = env.SHAREPOINT_SITE_URL;
+					const listName = env.SHAREPOINT_LIST_NAME || 'AST Reports';
+					
+					const spoRes = await fetch(
+						`${spoSiteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,IsRecycled&$top=5000`,
+						{ headers: { Authorization: `Bearer ${spoToken}`, Accept: 'application/json;odata=verbose' } }
+					);
+					
+					if (spoRes.ok) {
+						const spoData = await spoRes.json();
+						const spoItems = spoData.d?.results || [];
+						console.log(`SharePoint REST API returned ${spoItems.length} items for recycle bin`);
+						if (spoItems.length > 0) {
+							console.log(`Recycle bin first item fields: ${JSON.stringify(spoItems[0])}`);
+						}
+						
+						const recycledMap = {};
+						for (const item of spoItems) {
+							recycledMap[String(item.Id)] = item.IsRecycled === true;
+						}
+						console.log(`Recycled map: ${JSON.stringify(recycledMap)}`);
+						
+						items = items.map(item => ({
+							...item,
+							isRecycled: recycledMap[item.id] ?? item.isRecycled
+						}));
+					}
+				} catch (spoError) {
+					console.error("SharePoint REST API fallback failed:", spoError.message);
+				}
 			}
+			
+			items = items.filter(item => item.isRecycled);
 		} else if (!graphFilterFailed) {
 			items = items.filter(item => item.isRecycled);
 		}
