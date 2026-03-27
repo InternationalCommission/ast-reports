@@ -15,8 +15,9 @@
  * Required Environment Variables (wrangler secret put ...):
  *   AZURE_TENANT_ID         - Azure AD tenant ID
  *   AZURE_CLIENT_ID         - App registration client ID (backend + API scope audience)
- *   AZURE_CLIENT_SECRET     - App registration client secret (fallback for SharePoint/Graph)
- *   AZURE_CLIENT_CERTIFICATE - PEM-encoded private key or PFX for SharePoint (recommended)
+ *   AZURE_CLIENT_SECRET     - Client secret for Key Vault/ROPC access
+ *   AZURE_KEY_VAULT_URL     - Azure Key Vault URL (e.g. https://yourvault.vault.azure.net/)
+ *   AZURE_KEY_VAULT_CERT_NAME - Name of certificate in Key Vault
  *   AZURE_CLIENT_CERTIFICATE_PASSWORD - Password for PFX certificate (optional for PEM)
  *   ADMIN_CLIENT_ID         - App registration client ID for the admin SPA
  *                             (can be the same as AZURE_CLIENT_ID if using one app)
@@ -30,6 +31,10 @@
  *   SUPER_ADMIN_GROUP_ID    - Azure AD group ID for Super Admin role
  *   READWRITE_GROUP_ID      - Azure AD group ID for Read/Write role
  *   READONLY_GROUP_ID       - Azure AD group ID for Read-only role
+ *   SERVICE_ACCOUNT_USERNAME - SharePoint service account email for file uploads (via ROPC)
+ *   SERVICE_ACCOUNT_PASSWORD - SharePoint service account password (via ROPC)
+ *   POWER_AUTOMATE_WEBHOOK_URL - Power Automate HTTP trigger webhook URL (for file uploads)
+ *   UPLOAD_METHOD          - 'powerautomate' or 'sharepoint' (default: powerautomate)
  */
 
 export default {
@@ -82,14 +87,17 @@ export default {
 async function handleSubmit(request, env) {
   console.log(">>> HANDLING SUBMIT");
   const origin = request.headers.get("Origin") || "";
-  if (env.ALLOWED_ORIGIN && origin !== env.ALLOWED_ORIGIN) {
+  const allowedOrigins = (env.ALLOWED_ORIGIN || "").split(",").map(o => o.trim());
+  allowedOrigins.push("http://localhost:8080");
+  if (env.ALLOWED_ORIGIN && !allowedOrigins.includes(origin)) {
     return corsResponse({ error: "Forbidden origin" }, 403, env);
   }
 
   try {
     const formData = await request.formData();
     const fields   = extractFields(formData);
-    const photos   = formData.getAll("photos");
+    const photos   = formData.getAll("photos").concat(formData.getAll("photo"));
+    console.log(`[handleSubmit] Photos found: ${photos.length}`);
 
     const graphToken = await getAccessToken(env);
 
@@ -103,11 +111,13 @@ async function handleSubmit(request, env) {
     // If both list item and uploads succeeded, patch the folder URL back onto
     // the list item so the admin viewer can find the photos later
     if (listItemResult.status === "fulfilled" && uploadResults.status === "fulfilled") {
-      const { folderWebUrl, folderServerRelativePath } = uploadResults.value;
+      const { folderWebUrl, folderServerRelativePath, driveId, folderItemId } = uploadResults.value;
       const listItemId = listItemResult.value?.id;
       if (folderWebUrl && folderServerRelativePath && listItemId) {
-        await patchPhotoFolder(listItemId, folderWebUrl, folderServerRelativePath, env, graphToken)
-          .catch(e => console.warn("Could not patch photo folder URL:", e.message));
+        await patchPhotoFolder(listItemId, folderWebUrl, folderServerRelativePath, env, graphToken, {
+          PhotoDriveId: driveId,
+          PhotoFolderItemId: folderItemId,
+        }).catch(e => console.warn("Could not patch photo folder URL:", e.message));
       }
     }
 
@@ -674,7 +684,7 @@ function normalizeItem(item) {
 }
 
 // ── Patch photo folder info back onto the list item after upload ──────────────
-async function patchPhotoFolder(itemId, folderWebUrl, folderServerRelativePath, env, token) {
+async function patchPhotoFolder(itemId, folderWebUrl, folderServerRelativePath, env, token, extraFields = {}) {
 	const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" };
 	const { siteId, listId } = await resolveListIds(env, token);
 	await graphFetch(
@@ -685,6 +695,7 @@ async function patchPhotoFolder(itemId, folderWebUrl, folderServerRelativePath, 
 			body: JSON.stringify({
 				PhotoFolderUrl: folderWebUrl,
 				PhotoFolderServerRelativePath: folderServerRelativePath,
+				...extraFields,
 			}),
 		}
 	);
@@ -712,22 +723,24 @@ async function handleGetPhotos(request, env, id) {
 			return corsResponse({ photos: [], folderUrl }, 200, env);
 		}
 
-		const sharePointToken = await getSharePointAccessToken(env);
-		const encodedPath = escapeODataString(folderServerRelativePath);
-		const filesRes = await sharePointFetchJson(
-			`${env.SHAREPOINT_SITE_URL}/_api/web/GetFolderByServerRelativePath(decodedUrl='${encodedPath}')/Files?$select=Name,ServerRelativeUrl,UniqueId,TimeLastModified,Length`,
-			sharePointToken
+		const sitePath = new URL(env.SHAREPOINT_SITE_URL).pathname;
+		const relativePath = folderServerRelativePath.replace(new RegExp(`^${sitePath}`), '').replace(/^\//, '');
+		const encodedPath = encodeURIComponent(relativePath);
+		const childrenRes = await graphFetch(
+			`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodedPath}:/children?$select=name,webUrl,lastModifiedDateTime,size,file`,
+			{ headers }
 		);
 
-		const files = Array.isArray(filesRes?.value) ? filesRes.value : Array.isArray(filesRes?.d?.results) ? filesRes.d.results : [];
-		const photos = files.map(file => ({
-			id: file.UniqueId || file.Name,
-			name: file.Name,
-			webUrl: buildSharePointFileUrl(env.SHAREPOINT_SITE_URL, file.ServerRelativeUrl),
-			thumbnail: null,
-			lastModified: file.TimeLastModified || null,
-			size: file.Length || null,
-		}));
+		const photos = (childrenRes.value || [])
+			.filter(child => child.file)
+			.map(file => ({
+				id: file.id || file.name,
+				name: file.name,
+				webUrl: file.webUrl,
+				thumbnail: file.thumbnailUrl || null,
+				lastModified: file.lastModifiedDateTime || null,
+				size: file.size || null,
+			}));
 
 		return corsResponse({ photos, folderUrl }, 200, env);
 	} catch (err) {
@@ -1010,35 +1023,37 @@ async function updateSharePointListItem(itemId, fields, env, token) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Photo upload (chunked upload to SharePoint)
+// Photo upload (to SharePoint via Power Automate or direct REST API)
 // ────────────────────────────────────────────────────────────────────────────
 
 async function uploadPhotos(photoFiles, fields, env) {
+	console.log(`[uploadPhotos] Received ${photoFiles.length} file(s) in photoFiles`);
 	const validFiles = photoFiles.filter(file => file?.size > 0 && file?.name);
+	console.log(`[uploadPhotos] Valid files after filter: ${validFiles.length}`);
 	if (!validFiles.length) return { uploaded: [], errors: [], folderWebUrl: null, folderServerRelativePath: null };
 
+	const usePowerAutomate = env.UPLOAD_METHOD !== 'sharepoint' && env.POWER_AUTOMATE_WEBHOOK_URL;
+	console.log(`[uploadPhotos] Using Power Automate: ${usePowerAutomate}`);
 	console.log(`[uploadPhotos] Starting upload of ${validFiles.length} file(s)`);
 
-	const sharePointSiteUrl = env.SHAREPOINT_SITE_URL;
-	console.log('[uploadPhotos] Getting access token...');
-	const sharePointToken = await getSharePointToken(env);
-	console.log('[uploadPhotos] Access token obtained');
-
-	console.log('[uploadPhotos] Getting request digest...');
-	const requestDigest = await getSharePointRequestDigest(sharePointSiteUrl, sharePointToken);
-	console.log('[uploadPhotos] Request digest obtained');
+	const sitePath = new URL(env.SHAREPOINT_SITE_URL).pathname;
+	const parentFolderPath = env.SHAREPOINT_FOLDER_PATH || '';
+	
+	let baseFolderPath;
+	if (parentFolderPath.startsWith(sitePath)) {
+		baseFolderPath = parentFolderPath;
+	} else {
+		baseFolderPath = normalizePath(`${sitePath}/${parentFolderPath}`);
+	}
+	
+	console.log(`[uploadPhotos] Base folder path: ${baseFolderPath}`);
 
 	const folderName = buildFolderName(fields.projectTitle, fields.submittedAt);
-	const parentFolderPath = env.SHAREPOINT_FOLDER_PATH || '';
-	console.log(`[uploadPhotos] Ensuring folder exists: ${parentFolderPath}/${folderName}`);
-	const folderServerRelativePath = await ensureSharePointFolder({
-		sharePointSiteUrl,
-		sharePointToken,
-		requestDigest,
-		parentFolderPath,
-		folderName,
-	});
-	console.log(`[uploadPhotos] Folder ready: ${folderServerRelativePath}`);
+	console.log(`[uploadPhotos] Folder name: ${folderName}`);
+
+	const folderServerRelativePath = baseFolderPath;
+	
+	console.log(`[uploadPhotos] Uploading files to: ${folderServerRelativePath}`);
 
 	const uploaded = [];
 	const errors = [];
@@ -1046,47 +1061,249 @@ async function uploadPhotos(photoFiles, fields, env) {
 	for (let i = 0; i < validFiles.length; i++) {
 		const file = validFiles[i];
 		const safeFileName = sanitizeFileName(file.name);
-		console.log(`[uploadPhotos] Uploading file ${i + 1}/${validFiles.length}: ${safeFileName} (${file.size} bytes)`);
+		const prefixedFileName = `${folderName}_${safeFileName}`;
+		console.log(`[uploadPhotos] Uploading file ${i + 1}/${validFiles.length}: ${prefixedFileName} (${file.size} bytes)`);
 
 		try {
 			const arrayBuffer = await file.arrayBuffer();
 			const buffer = new Uint8Array(arrayBuffer);
 
-			const fileInfo = await uploadPhotoChunked({
-				sharePointSiteUrl,
-				sharePointToken,
-				folderServerRelativePath,
-				fileName: safeFileName,
-				contentType: file.type || 'application/octet-stream',
-				buffer,
-			});
+			let fileInfo;
+			if (usePowerAutomate) {
+				fileInfo = await uploadPhotoPowerAutomate({
+					webhookUrl: env.POWER_AUTOMATE_WEBHOOK_URL,
+					siteUrl: env.SHAREPOINT_SITE_URL,
+					folderPath: folderServerRelativePath,
+					fileName: prefixedFileName,
+					contentType: file.type || 'application/octet-stream',
+					buffer,
+				});
+			} else {
+				const sharePointToken = await getUserToken(env, 'sharepoint');
+				fileInfo = await uploadPhotoSPO({
+					siteUrl: env.SHAREPOINT_SITE_URL,
+					sharePointToken,
+					folderServerRelativePath,
+					fileName: prefixedFileName,
+					contentType: file.type || 'application/octet-stream',
+					buffer,
+				});
+			}
 
-			console.log(`[uploadPhotos] File uploaded successfully: ${safeFileName}`);
+			console.log(`[uploadPhotos] File uploaded successfully: ${prefixedFileName}`);
 			uploaded.push({
 				name: safeFileName,
-				webUrl: `${new URL(sharePointSiteUrl).origin}${fileInfo.ServerRelativeUrl}`,
+				webUrl: fileInfo.webUrl,
 			});
 		} catch (error) {
-			console.error(`[uploadPhotos] Upload failed for ${safeFileName}:`, error.message);
-			errors.push({ file: safeFileName, error: error.message });
+			console.error(`[uploadPhotos] Upload failed for ${prefixedFileName}:`, error.message);
+			errors.push({ file: prefixedFileName, error: error.message });
 		}
 	}
 
 	console.log(`[uploadPhotos] Complete: ${uploaded.length} uploaded, ${errors.length} errors`);
 
+	const folderWebUrl = `${new URL(env.SHAREPOINT_SITE_URL).origin}${folderServerRelativePath}`;
+
 	return {
 		uploaded,
 		errors,
-		folderWebUrl: `${new URL(sharePointSiteUrl).origin}${folderServerRelativePath}`,
+		folderWebUrl,
 		folderServerRelativePath,
 	};
 }
 
-async function getSharePointToken(env) {
-	const scope = `${new URL(env.SHAREPOINT_SITE_URL).origin}/.default`;
+async function uploadPhotoPowerAutomate({ webhookUrl, siteUrl, folderPath, fileName, contentType, buffer }) {
+	console.log(`[uploadPhotoPowerAutomate] ${fileName}: ${buffer.length} bytes via Power Automate`);
+	
+	const base64Content = btoa(String.fromCharCode(...buffer));
+	
+	// Strip site path from folderPath - SharePoint only needs relative path
+	const sitePath = new URL(siteUrl).pathname;
+	let relativeFolderPath = folderPath;
+	if (folderPath.startsWith(sitePath)) {
+		relativeFolderPath = folderPath.substring(sitePath.length);
+	}
+	
+	console.log(`[uploadPhotoPowerAutomate] Original folderPath: ${folderPath}`);
+	console.log(`[uploadPhotoPowerAutomate] Relative folderPath: ${relativeFolderPath}`);
+	
+	const payload = {
+		fileName: fileName,
+		content: base64Content,
+		contentType: contentType,
+		folderPath: relativeFolderPath,
+		siteUrl: siteUrl,
+	};
+	
+	console.log(`[uploadPhotoPowerAutomate] Sending to webhook: ${webhookUrl.substring(0, 50)}...`);
+	
+	const response = await fetch(webhookUrl, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify(payload),
+	});
+	
+	console.log(`[uploadPhotoPowerAutomate] Response status: ${response.status}`);
+	
+	if (!response.ok) {
+		const error = await response.text();
+		console.error('[uploadPhotoPowerAutomate] Power Automate upload failed:', error);
+		throw new Error(`Power Automate upload failed (${response.status}): ${error}`);
+	}
+	
+	const result = await response.json().catch(() => ({}));
+	console.log(`[uploadPhotoPowerAutomate] Upload successful:`, result);
+	
+	return {
+		webUrl: result.webUrl || `${new URL(siteUrl).origin}${folderPath}/${fileName}`,
+	};
+}
 
-	if (env.AZURE_CLIENT_CERTIFICATE && env.AZURE_CLIENT_CERTIFICATE_PASSWORD) {
-		console.log('[getSharePointToken] Using certificate authentication');
+async function ensureSharePointFolder({ siteUrl, sharePointToken, folderPath }) {
+	console.log(`[ensureSharePointFolder] Checking if folder exists: ${folderPath}`);
+	const checkResponse = await fetch(
+		`${siteUrl}/_api/web/getfolderbyserverrelativeurl('${folderPath}')`,
+		{
+			headers: {
+				Authorization: `Bearer ${sharePointToken}`,
+				Accept: 'application/json;odata=verbose',
+			},
+		}
+	);
+
+	if (checkResponse.ok) {
+		console.log(`[ensureSharePointFolder] Folder exists: ${folderPath}`);
+		return folderPath;
+	}
+
+	console.log(`[ensureSharePointFolder] Creating folder: ${folderPath}`);
+	const requestDigest = await getSharePointRequestDigest(siteUrl, sharePointToken);
+
+	const createUrl = `${siteUrl}/_api/web/folders/addUsingPath(decodedUrl='${folderPath}')`;
+	console.log(`[ensureSharePointFolder] Using URL: ${createUrl}`);
+
+	const createResponse = await fetch(createUrl, {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${sharePointToken}`,
+			Accept: 'application/json;odata=verbose',
+			'X-RequestDigest': requestDigest,
+		},
+	});
+
+	if (!createResponse.ok && createResponse.status !== 409) {
+		const errorText = await createResponse.text();
+		console.error('[ensureSharePointFolder] Create failed:', errorText);
+		throw new Error(`Folder create failed (${createResponse.status}): ${errorText}`);
+	}
+
+	console.log(`[ensureSharePointFolder] Folder created/exists: ${folderPath}`);
+	return folderPath;
+}
+
+async function getSharePointRequestDigest(siteUrl, token) {
+	console.log('[getSharePointRequestDigest] Requesting context info...');
+	const response = await fetch(`${siteUrl}/_api/contextinfo`, {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${token}`,
+			Accept: 'application/json;odata=verbose',
+		},
+	});
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		console.error('[getSharePointRequestDigest] Failed:', errorText);
+		throw new Error(`Context info failed (${response.status}): ${errorText}`);
+	}
+
+	const payload = await response.json();
+	const digest = payload?.d?.GetContextWebInformation?.FormDigestValue;
+	if (!digest) throw new Error('SharePoint request digest missing');
+	return digest;
+}
+
+async function uploadPhotoSPO({ siteUrl, sharePointToken, folderServerRelativePath, fileName, contentType, buffer }) {
+	console.log(`[uploadPhotoSPO] ${fileName}: ${buffer.length} bytes via SharePoint REST API`);
+	console.log(`[uploadPhotoSPO] folderServerRelativePath: ${folderServerRelativePath}`);
+	console.log(`[uploadPhotoSPO] siteUrl: ${siteUrl}`);
+	console.log(`[uploadPhotoSPO] contentType: ${contentType}`);
+
+	const fullFolderPath = folderServerRelativePath.endsWith('/') 
+		? folderServerRelativePath.slice(0, -1)
+		: folderServerRelativePath;
+	
+	const requestDigest = await getSharePointRequestDigest(siteUrl, sharePointToken);
+	console.log(`[uploadPhotoSPO] Got digest: ${requestDigest.substring(0, 50)}...`);
+	
+	const encodedFolderPath = encodeURIComponent(fullFolderPath);
+	console.log(`[uploadPhotoSPO] encodedFolderPath: ${encodedFolderPath}`);
+	
+	const fileUrl = `${siteUrl}/_api/web/getfolderbyserverrelativeurl('${encodedFolderPath}')/files/addUsingPath(decodedurl='${fileName}',overwrite=true)`;
+	console.log(`[uploadPhotoSPO] Upload URL: ${fileUrl}`);
+	
+	console.log(`[uploadPhotoSPO] Token preview: ${sharePointToken.substring(0, 50)}...`);
+
+	const response = await fetch(fileUrl, {
+		method: 'POST',
+		body: buffer,
+		headers: {
+			Authorization: `Bearer ${sharePointToken}`,
+			'Content-Type': contentType,
+			'Content-Length': buffer.length,
+			'X-RequestDigest': requestDigest,
+		},
+	});
+
+	console.log(`[uploadPhotoSPO] Response status: ${response.status}`);
+	console.log(`[uploadPhotoSPO] Response headers:`, Object.fromEntries(response.headers.entries()));
+
+	if (!response.ok && response.status !== 200 && response.status !== 201) {
+		const error = await response.text();
+		console.error('[uploadPhotoSPO] SharePoint REST API upload failed:', error);
+		throw new Error(`SharePoint REST API upload failed (${response.status}): ${error}`);
+	}
+
+	const resultText = await response.text();
+	const origin = new URL(siteUrl).origin;
+	let webUrl = `${origin}${fullFolderPath}/${fileName}`;
+	
+	try {
+		const parser = new DOMParser();
+		const xmlDoc = parser.parseFromString(resultText, "text/xml");
+		const uriNode = xmlDoc.querySelector("id");
+		if (uriNode) {
+			const uri = uriNode.textContent;
+			const nameMatch = uri.match(/decodedurl='([^']+)'/);
+			if (nameMatch) {
+				webUrl = `${siteUrl}${fullFolderPath}/${nameMatch[1]}`;
+			}
+		}
+	} catch (e) {
+		console.log('[uploadPhotoSPO] Could not parse response, using default webUrl');
+	}
+	
+	console.log(`[uploadPhotoSPO] Upload successful: ${webUrl}`);
+
+	return {
+		ServerRelativeUrl: `${fullFolderPath}/${fileName}`,
+		webUrl: webUrl,
+	};
+}
+
+async function getSharePointToken(env) {
+	const scope = 'https://graph.microsoft.com/.default';
+
+	if (env.AZURE_KEY_VAULT_URL && env.AZURE_KEY_VAULT_CERT_NAME) {
+		console.log('[getSharePointToken] Using Azure Key Vault certificate');
+		return getSharePointTokenWithKeyVault(env, scope);
+	}
+
+	if (env.AZURE_CLIENT_CERTIFICATE) {
+		console.log('[getSharePointToken] Using inline certificate authentication');
 		return getSharePointTokenWithCert(env, scope);
 	}
 
@@ -1095,7 +1312,205 @@ async function getSharePointToken(env) {
 		return getSharePointTokenWithSecret(env, scope);
 	}
 
-	throw new Error('Either AZURE_CLIENT_CERTIFICATE or AZURE_CLIENT_SECRET is required');
+	throw new Error('AZURE_KEY_VAULT_URL, AZURE_CLIENT_CERTIFICATE, or AZURE_CLIENT_SECRET is required');
+}
+
+async function getUserToken(env, scope) {
+	const scopeLabel = scope === 'graph' ? 'Graph' : 'SharePoint';
+	console.log(`[getUserToken] Getting ${scopeLabel} user token via ROPC flow`);
+	
+	if (!env.SERVICE_ACCOUNT_USERNAME || !env.SERVICE_ACCOUNT_PASSWORD) {
+		throw new Error('SERVICE_ACCOUNT_USERNAME and SERVICE_ACCOUNT_PASSWORD are required for user authentication');
+	}
+
+	let tokenScope;
+	if (scope === 'graph') {
+		tokenScope = 'https://graph.microsoft.com/.default';
+	} else {
+		const hostname = new URL(env.SHAREPOINT_SITE_URL).hostname;
+		tokenScope = `https://${hostname}/.default`;
+	}
+	
+	console.log(`[getUserToken] Scope: ${tokenScope}`);
+
+	const body = new URLSearchParams({
+		client_id: env.AZURE_CLIENT_ID,
+		client_secret: env.AZURE_CLIENT_SECRET || '',
+		scope: `${tokenScope} offline_access`,
+		username: env.SERVICE_ACCOUNT_USERNAME,
+		password: env.SERVICE_ACCOUNT_PASSWORD,
+		grant_type: 'password'
+	});
+
+	const res = await fetch(`https://login.microsoftonline.com/${env.AZURE_TENANT_ID}/oauth2/v2.0/token`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+		body
+	});
+
+	const data = await res.json();
+
+	if (!res.ok) {
+		console.error('[getUserToken] Token failed:', data);
+		throw new Error(`User token failed: ${data.error_description || data.error}`);
+	}
+	
+	// Decode token to check scopes
+	try {
+		const tokenParts = data.access_token.split('.');
+		const payload = JSON.parse(atob(tokenParts[1]));
+		console.log(`[getUserToken] ${scopeLabel} token scopes:`, payload.scp || payload.roles || 'no scopes');
+	} catch (e) {
+		console.log('[getUserToken] Could not decode token payload');
+	}
+
+	console.log(`[getUserToken] ${scopeLabel} user token obtained successfully`);
+	return data.access_token;
+}
+
+async function getSharePointTokenWithKeyVault(env, scope) {
+	console.log('[getSharePointToken] Fetching certificate from Key Vault...');
+
+	const keyVaultToken = await getKeyVaultAccessToken(env);
+	const certUrl = `${env.AZURE_KEY_VAULT_URL}/certificates/${env.AZURE_KEY_VAULT_CERT_NAME}/?api-version=7.0`;
+
+	const certResponse = await fetch(certUrl, {
+		headers: {
+			Authorization: `Bearer ${keyVaultToken}`,
+			'Content-Type': 'application/json',
+		},
+	});
+
+	if (!certResponse.ok) {
+		const error = await certResponse.text();
+		console.error('[getSharePointToken] Key Vault certificate fetch failed:', error);
+		throw new Error(`Key Vault certificate fetch failed (${certResponse.status}): ${error}`);
+	}
+
+	const certData = await certResponse.json();
+	const certX5t = certData.x5t;
+
+	if (!certX5t) {
+		throw new Error('Certificate thumbprint (x5t) not found in Key Vault certificate');
+	}
+
+	console.log('[getSharePointToken] Got certificate thumbprint from Key Vault:', certX5t);
+
+	const now = Math.floor(Date.now() / 1000);
+	const header = {
+		alg: 'RS256',
+		typ: 'JWT',
+		x5t: certX5t,
+	};
+
+	const jti = generateUUID();
+	const payload = {
+		aud: `https://login.microsoftonline.com/${env.AZURE_TENANT_ID}/v2.0`,
+		exp: now + 3600,
+		iss: env.AZURE_CLIENT_ID,
+		jti,
+		nbf: now,
+		sub: env.AZURE_CLIENT_ID,
+	};
+
+	const signingInput = base64UrlEncode(JSON.stringify(header)) + '.' + base64UrlEncode(JSON.stringify(payload));
+	console.log('[getSharePointToken] Signing JWT with Key Vault...');
+
+	const signature = await signWithKeyVault(env, keyVaultToken, signingInput);
+	const assertion = signingInput + '.' + signature;
+
+	console.log('[getSharePointToken] Requesting SharePoint token with Key Vault certificate assertion');
+
+	const response = await fetch(`https://login.microsoftonline.com/${env.AZURE_TENANT_ID}/oauth2/v2.0/token`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+		body: new URLSearchParams({
+			grant_type: 'client_credentials',
+			client_id: env.AZURE_CLIENT_ID,
+			client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+			client_assertion: assertion,
+			scope,
+		}),
+	});
+
+	if (!response.ok) {
+		const error = await response.text();
+		console.error('[getSharePointToken] SharePoint token request failed:', error);
+		throw new Error(`SharePoint token fetch failed (${response.status}): ${error}`);
+	}
+
+	const result = await response.json();
+	console.log('[getSharePointToken] Successfully obtained SharePoint token via Key Vault');
+	return result.access_token;
+}
+
+async function getKeyVaultAccessToken(env) {
+	const scope = 'https://vault.azure.net/.default';
+
+	if (env.AZURE_CLIENT_SECRET) {
+		console.log('[getKeyVaultAccessToken] Using client secret for Key Vault');
+		const response = await fetch(`https://login.microsoftonline.com/${env.AZURE_TENANT_ID}/oauth2/v2.0/token`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			body: new URLSearchParams({
+				grant_type: 'client_credentials',
+				client_id: env.AZURE_CLIENT_ID,
+				client_secret: env.AZURE_CLIENT_SECRET,
+				scope,
+			}),
+		});
+
+		if (!response.ok) {
+			const error = await response.text();
+			throw new Error(`Key Vault token failed (${response.status}): ${error}`);
+		}
+
+		const result = await response.json();
+		return result.access_token;
+	}
+
+	throw new Error('AZURE_CLIENT_SECRET is required for Key Vault access');
+}
+
+async function signWithKeyVault(env, accessToken, dataToSign) {
+	const signUrl = `${env.AZURE_KEY_VAULT_URL}/keys/${env.AZURE_KEY_VAULT_CERT_NAME}/sign?api-version=7.0`;
+
+	const dataBytes = new TextEncoder().encode(dataToSign);
+	const hashBuffer = await crypto.subtle.digest('SHA-256', dataBytes);
+	const hashArray = new Uint8Array(hashBuffer);
+	const hashBase64Url = btoa(String.fromCharCode(...hashArray))
+		.replace(/\+/g, '-')
+		.replace(/\//g, '_')
+		.replace(/=+$/, '');
+
+	const requestBody = {
+		alg: 'RS256',
+		value: hashBase64Url,
+	};
+
+	const response = await fetch(signUrl, {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${accessToken}`,
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify(requestBody),
+	});
+
+	if (!response.ok) {
+		const error = await response.text();
+		console.error('[signWithKeyVault] Key Vault sign operation failed:', error);
+		throw new Error(`Key Vault sign failed (${response.status}): ${error}`);
+	}
+
+	const result = await response.json();
+	return result.value;
+}
+
+function base64UrlDecode(str) {
+	const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+	const padded = base64 + '=='.slice(0, (4 - base64.length % 4) % 4);
+	return Uint8Array.from(atob(padded), c => c.charCodeAt(0));
 }
 
 async function getSharePointTokenWithSecret(env, scope) {
@@ -1189,9 +1604,8 @@ async function getCertThumbprint(pemCert) {
 	const certDer = Uint8Array.from(atob(certBase64), c => c.charCodeAt(0));
 
 	const hashBuffer = await crypto.subtle.digest('SHA-1', certDer);
-	const hashArray = Array.from(new Uint8Array(hashBuffer));
-	const thumbprintHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
-	return base64UrlEncode(Uint8Array.from(thumbprintHex, c => c.charCodeAt(0)));
+	const thumbprintBytes = new Uint8Array(hashBuffer);
+	return btoa(String.fromCharCode(...thumbprintBytes));
 }
 
 function generateUUID() {
@@ -1203,45 +1617,266 @@ function generateUUID() {
 	return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 }
 
-async function signJwt(input, pemPrivateKey, password) {
-	const pkcs8Der = decodePkcs8Pem(pemPrivateKey, password);
+async function signJwt(input, privateKeyPem, password) {
+	let keyData;
+	let keyType = 'unknown';
 
-	const key = await crypto.subtle.importKey(
-		'pkcs8',
-		pkcs8Der,
-		{ name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-		false,
-		['sign']
-	);
+	if (privateKeyPem.includes('-----BEGIN')) {
+		if (privateKeyPem.includes('ENCRYPTED PRIVATE KEY')) {
+			console.log('[signJwt] Processing ENCRYPTED PEM private key');
+			if (!password) {
+				throw new Error('AZURE_CLIENT_CERTIFICATE_PASSWORD is required for encrypted private key');
+			}
+			keyData = await decryptPemPrivateKey(privateKeyPem, password);
+			keyType = 'encrypted-pem';
+		} else if (privateKeyPem.includes('PRIVATE KEY')) {
+			console.log('[signJwt] Processing unencrypted PEM private key');
+			keyData = decodePemPrivateKey(privateKeyPem);
+			keyType = 'pem';
+		} else {
+			throw new Error('Unknown PEM format in private key');
+		}
+	} else {
+		console.log('[signJwt] Processing base64-encoded PFX/PKCS12');
+		if (!password) {
+			throw new Error('AZURE_CLIENT_CERTIFICATE_PASSWORD is required for PFX file');
+		}
+		keyData = await extractKeyFromPfx(privateKeyPem, password);
+		keyType = 'pfx';
+	}
 
-	const encoder = new TextEncoder();
-	const signature = await crypto.subtle.sign(
-		'RSASSA-PKCS1-v1_5',
-		key,
-		encoder.encode(input)
-	);
+	console.log(`[signJwt] Key type: ${keyType}, length: ${keyData.length}`);
 
-	return base64UrlEncode(new Uint8Array(signature));
+	try {
+		const key = await crypto.subtle.importKey(
+			'pkcs8',
+			keyData,
+			{ name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+			false,
+			['sign']
+		);
+
+		const encoder = new TextEncoder();
+		const signature = await crypto.subtle.sign(
+			'RSASSA-PKCS1-v1_5',
+			key,
+			encoder.encode(input)
+		);
+
+		return base64UrlEncode(new Uint8Array(signature));
+	} catch (importError) {
+		console.error('[signJwt] Key import failed:', importError.message);
+		console.error('[signJwt] First 20 bytes (hex):', Array.from(keyData.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' '));
+		throw importError;
+	}
 }
 
-function decodePkcs8Pem(pem, password) {
+function decodePemPrivateKey(pem) {
 	let pemContents = pem
 		.replace(/-----BEGIN PRIVATE KEY-----/, '')
 		.replace(/-----END PRIVATE KEY-----/, '')
 		.replace(/-----BEGIN RSA PRIVATE KEY-----/, '')
 		.replace(/-----END RSA PRIVATE KEY-----/, '')
+		.replace(/\s/g, '');
+
+	return Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+}
+
+async function decryptPemPrivateKey(pem, password) {
+	const pemContents = pem
 		.replace(/-----BEGIN ENCRYPTED PRIVATE KEY-----/, '')
 		.replace(/-----END ENCRYPTED PRIVATE KEY-----/, '')
 		.replace(/\s/g, '');
 
-	const encrypted = pem.includes('ENCRYPTED PRIVATE KEY');
+	const encryptedDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+	const pwdBytes = new TextEncoder().encode(password);
 
-	if (encrypted) {
-		const encryptedBytes = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
-		return encryptedBytes;
+	const key = await crypto.subtle.importKey(
+		'raw',
+		await crypto.subtle.digest('SHA-256', pwdBytes),
+		{ name: 'AES-CBC' },
+		false,
+		['decrypt']
+	);
+
+	const iv = encryptedDer.slice(0, 16);
+	const ciphertext = encryptedDer.slice(16);
+
+	const decrypted = await crypto.subtle.decrypt(
+		{ name: 'AES-CBC', iv },
+		key,
+		ciphertext
+	);
+
+	return new Uint8Array(decrypted);
+}
+
+async function extractKeyFromPfx(pfxBase64, password) {
+	console.log('[extractKeyFromPfx] Decoding PFX...');
+	const pfxDer = Uint8Array.from(atob(pfxBase64), c => c.charCodeAt(0));
+	console.log('[extractKeyFromPfx] PFX length:', pfxDer.length, 'bytes');
+
+	const pwdBytes = new TextEncoder().encode(password);
+
+	const pkcs12Info = parsePkcs12(pfxDer);
+	console.log('[extractKeyFromPfx] Parsed PFX, keybags found:', pkcs12Info.keyBags.length);
+
+	for (const bag of pkcs12Info.keyBags) {
+		if (bag.encrypted) {
+			try {
+				const decrypted = await pkcs12Decrypt(bag.data, pwdBytes);
+				if (decrypted) {
+					console.log('[extractKeyFromPfx] Successfully decrypted key bag');
+					return decrypted;
+				}
+			} catch (e) {
+				console.log('[extractKeyFromPfx] Decryption failed:', e.message);
+			}
+		} else {
+			console.log('[extractKeyFromPfx] Found unencrypted key bag');
+			return bag.data;
+		}
 	}
 
-	return Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+	for (const bag of pkcs12Info.keyBags) {
+		try {
+			const decrypted = await pkcs12Decrypt(bag.data, new Uint8Array(0));
+			if (decrypted) {
+				console.log('[extractKeyFromPfx] Successfully decrypted with empty password');
+				return decrypted;
+			}
+		} catch (e) {
+		}
+	}
+
+	throw new Error('Failed to extract private key from PFX. Check your password.');
+}
+
+function parsePkcs12(der) {
+	const result = { keyBags: [] };
+	let offset = 0;
+
+	if (der[offset] !== 0x30 || der[offset + 1] !== 0x82) {
+		throw new Error('Invalid PFX structure');
+	}
+	offset += 4;
+
+	const parseLength = (data, pos) => {
+		let len = data[pos];
+		if (len & 0x80) {
+			const numBytes = len & 0x7f;
+			len = 0;
+			for (let i = 0; i < numBytes; i++) {
+				len = (len << 8) | data[pos + 1 + i];
+			}
+			return { length: len, next: pos + 1 + numBytes, headerLen: 1 + numBytes };
+		}
+		return { length: len, next: pos + 1, headerLen: 1 };
+	};
+
+	const pfxSeqLen = parseLength(der, offset);
+	const pfxEnd = offset + pfxSeqLen.headerLen + pfxSeqLen.length;
+	offset = pfxSeqLen.next;
+
+	while (offset < pfxEnd) {
+		if (der[offset] !== 0x30) break;
+		const seqLen = parseLength(der, offset);
+		const seqEnd = offset + seqLen.headerLen + seqLen.length;
+		offset = seqLen.next;
+
+		if (offset >= seqEnd) break;
+
+		const numSetItems = der[offset++];
+		for (let i = 0; i < numSetItems && offset < seqEnd; i++) {
+			if (der[offset] !== 0x30) break;
+			const setSeqLen = parseLength(der, offset);
+			const setEnd = offset + setSeqLen.headerLen + setSeqLen.length;
+			offset = setSeqLen.next;
+
+			while (offset < setEnd) {
+				if (der[offset] !== 0x30) break;
+				const itemLen = parseLength(der, offset);
+				const itemEnd = offset + itemLen.headerLen + itemLen.length;
+				offset = itemLen.next;
+
+				if (offset >= itemEnd) break;
+
+				const oidLen = der[offset++];
+				const oid = der.slice(offset, offset + oidLen);
+				offset += oidLen;
+
+				const isKeyBag = oid.length >= 7 && 
+					oid[oid.length - 5] === 0x2a && oid[oid.length - 4] === 0x86 && 
+					oid[oid.length - 3] === 0x48 && oid[oid.length - 2] === 0x0f && oid[oid.length - 1] === 0x01;
+
+				if (der[offset++] !== 0x04) continue;
+				const octetLen = parseLength(der, offset);
+				const octetEnd = offset + octetLen.headerLen + octetLen.length;
+				offset = octetLen.next;
+
+				const bagContents = der.slice(offset, octetEnd);
+				offset = octetEnd;
+
+				const isEncrypted = bagContents[0] !== 0x30;
+				result.keyBags.push({ data: new Uint8Array(bagContents), encrypted: isEncrypted });
+			}
+			offset = setEnd;
+		}
+		offset = seqEnd;
+	}
+
+	return result;
+}
+
+async function pkcs12Decrypt(encryptedData, password) {
+	const SALT = new Uint8Array([0x30, 0xa5, 0x83, 0x02, 0xa2, 0x01, 0x34]);
+	const ITERATIONS = 100;
+
+	const deriveKey = async (password, salt, keyLen) => {
+		let key = new Uint8Array(keyLen);
+		let block = new Uint8Array(salt.length + 2);
+		block.set(salt);
+
+		for (let i = 0; i < Math.ceil(keyLen / 20); i++) {
+			block[salt.length] = ((i + 1) >> 8) & 0xff;
+			block[salt.length + 1] = (i + 1) & 0xff;
+
+			const combined = new Uint8Array([...block, ...password]);
+			let hash = await crypto.subtle.digest('SHA-1', combined);
+
+			for (let j = 1; j < ITERATIONS; j++) {
+				hash = await crypto.subtle.digest('SHA-1', hash);
+			}
+
+			const result = new Uint8Array(hash);
+			const offset = i * 20;
+			const copyLen = Math.min(20, keyLen - offset);
+			key.set(result.slice(0, copyLen), offset);
+		}
+
+		return key;
+	};
+
+	const key = await deriveKey(password, SALT, 32);
+	const iv = await deriveKey(password, SALT, 16);
+
+	const aesKey = await crypto.subtle.importKey(
+		'raw',
+		key,
+		'AES-CBC',
+		false,
+		['decrypt']
+	);
+
+	const decrypted = await crypto.subtle.decrypt(
+		{ name: 'AES-CBC', iv },
+		aesKey,
+		encryptedData
+	);
+
+	const result = new Uint8Array(decrypted);
+	const paddingLen = result[result.length - 1];
+	return result.slice(0, result.length - paddingLen);
 }
 
 function base64UrlEncode(data) {
@@ -1253,186 +1888,7 @@ function base64UrlEncode(data) {
 	return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
-async function getSharePointRequestDigest(sharePointSiteUrl, token) {
-	const response = await fetch(`${sharePointSiteUrl}/_api/contextinfo`, {
-		method: 'POST',
-		headers: {
-			Authorization: `Bearer ${token}`,
-			Accept: 'application/json;odata=nometadata',
-		},
-	});
 
-	if (!response.ok) {
-		const error = await response.text();
-		console.error('[getSharePointRequestDigest] Failed:', error);
-		throw new Error(`Context info failed (${response.status}): ${error}`);
-	}
-
-	const payload = await response.json();
-	const digest = payload?.FormDigestValue || payload?.d?.GetContextWebInformation?.FormDigestValue;
-	if (!digest) throw new Error('SharePoint request digest missing');
-	return digest;
-}
-
-async function ensureSharePointFolder({ sharePointSiteUrl, sharePointToken, requestDigest, parentFolderPath, folderName }) {
-	const folderPath = normalizePath(`${parentFolderPath}/${folderName}`);
-
-	const checkResponse = await fetch(
-		`${sharePointSiteUrl}/_api/web/GetFolderByServerRelativePath(decodedUrl='${escapeOData(folderPath)}')`,
-		{
-			headers: {
-				Authorization: `Bearer ${sharePointToken}`,
-				Accept: 'application/json;odata=nometadata',
-			},
-		}
-	);
-
-	if (checkResponse.ok) {
-		console.log(`[ensureSharePointFolder] Folder exists: ${folderPath}`);
-		return folderPath;
-	}
-
-	console.log(`[ensureSharePointFolder] Creating folder: ${folderPath}`);
-	const createResponse = await fetch(
-		`${sharePointSiteUrl}/_api/web/GetFolderByServerRelativePath(decodedUrl='${escapeOData(parentFolderPath)}')/Folders/addUsingPath(decodedUrl='${escapeOData(folderName)}')`,
-		{
-			method: 'POST',
-			headers: {
-				Authorization: `Bearer ${sharePointToken}`,
-				Accept: 'application/json;odata=nometadata',
-				'X-RequestDigest': requestDigest,
-			},
-		}
-	);
-
-	if (!createResponse.ok && createResponse.status !== 409) {
-		const error = await createResponse.text();
-		console.error('[ensureSharePointFolder] Create failed:', error);
-		throw new Error(`Folder create failed (${createResponse.status}): ${error}`);
-	}
-
-	console.log(`[ensureSharePointFolder] Folder created/exists: ${folderPath}`);
-	return folderPath;
-}
-
-async function uploadPhotoChunked({ sharePointSiteUrl, sharePointToken, folderServerRelativePath, fileName, contentType, buffer }) {
-	const CHUNK_SIZE = 327680;
-	const SMALL_FILE_THRESHOLD = 4194304;
-
-	console.log(`[uploadPhotoChunked] ${fileName}: ${buffer.length} bytes, threshold: ${SMALL_FILE_THRESHOLD}, chunkSize: ${CHUNK_SIZE}`);
-
-	if (buffer.length <= SMALL_FILE_THRESHOLD) {
-		return uploadPhotoSimple({ sharePointSiteUrl, sharePointToken, folderServerRelativePath, fileName, contentType, buffer });
-	}
-
-	const sessionUrl = `${sharePointSiteUrl}/_api/web/GetFolderByServerRelativePath(decodedUrl='${escapeOData(folderServerRelativePath)}')/Files/CreateUploadSession(FileName='${escapeOData(fileName)}')`;
-	console.log(`[uploadPhotoChunked] Creating session: ${sessionUrl}`);
-
-	const sessionResponse = await fetch(sessionUrl, {
-		method: 'POST',
-		headers: {
-			Authorization: `Bearer ${sharePointToken}`,
-			Accept: 'application/json;odata=nometadata',
-			'Content-Type': 'application/json',
-		},
-		body: JSON.stringify({ deferCommit: false }),
-	});
-
-	if (!sessionResponse.ok) {
-		const error = await sessionResponse.text();
-		console.error('[uploadPhotoChunked] Session create failed:', error);
-		throw new Error(`CreateUploadSession failed (${sessionResponse.status}): ${error}`);
-	}
-
-	const sessionData = await sessionResponse.json();
-	const uploadUrl = sessionData.uploadUrl;
-	console.log(`[uploadPhotoChunked] Session created, uploadUrl received`);
-
-	let offset = 0;
-	const fileSize = buffer.length;
-	let chunkNum = 0;
-
-	while (offset < fileSize) {
-		chunkNum++;
-		const end = Math.min(offset + CHUNK_SIZE, fileSize) - 1;
-		const chunk = buffer.slice(offset, end + 1);
-		const contentRange = `bytes ${offset}-${end}/${fileSize}`;
-
-		console.log(`[uploadPhotoChunked] Uploading chunk ${chunkNum}: ${contentRange}`);
-
-		const putResponse = await fetch(uploadUrl, {
-			method: 'PUT',
-			headers: {
-				Authorization: `Bearer ${sharePointToken}`,
-				'Content-Length': chunk.length,
-				'Content-Range': contentRange,
-			},
-			body: chunk,
-		});
-
-		console.log(`[uploadPhotoChunked] Chunk ${chunkNum} response: ${putResponse.status}`);
-
-		if (putResponse.status !== 202 && putResponse.status !== 201 && putResponse.status !== 200) {
-			const error = await putResponse.text();
-			console.error(`[uploadPhotoChunked] Chunk failed:`, error);
-			throw new Error(`Chunk upload failed (${putResponse.status}): ${error}`);
-		}
-
-		if (putResponse.status === 201 || putResponse.status === 200) {
-			console.log(`[uploadPhotoChunked] Final chunk received, upload complete`);
-			break;
-		}
-
-		const rangeHeader = putResponse.headers.get('nextExpectedRanges');
-		if (rangeHeader) {
-			const match = rangeHeader.match(/(\d+)-/);
-			if (match) {
-				offset = parseInt(match[1], 10);
-			} else {
-				offset += chunk.length;
-			}
-		} else {
-			offset += chunk.length;
-		}
-	}
-
-	const finalResponse = await fetch(uploadUrl, {
-		method: 'GET',
-		headers: { Authorization: `Bearer ${sharePointToken}` },
-	});
-
-	if (!finalResponse.ok) {
-		throw new Error(`Failed to get uploaded file info (${finalResponse.status})`);
-	}
-
-	return finalResponse.json();
-}
-
-async function uploadPhotoSimple({ sharePointSiteUrl, sharePointToken, folderServerRelativePath, fileName, contentType, buffer }) {
-	console.log(`[uploadPhotoSimple] ${fileName}: ${buffer.length} bytes (simple upload)`);
-
-	const response = await fetch(
-		`${sharePointSiteUrl}/_api/web/GetFolderByServerRelativePath(decodedUrl='${escapeOData(folderServerRelativePath)}')/Files/AddUsingPath(decodedurl='${escapeOData(fileName)}',overwrite=true)`,
-		{
-			method: 'POST',
-			headers: {
-				Authorization: `Bearer ${sharePointToken}`,
-				Accept: 'application/json;odata=nometadata',
-				'Content-Type': contentType,
-				'X-RequestDigest': await getSharePointRequestDigest(sharePointSiteUrl, sharePointToken),
-			},
-			body: buffer,
-		}
-	);
-
-	if (!response.ok) {
-		const error = await response.text();
-		console.error('[uploadPhotoSimple] Failed:', error);
-		throw new Error(`SharePoint upload failed (${response.status}): ${error}`);
-	}
-
-	return response.json();
-}
 
 function buildFolderName(projectTitle, submittedAt) {
 	const safeTitle = String(projectTitle || 'IC Report').replace(/[^a-zA-Z0-9 _-]/g, '').trim() || 'IC Report';
@@ -1449,10 +1905,6 @@ function normalizePath(pathValue) {
 	const normalized = String(pathValue || '').trim().replace(/\\/g, '/').replace(/\/+/g, '/');
 	if (!normalized) return '';
 	return normalized.startsWith('/') ? normalized : `/${normalized}`;
-}
-
-function escapeOData(value) {
-	return String(value || '').replace(/'/g, "''");
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -1567,32 +2019,6 @@ async function sendConfirmationEmail(fields, env, token) {
 // ────────────────────────────────────────────────────────────────────────────
 // Utilities
 // ────────────────────────────────────────────────────────────────────────────
-async function getSharePointAccessToken(env) {
-	const tenantId = env.AZURE_TENANT_ID;
-	const clientId = env.AZURE_CLIENT_ID;
-	const clientSecret = env.AZURE_CLIENT_SECRET;
-	const sharePointOrigin = new URL(env.SHAREPOINT_SITE_URL).origin;
-	return fetchTokenV2(tenantId, clientId, clientSecret, `${sharePointOrigin}/.default`);
-}
-
-async function sharePointFetchJson(url, token, options = {}) {
-	const headers = {
-		Accept: 'application/json;odata=nometadata',
-		Authorization: `Bearer ${token}`,
-		...(options.headers || {}),
-	};
-	const res = await fetch(url, { ...options, headers });
-	if (!res.ok) throw new Error(`SharePoint ${res.status} at ${url}: ${await res.text().catch(() => '')}`);
-	return res.status === 204 ? null : res.json();
-}
-
-
-
-function buildSharePointFileUrl(siteUrl, serverRelativeUrl) {
-	if (!serverRelativeUrl) return null;
-	return `${new URL(siteUrl).origin}${serverRelativeUrl}`;
-}
-
 
 async function getAccessToken(env) {
   console.log('>>> GET ACCESS TOKEN: graph');

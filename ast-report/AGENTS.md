@@ -140,9 +140,9 @@ ast-report/
 Set via `wrangler secret put`:
 - `AZURE_TENANT_ID` - Azure AD tenant ID
 - `AZURE_CLIENT_ID` - App registration for SharePoint/Graph
-- `AZURE_CLIENT_SECRET` - Client secret fallback (deprecated, use certificate)
-- `AZURE_CLIENT_CERTIFICATE` - PEM private key or PFX for SharePoint authentication (recommended)
-- `AZURE_CLIENT_CERTIFICATE_PASSWORD` - Password for PFX certificate (optional for PEM)
+- `AZURE_CLIENT_SECRET` - Client secret for Key Vault access
+- `AZURE_KEY_VAULT_URL` - Azure Key Vault URL (e.g. https://yourvault.vault.azure.net/)
+- `AZURE_KEY_VAULT_CERT_NAME` - Name of certificate in Key Vault
 - `ADMIN_CLIENT_ID` - App registration for admin SPA
 - `SHAREPOINT_SITE_URL` - e.g. https://org.sharepoint.com/sites/site
 - `SHAREPOINT_LIST_NAME` - Target list name
