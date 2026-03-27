@@ -75,6 +75,9 @@ export default {
     if (method === "GET"  && path.startsWith("/proxy/photo")) {
       return handlePhotoProxy(request, env);
     }
+    if (method === "GET"  && path === "/test-sharepoint") {
+      return handleTestSharePoint(request, env);
+    }
     if (method === "GET"  && path.startsWith("/reports/")) {
       return handleGetReport(request, env, path.split("/reports/")[1]);
     }
@@ -174,6 +177,7 @@ async function handleGetReports(request, env, url) {
 
     const top    = url.searchParams.get("top")    || "50";
     const cursor = url.searchParams.get("cursor") || null;
+    const area   = url.searchParams.get("area")   || null;
 
     // Prefer header: lets Graph query non-indexed columns without erroring.
     // Results may occasionally be inconsistent on very large lists, but is
@@ -187,11 +191,15 @@ async function handleGetReports(request, env, url) {
     // Fetch all fields without $select — avoids 400s from missing columns.
     // No $orderby — SubmittedAt is not indexed; we sort client-side below.
     // Filter to exclude recycled items.
+    const recycleFilter = "fields/Is_x0020_Recycled eq false or fields/Is_x0020_Recycled eq null";
+    const areaFilter = area ? `fields/Area eq '${area}'` : null;
+    const combinedFilter = areaFilter ? `(${recycleFilter}) and ${areaFilter}` : recycleFilter;
+    
     const endpoint = cursor
       ? decodeURIComponent(cursor)
       : `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`
           + `?expand=fields`
-          + `&$filter='Is_x0020_Recycled' eq false`
+          + `&$filter=${combinedFilter}`
           + `&$top=${top}`;
 
     let res;
@@ -202,11 +210,15 @@ async function handleGetReports(request, env, url) {
       // If filter fails (e.g., IsRecycled column not found), fetch all and filter client-side
       console.error("Filter failed, falling back to client-side filtering:", filterError.message);
       graphFilterFailed = true;
-      const fallbackEndpoint = cursor
+      let fallbackEndpoint = cursor
         ? decodeURIComponent(cursor)
         : `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`
             + `?expand=fields`
             + `&$top=${top}`;
+      if (area && !cursor) {
+        // Add area filter to fallback endpoint if not using cursor (cursor already contains full URL)
+        fallbackEndpoint += `&$filter=fields/Area eq '${area}'`;
+      }
       res = await graphFetch(fallbackEndpoint, { headers });
       // Log available fields for debugging
       if (res.value?.length > 0) {
@@ -235,7 +247,7 @@ async function handleGetReports(request, env, url) {
           
           // Get items with Is Recycled field via SharePoint REST API
 			const spoRes = await fetch(
-					`${spoSiteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,IsRecycled&$top=5000`,
+					`${spoSiteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,IsRecycled,Is_x0020_Recycled&$top=5000`,
 					{ headers: { Authorization: `Bearer ${spoToken}`, Accept: 'application/json;odata=verbose' } }
 				);
 				
@@ -250,7 +262,8 @@ async function handleGetReports(request, env, url) {
 					// Create a map of item ID to Is Recycled status
 					const recycledMap = {};
 					for (const item of spoItems) {
-						recycledMap[String(item.Id)] = item.IsRecycled === true;
+						const isRecycled = item.IsRecycled === true || item.Is_x0020_Recycled === true;
+						recycledMap[String(item.Id)] = isRecycled;
 					}
 					console.log(`Recycled map: ${JSON.stringify(recycledMap)}`);
 					
@@ -820,40 +833,125 @@ async function handlePhotoProxy(request, env) {
 			return corsResponse({ error: "Invalid URL" }, 400, env);
 		}
 		
-		// Fetch the image using SharePoint service account token
+		console.log(`[PhotoProxy] Fetching: ${photoUrl}`);
+		
+		// Fetch the image using SharePoint service account token via REST API
 		const sharePointToken = await getUserToken(env, 'sharepoint');
-		const imageRes = await fetch(photoUrl, {
-			headers: { Authorization: `Bearer ${sharePointToken}` },
+		console.log(`[PhotoProxy] Token obtained, length: ${sharePointToken.length}`);
+		
+		// Extract server-relative path from the URL
+		const urlObj = new URL(photoUrl);
+		const serverRelativePath = urlObj.pathname; // e.g., /sites/ASTReports/Documents/Report Photos/...
+		console.log(`[PhotoProxy] Server-relative path: ${serverRelativePath}`);
+		
+		// Build SharePoint REST API URL to get file content
+		// The decodedurl parameter expects the decoded path; we encode each segment (preserve slashes)
+		const encodedPath = serverRelativePath.split('/').map(segment => encodeURIComponent(segment)).join('/');
+		const apiUrl = `${env.SHAREPOINT_SITE_URL}/_api/web/GetFileByServerRelativeUrl('${serverRelativePath}')/$value`;
+		console.log(`[PhotoProxy] API URL: ${apiUrl}`);
+		
+		const imageRes = await fetch(apiUrl, {
+			headers: { 
+				Authorization: `Bearer ${sharePointToken}`,
+				Accept: 'application/json, image/*, */*'
+			},
+			redirect: 'follow',
 		});
 		
+		console.log(`[PhotoProxy] Response status: ${imageRes.status}, Content-Type: ${imageRes.headers.get("Content-Type")}`);
+		
 		if (!imageRes.ok) {
-			console.error(`[PhotoProxy] Failed to fetch ${photoUrl}: ${imageRes.status}`);
-			// Return a 1x1 transparent pixel on error
-			return new Response(
-				new Uint8Array([0x47,0x49,0x46,0x38,0x39,0x61,0x01,0x00,0x01,0x00,0x80,0x00,0x00,0xff,0xff,0xff,0x00,0x00,0x00,0x21,0xf9,0x04,0x00,0x00,0x00,0x00,0x00,0x2c,0x00,0x00,0x00,0x00,0x01,0x00,0x01,0x00,0x00,0x02,0x02,0x44,0x01,0x00,0x3b]),
-				{ headers: { "Content-Type": "image/gif", "Cache-Control": "max-age=60" } }
-			);
+			// Log response body for error details
+			let errorBody = '';
+			try {
+				errorBody = await imageRes.text();
+				console.error(`[PhotoProxy] Failed to fetch ${photoUrl}: ${imageRes.status}, body: ${errorBody.substring(0, 500)}`);
+			} catch (e) {
+				console.error(`[PhotoProxy] Failed to fetch ${photoUrl}: ${imageRes.status}, could not read body`);
+				errorBody = 'Could not read error response';
+			}
+			// Return error details as JSON for debugging
+			return new Response(JSON.stringify({
+				error: 'Failed to fetch photo',
+				status: imageRes.status,
+				details: errorBody.substring(0, 1000)
+			}), {
+				status: imageRes.status,
+				headers: {
+					'Content-Type': 'application/json',
+					'Access-Control-Allow-Origin': '*'
+				}
+			});
 		}
+		
+		// Read the entire body into a buffer to ensure it's fully downloaded
+		const imageBuffer = await imageRes.arrayBuffer();
+		console.log(`[PhotoProxy] Image size: ${imageBuffer.byteLength} bytes`);
 		
 		// Return the image with appropriate headers
 		const contentType = imageRes.headers.get("Content-Type") || "image/jpeg";
-		const contentLength = imageRes.headers.get("Content-Length");
 		
-		const headers = new Headers({
-			"Content-Type": contentType,
-			"Cache-Control": "public, max-age=86400",
+		return new Response(imageBuffer, {
+			headers: {
+				"Content-Type": contentType,
+				"Content-Length": imageBuffer.byteLength.toString(),
+				"Cache-Control": "public, max-age=86400",
+				"Access-Control-Allow-Origin": "*",
+			},
 		});
-		if (contentLength) {
-			headers.set("Content-Length", contentLength);
-		}
-		
-		return new Response(imageRes.body, { headers });
 	} catch (err) {
 		console.error("[PhotoProxy] error:", err);
-		return new Response(
-			new Uint8Array([0x47,0x49,0x46,0x38,0x39,0x61,0x01,0x00,0x01,0x00,0x80,0x00,0x00,0xff,0xff,0xff,0x00,0x00,0x00,0x21,0xf9,0x04,0x00,0x00,0x00,0x00,0x00,0x2c,0x00,0x00,0x00,0x00,0x01,0x00,0x01,0x00,0x00,0x02,0x02,0x44,0x01,0x00,0x3b]),
-			{ headers: { "Content-Type": "image/gif" } }
-		);
+		return new Response(null, { status: 500 });
+	}
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// GET /test-sharepoint — Test SharePoint REST API access with service account
+// ────────────────────────────────────────────────────────────────────────────
+async function handleTestSharePoint(request, env) {
+	try {
+		console.log('[TestSharePoint] Testing SharePoint REST API access');
+		const token = await getUserToken(env, 'sharepoint');
+		console.log('[TestSharePoint] Token obtained');
+		
+		// Test 1: Get site properties
+		const siteUrl = `${env.SHAREPOINT_SITE_URL}/_api/web`;
+		const siteRes = await fetch(siteUrl, {
+			headers: {
+				Authorization: `Bearer ${token}`,
+				Accept: 'application/json;odata=verbose'
+			}
+		});
+		const siteStatus = siteRes.status;
+		let siteBody = '';
+		try {
+			siteBody = await siteRes.text();
+		} catch (e) {}
+		console.log(`[TestSharePoint] Site API response: ${siteStatus}`);
+		
+		// Test 2: Get root folder of "Report Photos" library
+		const photosUrl = `${env.SHAREPOINT_SITE_URL}/_api/web/GetFolderByServerRelativeUrl('/sites/ASTReports/Documents/Report Photos')`;
+		const photosRes = await fetch(photosUrl, {
+			headers: {
+				Authorization: `Bearer ${token}`,
+				Accept: 'application/json;odata=verbose'
+			}
+		});
+		const photosStatus = photosRes.status;
+		let photosBody = '';
+		try {
+			photosBody = await photosRes.text();
+		} catch (e) {}
+		console.log(`[TestSharePoint] Photos folder API response: ${photosStatus}`);
+		
+		return corsResponse({
+			tokenLength: token.length,
+			siteApi: { status: siteStatus, body: siteBody.substring(0, 500) },
+			photosFolderApi: { status: photosStatus, body: photosBody.substring(0, 500) }
+		}, 200, env);
+	} catch (err) {
+		console.error('[TestSharePoint] error:', err);
+		return corsResponse({ error: err.message }, 500, env);
 	}
 }
 
@@ -880,7 +978,7 @@ async function handleGetRecycleBin(request, env) {
 
 		const endpoint = `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`
 			+ `?expand=fields`
-			+ `&$filter='Is_x0020_Recycled' eq true`;
+			+ `&$filter=fields/Is_x0020_Recycled eq true`;
 
 		let res;
 		let graphFilterFailed = false;
@@ -904,43 +1002,39 @@ async function handleGetRecycleBin(request, env) {
 			.map(item => normalizeItem(item));
 
 		if (graphFilterFailed && items.length > 0) {
-			const rawFields = res.value[0]?.fields;
-			const hasIsRecycledField = rawFields && ('Is Recycled' in rawFields || 'IsRecycled' in rawFields || 'Is_x0020_Recycled' in rawFields);
-			
-			if (!hasIsRecycledField) {
-				// Try SharePoint REST API to get the field values
-				try {
-					const spoToken = await getUserToken(env, 'sharepoint');
-					const spoSiteUrl = env.SHAREPOINT_SITE_URL;
-					const listName = env.SHAREPOINT_LIST_NAME || 'AST Reports';
-					
-					const spoRes = await fetch(
-						`${spoSiteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,IsRecycled&$top=5000`,
-						{ headers: { Authorization: `Bearer ${spoToken}`, Accept: 'application/json;odata=verbose' } }
-					);
-					
-					if (spoRes.ok) {
-						const spoData = await spoRes.json();
-						const spoItems = spoData.d?.results || [];
-						console.log(`SharePoint REST API returned ${spoItems.length} items for recycle bin`);
-						if (spoItems.length > 0) {
-							console.log(`Recycle bin first item fields: ${JSON.stringify(spoItems[0])}`);
-						}
-						
-						const recycledMap = {};
-						for (const item of spoItems) {
-							recycledMap[String(item.Id)] = item.IsRecycled === true;
-						}
-						console.log(`Recycled map: ${JSON.stringify(recycledMap)}`);
-						
-						items = items.map(item => ({
-							...item,
-							isRecycled: recycledMap[item.id] ?? item.isRecycled
-						}));
+			// Always fetch current IsRecycled values from SharePoint REST API when Graph filter fails
+			try {
+				const spoToken = await getUserToken(env, 'sharepoint');
+				const spoSiteUrl = env.SHAREPOINT_SITE_URL;
+				const listName = env.SHAREPOINT_LIST_NAME || 'AST Reports';
+				
+				const spoRes = await fetch(
+					`${spoSiteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,IsRecycled,Is_x0020_Recycled&$top=5000`,
+					{ headers: { Authorization: `Bearer ${spoToken}`, Accept: 'application/json;odata=verbose' } }
+				);
+				
+				if (spoRes.ok) {
+					const spoData = await spoRes.json();
+					const spoItems = spoData.d?.results || [];
+					console.log(`SharePoint REST API returned ${spoItems.length} items for recycle bin`);
+					if (spoItems.length > 0) {
+						console.log(`Recycle bin first item fields: ${JSON.stringify(spoItems[0])}`);
 					}
-				} catch (spoError) {
-					console.error("SharePoint REST API fallback failed:", spoError.message);
+					
+					const recycledMap = {};
+					for (const item of spoItems) {
+						const isRecycled = item.IsRecycled === true || item.Is_x0020_Recycled === true;
+						recycledMap[String(item.Id)] = isRecycled;
+					}
+					console.log(`Recycled map: ${JSON.stringify(recycledMap)}`);
+					
+					items = items.map(item => ({
+						...item,
+						isRecycled: recycledMap[item.id] ?? item.isRecycled
+					}));
 				}
+			} catch (spoError) {
+				console.error("SharePoint REST API fallback failed:", spoError.message);
 			}
 			
 			items = items.filter(item => item.isRecycled);
