@@ -301,10 +301,10 @@
       </div>
       <div class="section-body">
         <div class="file-drop" id="dropZone">
-          <input type="file" id="photos" name="photos" accept="image/*" multiple />
+          <input type="file" id="photos" name="photos" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" multiple />
           <div class="upload-icon">📷</div>
-          <p><strong>Click to select photos</strong> or drag &amp; drop them here</p>
-          <p style="margin-top:5px;font-size:12px;">JPEG, PNG, WEBP &mdash; up to 10 photos, 25 MB each</p>
+          <p><strong>Click to select files</strong> or drag &amp; drop them here</p>
+          <p style="margin-top:5px;font-size:12px;">JPEG, PNG, WEBP, PDF, DOC, XLS, TXT &mdash; up to 10 files, 25 MB each</p>
           <div class="file-list" id="fileList"></div>
         </div>
       </div>
@@ -496,14 +496,28 @@
   });
   fileInput.addEventListener("change", () => { addFiles([...fileInput.files]); fileInput.value = ""; });
 
+  function getFileIcon(file) {
+    if (file.type.startsWith("image/")) return "🖼️";
+    if (file.type === "application/pdf") return "📄";
+    if (file.type.includes("word") || file.name.endsWith(".doc") || file.name.endsWith(".docx")) return "📝";
+    if (file.type.includes("sheet") || file.type.includes("excel") || file.name.endsWith(".xls") || file.name.endsWith(".xlsx")) return "📊";
+    return "📎";
+  }
+
   function addFiles(newFiles) {
-    selectedFiles = [...selectedFiles, ...newFiles.filter(f => f.type.startsWith("image/"))].slice(0, 10);
+    const allowedTypes = ["image/", "application/pdf", "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "text/plain"];
+    selectedFiles = [...selectedFiles, ...newFiles.filter(f =>
+      allowedTypes.some(t => f.type.startsWith(t) || f.type === t)
+    )].slice(0, 10);
     renderFileList();
   }
   function renderFileList() {
     fileList.innerHTML = selectedFiles.map((f, i) => `
       <div class="file-item" onclick="event.stopPropagation()">
-        <span>🖼</span>
+        <span>${getFileIcon(f)}</span>
         <span>${f.name}</span>
         <span style="color:var(--muted);font-size:12px;">(${(f.size/1024).toFixed(0)} KB)</span>
         <button type="button" class="remove-file" onclick="event.stopPropagation();removeFile(${i})" title="Remove">✕</button>
