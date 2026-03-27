@@ -924,7 +924,7 @@ async function handleRecycleReport(request, env, id) {
 		const digestData = await digestRes.json();
 		const requestDigest = digestData.d?.GetContextWebInformation?.FormDigestValue;
 
-		await fetch(
+		const patchRes = await fetch(
 			`${spoSiteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${id})`,
 			{
 				method: 'POST',
@@ -936,9 +936,18 @@ async function handleRecycleReport(request, env, id) {
 					'X-HTTP-Method': 'MERGE',
 					'IF-MATCH': '*',
 				},
-				body: JSON.stringify({ IsRecycled: true }),
+				body: JSON.stringify({
+					'__metadata': { 'type': 'SP.Data.ReportsListItem' },
+					IsRecycled: true
+				}),
 			}
 		);
+
+		console.log(`[handleRecycleReport] PATCH response status: ${patchRes.status}`);
+		if (!patchRes.ok) {
+			const patchError = await patchRes.text();
+			console.error(`[handleRecycleReport] PATCH error: ${patchError}`);
+		}
 
 		return corsResponse({ success: true, message: "Report moved to recycle bin" }, 200, env);
 	} catch (err) {
@@ -975,7 +984,7 @@ async function handleRestoreReport(request, env, id) {
 		const digestData = await digestRes.json();
 		const requestDigest = digestData.d?.GetContextWebInformation?.FormDigestValue;
 
-		await fetch(
+		const patchRes = await fetch(
 			`${spoSiteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${id})`,
 			{
 				method: 'POST',
@@ -987,9 +996,18 @@ async function handleRestoreReport(request, env, id) {
 					'X-HTTP-Method': 'MERGE',
 					'IF-MATCH': '*',
 				},
-				body: JSON.stringify({ IsRecycled: false }),
+				body: JSON.stringify({
+					'__metadata': { 'type': 'SP.Data.ReportsListItem' },
+					IsRecycled: false
+				}),
 			}
 		);
+
+		console.log(`[handleRestoreReport] PATCH response status: ${patchRes.status}`);
+		if (!patchRes.ok) {
+			const patchError = await patchRes.text();
+			console.error(`[handleRestoreReport] PATCH error: ${patchError}`);
+		}
 
 		return corsResponse({ success: true, message: "Report restored from recycle bin" }, 200, env);
 	} catch (err) {
