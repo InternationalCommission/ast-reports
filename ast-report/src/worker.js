@@ -908,21 +908,35 @@ async function handleRecycleReport(request, env, id) {
 	if (roleCheck.error) return corsResponse({ error: roleCheck.error }, 403, env);
 
 	try {
-		const token = await getAccessToken(env);
-		const { siteId, listId } = await resolveListIds(env, token);
+		// Use SharePoint REST API since Graph API doesn't recognize "Is Recycled" field
+		const spoToken = await getUserToken(env, 'sharepoint');
+		const spoSiteUrl = env.SHAREPOINT_SITE_URL;
+		const listName = env.SHAREPOINT_LIST_NAME || 'AST Reports';
 
-		const headers = {
-			Authorization: `Bearer ${token}`,
-			"Content-Type": "application/json",
-			Accept: "application/json",
-		};
+		// Get request digest for POST
+		const digestRes = await fetch(`${spoSiteUrl}/_api/contextinfo`, {
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${spoToken}`,
+				Accept: 'application/json;odata=verbose',
+			},
+		});
+		const digestData = await digestRes.json();
+		const requestDigest = digestData.d?.GetContextWebInformation?.FormDigestValue;
 
-		await graphFetch(
-			`https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${id}/fields`,
+		await fetch(
+			`${spoSiteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${id})`,
 			{
-				method: "PATCH",
-				headers,
-				body: JSON.stringify({ 'Is Recycled': true }),
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${spoToken}`,
+					'Content-Type': 'application/json;odata=verbose',
+					Accept: 'application/json;odata=verbose',
+					'X-RequestDigest': requestDigest,
+					'X-HTTP-Method': 'MERGE',
+					'IF-MATCH': '*',
+				},
+				body: JSON.stringify({ IsRecycled: true }),
 			}
 		);
 
@@ -945,21 +959,35 @@ async function handleRestoreReport(request, env, id) {
 	if (roleCheck.error) return corsResponse({ error: roleCheck.error }, 403, env);
 
 	try {
-		const token = await getAccessToken(env);
-		const { siteId, listId } = await resolveListIds(env, token);
+		// Use SharePoint REST API since Graph API doesn't recognize "Is Recycled" field
+		const spoToken = await getUserToken(env, 'sharepoint');
+		const spoSiteUrl = env.SHAREPOINT_SITE_URL;
+		const listName = env.SHAREPOINT_LIST_NAME || 'AST Reports';
 
-		const headers = {
-			Authorization: `Bearer ${token}`,
-			"Content-Type": "application/json",
-			Accept: "application/json",
-		};
+		// Get request digest for POST
+		const digestRes = await fetch(`${spoSiteUrl}/_api/contextinfo`, {
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${spoToken}`,
+				Accept: 'application/json;odata=verbose',
+			},
+		});
+		const digestData = await digestRes.json();
+		const requestDigest = digestData.d?.GetContextWebInformation?.FormDigestValue;
 
-		await graphFetch(
-			`https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${id}/fields`,
+		await fetch(
+			`${spoSiteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${id})`,
 			{
-				method: "PATCH",
-				headers,
-				body: JSON.stringify({ 'Is Recycled': false }),
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${spoToken}`,
+					'Content-Type': 'application/json;odata=verbose',
+					Accept: 'application/json;odata=verbose',
+					'X-RequestDigest': requestDigest,
+					'X-HTTP-Method': 'MERGE',
+					'IF-MATCH': '*',
+				},
+				body: JSON.stringify({ IsRecycled: false }),
 			}
 		);
 
