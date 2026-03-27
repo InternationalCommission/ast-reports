@@ -188,7 +188,7 @@ async function handleGetReports(request, env, url) {
       ? decodeURIComponent(cursor)
       : `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`
           + `?expand=fields`
-          + `&$filter=IsRecycled eq false`
+          + `&$filter='Is_x0020_Recycled' eq false`
           + `&$top=${top}`;
 
     let res;
@@ -221,11 +221,11 @@ async function handleGetReports(request, env, url) {
     // If Graph filter failed, check if IsRecycled exists and filter client-side
     if (graphFilterFailed && items.length > 0) {
       const rawFields = res.value[0]?.fields;
-      if (rawFields && 'IsRecycled' in rawFields) {
-        console.log("IsRecycled found in fields - applying client-side filter");
+      if (rawFields && ('Is Recycled' in rawFields || 'IsRecycled' in rawFields)) {
+        console.log("Is Recycled found in fields - applying client-side filter");
         items = items.filter(item => !item.isRecycled);
       } else {
-        console.warn("IsRecycled field NOT found in SharePoint - showing all items");
+        console.warn("Is Recycled field NOT found in SharePoint - showing all items");
       }
     } else if (!graphFilterFailed) {
       // Graph filter worked, but still filter in case of inconsistencies
@@ -678,8 +678,8 @@ function normalizeItem(item) {
     photoFolderServerRelativePath:   f.PhotoFolderServerRelativePath || null,
     photoDriveId:                    f.PhotoDriveId || null,
     photoFolderItemId:               f.PhotoFolderItemId || null,
-    // Recycle bin status
-    isRecycled:                 f.IsRecycled || false,
+    // Recycle bin status (column is "Is Recycled" with space, internal name may vary)
+    isRecycled:                 f['Is Recycled'] ?? f.IsRecycled ?? false,
   };
 }
 
@@ -784,7 +784,7 @@ async function handleGetRecycleBin(request, env) {
 
 		const endpoint = `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`
 			+ `?expand=fields`
-			+ `&$filter=IsRecycled eq true`;
+			+ `&$filter='Is_x0020_Recycled' eq true`;
 
 		let res;
 		let graphFilterFailed = false;
@@ -809,11 +809,11 @@ async function handleGetRecycleBin(request, env) {
 
 		if (graphFilterFailed && items.length > 0) {
 			const rawFields = res.value[0]?.fields;
-			if (rawFields && 'IsRecycled' in rawFields) {
-				console.log("IsRecycled found - applying client-side filter for recycle bin");
+			if (rawFields && ('Is Recycled' in rawFields || 'IsRecycled' in rawFields)) {
+				console.log("Is Recycled found - applying client-side filter for recycle bin");
 				items = items.filter(item => item.isRecycled);
 			} else {
-				console.warn("IsRecycled field NOT found - showing all items in recycle bin");
+				console.warn("Is Recycled field NOT found - showing all items in recycle bin");
 			}
 		} else if (!graphFilterFailed) {
 			items = items.filter(item => item.isRecycled);
@@ -854,7 +854,7 @@ async function handleRecycleReport(request, env, id) {
 			{
 				method: "PATCH",
 				headers,
-				body: JSON.stringify({ IsRecycled: true }),
+				body: JSON.stringify({ 'Is Recycled': true }),
 			}
 		);
 
@@ -891,7 +891,7 @@ async function handleRestoreReport(request, env, id) {
 			{
 				method: "PATCH",
 				headers,
-				body: JSON.stringify({ IsRecycled: false }),
+				body: JSON.stringify({ 'Is Recycled': false }),
 			}
 		);
 
