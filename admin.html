@@ -296,7 +296,7 @@
   <div class="topbar-divider"></div>
   <div class="search-wrap" style="position: relative;">
     <span class="search-icon">🔍</span>
-    <input type="text" id="searchInput" placeholder="Search or use /commands: /area, /country, /coordinator, /start, /end, /city, /title… (use quotes for spaces)" autocomplete="off" />
+    <input type="text" id="searchInput" placeholder="Type / to filter, e.g., /area Latin America /country United States" autocomplete="off" />
     <div id="suggestions" style="
       display: none;
       position: absolute;
@@ -690,79 +690,20 @@
   // ── Slash command parser ──────────────────────────────────────────────────
   function parseSlashCommands(input) {
     const commands = {};
-    let i = 0;
-    const len = input.length;
-    let currentCommand = null;
-    let currentValue = '';
-    let inQuotes = false;
-    let quoteChar = '';
-    
-    while (i < len) {
-      const char = input[i];
-      
-      if (!inQuotes && char === '/') {
-        // Save previous command if any
-        if (currentCommand) {
-          commands[currentCommand.toLowerCase()] = currentValue.trim();
-        }
-        // Start new command
-        currentCommand = '';
-        currentValue = '';
-        i++;
-        continue;
+    const regex = /\/(\w+)([^/]*?)(?=\/|$)/g;
+    let match;
+    while ((match = regex.exec(input)) !== null) {
+      const command = match[1].toLowerCase();
+      const value = match[2].trim();
+      if (value) {
+        commands[command] = value;
       }
-      
-      if (!inQuotes && (char === ' ' || char === '\t')) {
-        if (currentCommand !== null && currentValue === '') {
-          // Space after command, start value
-          i++;
-          continue;
-        }
-        if (currentCommand !== null) {
-          // End of value, save command
-          commands[currentCommand.toLowerCase()] = currentValue.trim();
-          currentCommand = null;
-          currentValue = '';
-        } else {
-          // Regular search term
-          if (!commands._search) commands._search = '';
-          commands._search += char;
-        }
-        i++;
-        continue;
-      }
-      
-      if (char === '"' || char === "'") {
-        if (!inQuotes) {
-          inQuotes = true;
-          quoteChar = char;
-          i++;
-          continue;
-        } else if (char === quoteChar) {
-          inQuotes = false;
-          i++;
-          continue;
-        }
-      }
-      
-      if (currentCommand !== null) {
-        currentValue += char;
-      } else {
-        if (!commands._search) commands._search = '';
-        commands._search += char;
-      }
-      i++;
     }
     
-    // Save last command
-    if (currentCommand) {
-      commands[currentCommand.toLowerCase()] = currentValue.trim();
-    }
-    
-    // Trim search string
-    if (commands._search) {
-      commands._search = commands._search.trim();
-      if (!commands._search) delete commands._search;
+    // Extract non-command text (search terms)
+    const nonCommandText = input.replace(/\/\w+[^/]*(?=\/|$)/g, '').trim();
+    if (nonCommandText) {
+      commands._search = nonCommandText;
     }
     
     return commands;
@@ -782,23 +723,28 @@
   ];
   
   let activeSuggestionIndex = -1;
-  let isInCommandValue = false;
-  let currentCommand = null;
+  let isCommandMode = false; // true when typing a command (after '/')
+  let isValueMode = false;   // true when typing a value after a command
+  let currentCommand = null; // command being typed or completed
+  
+  // DOM elements
+  const searchInput = document.getElementById('searchInput');
+  const suggestionsDiv = document.getElementById('suggestions');
   
   function updateSuggestions() {
-    const input = document.getElementById('searchInput');
-    const suggestionsDiv = document.getElementById('suggestions');
-    const value = input.value;
-    const cursorPos = input.selectionStart;
+    const value = searchInput.value;
+    const cursorPos = searchInput.selectionStart;
     
-    // Find if we're inside a command value
-    // Simple approach: find last '/' before cursor
+    // Find the last '/' before cursor
     const textBeforeCursor = value.substring(0, cursorPos);
     const lastSlashIndex = textBeforeCursor.lastIndexOf('/');
     
+    // Determine mode
     if (lastSlashIndex === -1) {
-      // No slash before cursor, show command suggestions
-      showCommandSuggestions('');
+      // No slash before cursor - normal mode
+      isCommandMode = false;
+      isValueMode = false;
+      hideSuggestions();
       return;
     }
     
@@ -807,20 +753,22 @@
     const spaceIndex = textAfterSlash.indexOf(' ');
     
     if (spaceIndex !== -1) {
-      // Command is completed, we're in value mode - hide suggestions
-      suggestionsDiv.style.display = 'none';
-      isInCommandValue = true;
+      // Command completed, we're in value mode
+      isCommandMode = false;
+      isValueMode = true;
       currentCommand = textAfterSlash.substring(1, spaceIndex).toLowerCase();
+      hideSuggestions();
       return;
     }
     
     // Still typing command
-    const partialCommand = textAfterSlash.substring(1);
-    showCommandSuggestions(partialCommand);
+    isCommandMode = true;
+    isValueMode = false;
+    currentCommand = textAfterSlash.substring(1);
+    showCommandSuggestions(currentCommand);
   }
   
   function showCommandSuggestions(partial) {
-    const suggestionsDiv = document.getElementById('suggestions');
     suggestionsDiv.innerHTML = '';
     
     const matches = availableCommands.filter(cmd => 
@@ -828,8 +776,7 @@
     );
     
     if (matches.length === 0) {
-      suggestionsDiv.style.display = 'none';
-      activeSuggestionIndex = -1;
+      hideSuggestions();
       return;
     }
     
@@ -848,31 +795,33 @@
   }
   
   function acceptSuggestion(command) {
-    const input = document.getElementById('searchInput');
-    const value = input.value;
-    const cursorPos = input.selectionStart;
+    const value = searchInput.value;
+    const cursorPos = searchInput.selectionStart;
     
     const textBeforeCursor = value.substring(0, cursorPos);
     const lastSlashIndex = textBeforeCursor.lastIndexOf('/');
     
     if (lastSlashIndex !== -1) {
-      // Replace partial command with full command
+      // Replace partial command with full command and a space
       const before = value.substring(0, lastSlashIndex);
       const after = value.substring(cursorPos);
-      input.value = before + '/' + command + ' ' + after;
+      searchInput.value = before + '/' + command + ' ' + after;
       // Position cursor after command and space
       const newPos = lastSlashIndex + command.length + 2;
-      input.setSelectionRange(newPos, newPos);
+      searchInput.setSelectionRange(newPos, newPos);
     }
     
     hideSuggestions();
-    input.focus();
-    isInCommandValue = true;
+    searchInput.focus();
+    isCommandMode = false;
+    isValueMode = true;
     currentCommand = command.toLowerCase();
+    // Trigger filter update
+    filterReports();
   }
   
   function hideSuggestions() {
-    document.getElementById('suggestions').style.display = 'none';
+    suggestionsDiv.style.display = 'none';
     activeSuggestionIndex = -1;
   }
   
@@ -882,14 +831,14 @@
   }
   
   function updateActiveSuggestion() {
-    const items = document.querySelectorAll('.suggestion-item');
+    const items = suggestionsDiv.querySelectorAll('.suggestion-item');
     items.forEach((item, i) => {
       item.classList.toggle('active', i === activeSuggestionIndex);
     });
   }
   
   function moveSuggestion(delta) {
-    const items = document.querySelectorAll('.suggestion-item');
+    const items = suggestionsDiv.querySelectorAll('.suggestion-item');
     if (items.length === 0) return;
     
     let newIndex = activeSuggestionIndex + delta;
@@ -899,45 +848,64 @@
     setActiveSuggestion(newIndex);
   }
   
-  // Set up event listeners
-  document.addEventListener('DOMContentLoaded', () => {
-    const input = document.getElementById('searchInput');
-    const suggestionsDiv = document.getElementById('suggestions');
-    
-    input.addEventListener('input', updateSuggestions);
-    input.addEventListener('keydown', (e) => {
-      if (suggestionsDiv.style.display === 'block') {
-        if (e.key === 'Tab' || e.key === 'Enter') {
-          e.preventDefault();
-          if (activeSuggestionIndex >= 0) {
-            const items = document.querySelectorAll('.suggestion-item');
-            if (items[activeSuggestionIndex]) {
-              items[activeSuggestionIndex].click();
-            }
+  // Set up event listeners immediately
+  searchInput.addEventListener('input', updateSuggestions);
+  searchInput.addEventListener('keydown', (e) => {
+    if (suggestionsDiv.style.display === 'block') {
+      // Suggestions are visible
+      if (e.key === 'Tab' || e.key === 'Enter') {
+        e.preventDefault();
+        if (activeSuggestionIndex >= 0) {
+          const items = suggestionsDiv.querySelectorAll('.suggestion-item');
+          if (items[activeSuggestionIndex]) {
+            items[activeSuggestionIndex].click();
           }
-        } else if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          moveSuggestion(1);
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          moveSuggestion(-1);
-        } else if (e.key === 'Escape') {
-          hideSuggestions();
         }
-      } else if (e.key === 'Tab' && isInCommandValue) {
-        // Tab pressed while in command value mode - exit value mode
-        isInCommandValue = false;
-        currentCommand = null;
-      }
-    });
-    
-    // Close suggestions when clicking outside
-    document.addEventListener('click', (e) => {
-      if (!input.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        moveSuggestion(1);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        moveSuggestion(-1);
+      } else if (e.key === 'Escape') {
         hideSuggestions();
       }
-    });
+    } else if (e.key === 'Tab') {
+      if (isValueMode) {
+        // Tab pressed while in value mode - exit value mode, allow typing new command
+        e.preventDefault();
+        isValueMode = false;
+        currentCommand = null;
+        // Insert a slash to start a new command? Not needed, user can type '/' themselves.
+        // Instead, move cursor to end of current value and insert a space?
+        const value = searchInput.value;
+        const cursorPos = searchInput.selectionStart;
+        // If there's already a space after cursor, do nothing
+        if (value[cursorPos] !== ' ') {
+          // Insert a space to separate from next command
+          searchInput.value = value.substring(0, cursorPos) + ' ' + value.substring(cursorPos);
+          searchInput.setSelectionRange(cursorPos + 1, cursorPos + 1);
+        }
+      } else if (isCommandMode) {
+        // Tab pressed while typing a command - accept the first suggestion
+        e.preventDefault();
+        const items = suggestionsDiv.querySelectorAll('.suggestion-item');
+        if (items.length > 0) {
+          items[0].click();
+        }
+      }
+    }
   });
+  
+  // Close suggestions when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!searchInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+      hideSuggestions();
+    }
+  });
+  
+  // Initialize
+  updateSuggestions();
 
   // ── Sign in ───────────────────────────────────────────────────────────────
   async function signIn() {
