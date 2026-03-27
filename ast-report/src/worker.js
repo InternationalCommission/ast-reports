@@ -72,6 +72,9 @@ export default {
       const id = path.split("/reports/")[1].replace("/photos", "");
       return handleGetPhotos(request, env, id);
     }
+    if (method === "GET"  && path.startsWith("/proxy/photo")) {
+      return handlePhotoProxy(request, env);
+    }
     if (method === "GET"  && path.startsWith("/reports/")) {
       return handleGetReport(request, env, path.split("/reports/")[1]);
     }
@@ -778,12 +781,14 @@ async function handleGetPhotos(request, env, id) {
 			const origin = new URL(env.SHAREPOINT_SITE_URL).origin;
 			const serverRelativeUrl = file.ServerRelativeUrl || file.name;
 			const webUrl = serverRelativeUrl ? `${origin}${serverRelativeUrl}` : null;
+			// Use proxy URL for thumbnails so all authenticated users can view them
+			const proxyUrl = webUrl ? `${new URL(request.url).origin}/proxy/photo?url=${encodeURIComponent(webUrl)}` : null;
 			
 			return {
 				id: file.UniqueId || file.Name,
 				name: file.Name,
 				webUrl,
-				thumbnail: webUrl,
+				thumbnail: proxyUrl,
 				lastModified: file.TimeLastModified || null,
 				size: file.Length || null,
 			};
@@ -792,6 +797,56 @@ async function handleGetPhotos(request, env, id) {
 		return corsResponse({ photos, folderUrl }, 200, env);
 	} catch (err) {
 		console.error("GetPhotos error:", err);
+		return corsResponse({ error: err.message }, 500, env);
+	}
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// GET /proxy/photo?url=... — Proxy SharePoint photos with service account auth
+// ────────────────────────────────────────────────────────────────────────────
+
+async function handlePhotoProxy(request, env) {
+	const authError = await validateAzureToken(request, env);
+	if (authError) return corsResponse({ error: authError }, 401, env);
+
+	try {
+		const url = new URL(request.url);
+		const photoUrl = url.searchParams.get("url");
+		
+		if (!photoUrl) {
+			return corsResponse({ error: "Missing url parameter" }, 400, env);
+		}
+		
+		// Validate the URL is a SharePoint URL
+		if (!photoUrl.includes("sharepoint.com")) {
+			return corsResponse({ error: "Invalid URL" }, 400, env);
+		}
+		
+		// Fetch the image using SharePoint token
+		const sharePointToken = await getUserToken(env, 'sharepoint');
+		const imageRes = await fetch(photoUrl, {
+			headers: { Authorization: `Bearer ${sharePointToken}` },
+		});
+		
+		if (!imageRes.ok) {
+			return corsResponse({ error: "Failed to fetch image" }, imageRes.status, env);
+		}
+		
+		// Return the image with appropriate headers
+		const contentType = imageRes.headers.get("Content-Type") || "image/jpeg";
+		const contentLength = imageRes.headers.get("Content-Length");
+		
+		const headers = new Headers({
+			"Content-Type": contentType,
+			"Cache-Control": "public, max-age=86400",
+		});
+		if (contentLength) {
+			headers.set("Content-Length", contentLength);
+		}
+		
+		return new Response(imageRes.body, { headers });
+	} catch (err) {
+		console.error("PhotoProxy error:", err);
 		return corsResponse({ error: err.message }, 500, env);
 	}
 }
