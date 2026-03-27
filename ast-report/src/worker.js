@@ -1072,9 +1072,8 @@ async function uploadPhotos(photoFiles, fields, env) {
 
 	for (let i = 0; i < validFiles.length; i++) {
 		const file = validFiles[i];
-		const safeFileName = sanitizeFileName(file.name);
-		const prefixedFileName = `${folderName}_${safeFileName}`;
-		console.log(`[uploadPhotos] Uploading file ${i + 1}/${validFiles.length}: ${prefixedFileName} (${file.size} bytes)`);
+		const fileName = sanitizeFileName(file.name);
+		console.log(`[uploadPhotos] Uploading file ${i + 1}/${validFiles.length}: ${fileName} (${file.size} bytes)`);
 
 		try {
 			const arrayBuffer = await file.arrayBuffer();
@@ -1086,7 +1085,7 @@ async function uploadPhotos(photoFiles, fields, env) {
 					webhookUrl: env.POWER_AUTOMATE_WEBHOOK_URL,
 					siteUrl: env.SHAREPOINT_SITE_URL,
 					folderPath: folderServerRelativePath,
-					fileName: prefixedFileName,
+					fileName: fileName,
 					contentType: file.type || 'application/octet-stream',
 					buffer,
 					projectTitle: folderName,
@@ -1097,20 +1096,20 @@ async function uploadPhotos(photoFiles, fields, env) {
 					siteUrl: env.SHAREPOINT_SITE_URL,
 					sharePointToken,
 					folderServerRelativePath,
-					fileName: prefixedFileName,
+					fileName: fileName,
 					contentType: file.type || 'application/octet-stream',
 					buffer,
 				});
 			}
 
-			console.log(`[uploadPhotos] File uploaded successfully: ${prefixedFileName}`);
+			console.log(`[uploadPhotos] File uploaded successfully: ${fileName}`);
 			uploaded.push({
-				name: safeFileName,
+				name: fileName,
 				webUrl: fileInfo.webUrl,
 			});
 		} catch (error) {
-			console.error(`[uploadPhotos] Upload failed for ${prefixedFileName}:`, error.message);
-			errors.push({ file: prefixedFileName, error: error.message });
+			console.error(`[uploadPhotos] Upload failed for ${fileName}:`, error.message);
+			errors.push({ file: fileName, error: error.message });
 		}
 	}
 
