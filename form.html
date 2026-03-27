@@ -99,12 +99,12 @@
     .file-drop { border: 2px dashed var(--border); border-radius: 4px; padding: 28px 20px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; background: #fff; position: relative; }
     .file-drop:hover, .file-drop.drag-over { border-color: var(--navy); background: rgba(26,58,92,.03); }
     .file-drop input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
-    .file-drop .upload-icon { font-size: 28px; margin-bottom: 8px; }
-    .file-drop p { color: var(--muted); font-size: 14px; }
+    .file-drop .upload-icon { font-size: 28px; margin-bottom: 8px; position: relative; }
+    .file-drop p { color: var(--muted); font-size: 14px; position: relative; }
     .file-drop strong { color: var(--navy); }
-    .file-list { margin-top: 12px; text-align: left; }
+    .file-list { margin-top: 12px; text-align: left; position: relative; z-index: 10; }
     .file-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: rgba(26,58,92,.05); border-radius: 3px; margin-bottom: 5px; font-size: 13px; color: var(--navy); }
-    .file-item .remove-file { margin-left: auto; background: none; border: none; cursor: pointer; color: var(--red); font-size: 16px; line-height: 1; padding: 0; }
+    .file-item .remove-file { margin-left: auto; background: none; border: none; cursor: pointer; color: var(--red); font-size: 16px; line-height: 1; padding: 4px 8px; position: relative; z-index: 11; }
 
     /* Coordinator bar */
     .submitter-bar { background: var(--navy); border-radius: 4px; padding: 22px 28px; margin-bottom: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
