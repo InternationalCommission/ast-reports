@@ -806,9 +806,7 @@ async function handleGetPhotos(request, env, id) {
 // ────────────────────────────────────────────────────────────────────────────
 
 async function handlePhotoProxy(request, env) {
-	const authError = await validateAzureToken(request, env);
-	if (authError) return corsResponse({ error: authError }, 401, env);
-
+	// No auth required - uses service account token and validates URL
 	try {
 		const url = new URL(request.url);
 		const photoUrl = url.searchParams.get("url");
@@ -818,18 +816,23 @@ async function handlePhotoProxy(request, env) {
 		}
 		
 		// Validate the URL is a SharePoint URL
-		if (!photoUrl.includes("sharepoint.com")) {
+		if (!photoUrl.includes("sharepoint.com") || !photoUrl.includes("/sites/ASTReports/")) {
 			return corsResponse({ error: "Invalid URL" }, 400, env);
 		}
 		
-		// Fetch the image using SharePoint token
+		// Fetch the image using SharePoint service account token
 		const sharePointToken = await getUserToken(env, 'sharepoint');
 		const imageRes = await fetch(photoUrl, {
 			headers: { Authorization: `Bearer ${sharePointToken}` },
 		});
 		
 		if (!imageRes.ok) {
-			return corsResponse({ error: "Failed to fetch image" }, imageRes.status, env);
+			console.error(`[PhotoProxy] Failed to fetch ${photoUrl}: ${imageRes.status}`);
+			// Return a 1x1 transparent pixel on error
+			return new Response(
+				new Uint8Array([0x47,0x49,0x46,0x38,0x39,0x61,0x01,0x00,0x01,0x00,0x80,0x00,0x00,0xff,0xff,0xff,0x00,0x00,0x00,0x21,0xf9,0x04,0x00,0x00,0x00,0x00,0x00,0x2c,0x00,0x00,0x00,0x00,0x01,0x00,0x01,0x00,0x00,0x02,0x02,0x44,0x01,0x00,0x3b]),
+				{ headers: { "Content-Type": "image/gif", "Cache-Control": "max-age=60" } }
+			);
 		}
 		
 		// Return the image with appropriate headers
@@ -846,8 +849,11 @@ async function handlePhotoProxy(request, env) {
 		
 		return new Response(imageRes.body, { headers });
 	} catch (err) {
-		console.error("PhotoProxy error:", err);
-		return corsResponse({ error: err.message }, 500, env);
+		console.error("[PhotoProxy] error:", err);
+		return new Response(
+			new Uint8Array([0x47,0x49,0x46,0x38,0x39,0x61,0x01,0x00,0x01,0x00,0x80,0x00,0x00,0xff,0xff,0xff,0x00,0x00,0x00,0x21,0xf9,0x04,0x00,0x00,0x00,0x00,0x00,0x2c,0x00,0x00,0x00,0x00,0x01,0x00,0x01,0x00,0x00,0x02,0x02,0x44,0x01,0x00,0x3b]),
+			{ headers: { "Content-Type": "image/gif" } }
+		);
 	}
 }
 
