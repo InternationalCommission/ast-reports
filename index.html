@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>International Commission — Project Reports</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Source+Serif+4:ital,wght@0,300;0,400;0,600;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy:   #1a3a5c;
+      --gold:   #c8a96e;
+      --cream:  #f9f7f4;
+      --paper:  #f2ede6;
+      --ink:    #1a1a1a;
+      --muted:  #6b6660;
+      --border: #d8d0c6;
+      --red:    #9b2335;
+      --green:  #2a6b3c;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Source Serif 4', Georgia, serif; background: var(--paper); color: var(--ink); min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* Header */
+    .site-header {
+      background: var(--navy);
+      padding: 60px 24px 50px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .site-header::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(45deg, transparent, transparent 40px, rgba(200,169,110,.06) 40px, rgba(200,169,110,.06) 41px);
+    }
+    .site-header img {
+      width: 80px;
+      height: 80px;
+      object-fit: contain;
+      margin-bottom: 20px;
+      position: relative;
+      border-radius: 8px;
+    }
+    .site-header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(26px, 5vw, 42px);
+      color: #fff;
+      letter-spacing: .5px;
+      position: relative;
+    }
+    .site-header .gold-line {
+      width: 80px;
+      height: 2px;
+      background: var(--gold);
+      margin: 18px auto;
+      position: relative;
+    }
+    .site-header p {
+      color: #a8c4e0;
+      font-size: 17px;
+      font-style: italic;
+      position: relative;
+      max-width: 500px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* Main content */
+    .main-content {
+      flex: 1;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 48px 20px 80px;
+      width: 100%;
+    }
+
+    /* Action cards */
+    .action-card {
+      background: var(--cream);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 32px;
+      margin-bottom: 24px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+      transition: box-shadow .2s, transform .15s;
+    }
+    .action-card:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,.1);
+      transform: translateY(-2px);
+    }
+    .action-card .icon {
+      font-size: 40px;
+      margin-bottom: 16px;
+    }
+    .action-card h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px;
+      color: var(--navy);
+      margin-bottom: 10px;
+      font-weight: 500;
+    }
+    .action-card p {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--navy);
+      color: #fff;
+      border: none;
+      padding: 14px 32px;
+      font-family: 'Playfair Display', serif;
+      font-size: 16px;
+      letter-spacing: .5px;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: background .2s, transform .15s, box-shadow .2s;
+      box-shadow: 0 4px 16px rgba(26,58,92,.25);
+      text-decoration: none;
+    }
+    .btn-primary:hover {
+      background: #254e7a;
+      box-shadow: 0 6px 22px rgba(26,58,92,.35);
+      transform: translateY(-1px);
+    }
+
+    /* Admin link */
+    .admin-link {
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+    }
+    .admin-link a {
+      color: var(--muted);
+      font-size: 13px;
+      text-decoration: none;
+      transition: color .2s;
+    }
+    .admin-link a:hover {
+      color: var(--navy);
+    }
+
+    /* Footer */
+    .site-footer {
+      background: var(--navy);
+      color: rgba(255,255,255,.4);
+      text-align: center;
+      padding: 24px;
+      font-size: 12px;
+    }
+    .site-footer a {
+      color: rgba(255,255,255,.6);
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <img src="https://internationalcommission.org/Files/Blue-globe-square-crop.png.webp" alt="International Commission" />
+    <h1>International Commission</h1>
+    <div class="gold-line"></div>
+    <p>Project Reports — Submit and review field reports, testimonies, and financial documentation</p>
+  </header>
+
+  <main class="main-content">
+    <div class="action-card">
+      <div class="icon">📋</div>
+      <h2>Submit a Project Report</h2>
+      <p>Complete your field report with project details, participant testimonies, photos, and financial documentation.</p>
+      <a href="form.html" class="btn-primary">Start New Report</a>
+    </div>
+
+    <div class="action-card">
+      <div class="icon">🔐</div>
+      <h2>Administrator Access</h2>
+      <p>Sign in with your International Commission credentials to view, edit, and manage submitted reports.</p>
+      <button id="adminSignInBtn" class="btn-primary">Sign In to Admin</button>
+    </div>
+
+    <div class="admin-link">
+      <a href="form.html">Need to submit a report? Go to the form →</a>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    &copy; International Commission · <a href="https://internationalcommission.org">internationalcommission.org</a>
+  </footer>
+
+  <script src="https://alcdn.msauth.net/browser/2.24.0/js/msal-browser.min.js"></script>
+  <script>
+    // ── MSAL Config (from admin.html) ──────────────────────────────────────
+    const ADMIN_CLIENT_ID = "66d5787b-f69b-468a-af0b-6791dee76928";
+    const TENANT_ID = "3e34eb62-b83a-4aa8-8ba8-d0959d15e612";
+    const WORKER_URL = "https://ast-report.alex-wascomb.workers.dev";
+
+    const msalConfig = {
+      auth: {
+        clientId: ADMIN_CLIENT_ID,
+        authority: `https://login.microsoftonline.com/${TENANT_ID}`,
+        redirectUri: window.location.origin + "/admin.html",
+      },
+      cache: {
+        cacheLocation: "sessionStorage",
+        storeAuthStateInCookie: false,
+      },
+    };
+
+    const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+    // Handle admin sign-in
+    document.getElementById("adminSignInBtn").addEventListener("click", async () => {
+      try {
+        // Try silent token acquisition first (if already signed in)
+        const accounts = msalInstance.getAllAccounts();
+        if (accounts.length > 0) {
+          const silentRequest = {
+            scopes: [`${WORKER_URL}/.default`],
+            account: accounts[0],
+          };
+          try {
+            await msalInstance.acquireTokenSilent(silentRequest);
+            // Token acquired silently, redirect to admin
+            window.location.href = "admin.html";
+            return;
+          } catch (silentError) {
+            // Silent failed, try popup
+          }
+        }
+
+        // Show popup login
+        const loginRequest = {
+          scopes: [`${WORKER_URL}/.default`],
+          prompt: "select_account",
+        };
+        await msalInstance.loginPopup(loginRequest);
+        window.location.href = "admin.html";
+      } catch (error) {
+        console.error("Sign in error:", error);
+        alert("Sign in failed: " + (error.message || "Unknown error"));
+      }
+    });
+
+    // Check if already signed in and update button text
+    msalInstance.initialize().then(() => {
+      const accounts = msalInstance.getAllAccounts();
+      if (accounts.length > 0) {
+        document.getElementById("adminSignInBtn").textContent = "Go to Admin Dashboard";
+      }
+    });
+  </script>
+</body>
+</html>
