@@ -73,15 +73,7 @@
     .search-wrap input::placeholder { color: rgba(255,255,255,.4); }
     .search-wrap input:focus { outline: none; border-color: var(--gold); }
     .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 14px; opacity: .5; }
-    .area-filter {
-      display: flex; align-items: center; gap: 8px;
-    }
-    .area-filter select {
-      background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
-      border-radius: 3px; color: #fff; font-size: 13px; font-family: inherit;
-      padding: 6px 10px; cursor: pointer;
-    }
-    .area-filter select option { background: var(--navy); color: #fff; }
+
     .suggestion-item {
       padding: 8px 12px;
       cursor: pointer;
@@ -312,20 +304,6 @@
       z-index: 100;
     "></div>
   </div>
-  <div class="area-filter">
-    <label for="areaFilter" style="color:rgba(255,255,255,.7);font-size:13px;white-space:nowrap;">Area:</label>
-    <select id="areaFilter">
-      <option value="">All Areas</option>
-      <option value="Latin America">Latin America</option>
-      <option value="Western Europe">Western Europe</option>
-      <option value="Eastern Europe">Eastern Europe</option>
-      <option value="Africa">Africa</option>
-      <option value="North Africa / Middle East (N.A.M.E.)">North Africa / Middle East (N.A.M.E.)</option>
-      <option value="South Asia">South Asia</option>
-      <option value="Asia">Asia</option>
-      <option value="Oceania">Oceania</option>
-    </select>
-  </div>
   <div class="topbar-right">
     <span class="report-count" id="reportCount"></span>
     <button class="btn-translate" id="translateBtn" title="Toggle translation" style="display:none;">
@@ -422,7 +400,6 @@
     document.getElementById("refreshBtn").addEventListener("click", () => loadReports());
     document.getElementById("loadMoreBtn").addEventListener("click",() => loadMore());
     document.getElementById("searchInput").addEventListener("input",() => filterReports());
-    document.getElementById("areaFilter").addEventListener("change",() => filterReports());
     document.getElementById("translateBtn").addEventListener("click",() => toggleTranslation());
 
   // ── Configuration — update these three values ─────────────────────────────
@@ -1233,7 +1210,6 @@
   // ── Filter ────────────────────────────────────────────────────────────────
   function filterReports() {
     const raw = document.getElementById("searchInput").value.trim();
-    const areaDropdown = document.getElementById("areaFilter").value;
     
     // Parse slash commands
     const commands = parseSlashCommands(raw);
@@ -1291,11 +1267,6 @@
         
         // For numeric fields, we could support numeric comparisons, but for now simple includes
         if (!fieldValueStr.includes(cmdValueStr)) return false;
-      }
-      
-      // Check area dropdown (if no area slash command)
-      if (areaDropdown && !commands.area) {
-        if (r.area !== areaDropdown) return false;
       }
       
       return true;
