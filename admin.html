@@ -310,6 +310,41 @@
 </div>
 
 <script>
+  // ── Photo lightbox (global) ─────────────────────────────────────────────────
+  window.photoViewer = {
+    photos: [],
+    index: 0,
+    open(photos, index) {
+      this.photos = photos;
+      this.index = index;
+      this.update();
+      document.getElementById("photoLightbox").style.display = "flex";
+      document.body.style.overflow = "hidden";
+    },
+    close() {
+      document.getElementById("photoLightbox").style.display = "none";
+      document.body.style.overflow = "";
+    },
+    prev() {
+      this.index = (this.index - 1 + this.photos.length) % this.photos.length;
+      this.update();
+    },
+    next() {
+      this.index = (this.index + 1) % this.photos.length;
+      this.update();
+    },
+    update() {
+      const photo = this.photos[this.index];
+      const img = document.getElementById("lightboxImg");
+      img.src = photo.webUrl;
+      img.alt = photo.name;
+      document.getElementById("lightboxCounter").textContent = `${this.index + 1} / ${this.photos.length}`;
+      document.getElementById("lightboxFilename").textContent = photo.name;
+      document.getElementById("lightboxPrev").style.visibility = this.photos.length > 1 ? "visible" : "hidden";
+      document.getElementById("lightboxNext").style.visibility = this.photos.length > 1 ? "visible" : "hidden";
+    }
+  };
+
   window.addEventListener("DOMContentLoaded", () => {
     // Guard: make sure MSAL loaded from CDN before proceeding
     if (typeof msal === "undefined") {
@@ -1075,41 +1110,6 @@
         ${financeHtml}
       </div>`;
   }
-
-  // ── Photo lightbox ────────────────────────────────────────────────────────
-  let photoViewer = {
-    photos: [],
-    index: 0,
-    open(photos, index) {
-      this.photos = photos;
-      this.index = index;
-      this.update();
-      document.getElementById("photoLightbox").style.display = "flex";
-      document.body.style.overflow = "hidden";
-    },
-    close() {
-      document.getElementById("photoLightbox").style.display = "none";
-      document.body.style.overflow = "";
-    },
-    prev() {
-      this.index = (this.index - 1 + this.photos.length) % this.photos.length;
-      this.update();
-    },
-    next() {
-      this.index = (this.index + 1) % this.photos.length;
-      this.update();
-    },
-    update() {
-      const photo = this.photos[this.index];
-      const img = document.getElementById("lightboxImg");
-      img.src = photo.webUrl;
-      img.alt = photo.name;
-      document.getElementById("lightboxCounter").textContent = `${this.index + 1} / ${this.photos.length}`;
-      document.getElementById("lightboxFilename").textContent = photo.name;
-      document.getElementById("lightboxPrev").style.visibility = this.photos.length > 1 ? "visible" : "hidden";
-      document.getElementById("lightboxNext").style.visibility = this.photos.length > 1 ? "visible" : "hidden";
-    }
-  };
 
   // ── Load photos for the open report ──────────────────────────────────────
   async function loadPhotos(reportId) {
