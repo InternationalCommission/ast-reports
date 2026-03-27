@@ -290,9 +290,16 @@
 <!-- ── App body ── -->
 <div class="app-body">
   <div class="sidebar">
-    <div class="sidebar-header" style="display:flex;justify-content:space-between;align-items:center;">
+    <div class="sidebar-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
       <span id="sidebarTitle">Reports</span>
-      <button id="recycleBinBtn" onclick="toggleRecycleBin()" style="display:none;background:none;border:1px solid rgba(26,58,92,.3);color:var(--navy);padding:2px 8px;border-radius:3px;font-size:11px;cursor:pointer;" title="View Recycle Bin">♻️ Recycle Bin</button>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <select id="viewAsRole" style="display:none;font-size:11px;padding:2px 4px;border:1px solid rgba(26,58,92,.3);border-radius:3px;background:#fff;color:var(--navy);" title="View as different role">
+          <option value="SuperAdmin">Super Admin</option>
+          <option value="ReadWrite">Read/Write</option>
+          <option value="ReadOnly">Read Only</option>
+        </select>
+        <button id="recycleBinBtn" onclick="toggleRecycleBin()" style="display:none;background:none;border:1px solid rgba(26,58,92,.3);color:var(--navy);padding:2px 8px;border-radius:3px;font-size:11px;cursor:pointer;" title="View Recycle Bin">♻️ Recycle Bin</button>
+      </div>
     </div>
     <div class="report-list" id="reportList">
       <div style="padding:24px 18px;color:var(--muted);font-size:13px;font-style:italic;">Sign in to load reports.</div>
@@ -383,6 +390,8 @@
   const PAGE_SIZE = 25;
 
   // ── Role helpers ────────────────────────────────────────────────────────────
+  let viewAsRole = null; // null = use actual roles, otherwise override with this role
+
   function getUserRoles() {
     const idToken = currentAccount?.idTokenClaims || {};
     const groups = idToken.groups || [];
@@ -390,6 +399,10 @@
     if (groups.includes(GROUP_IDS.SuperAdmin)) roles.push("SuperAdmin");
     if (groups.includes(GROUP_IDS.ReadWrite)) roles.push("ReadWrite");
     if (groups.includes(GROUP_IDS.ReadOnly)) roles.push("ReadOnly");
+    // If "View As" mode is active for Super Admin, override with selected role
+    if (viewAsRole && roles.includes("SuperAdmin")) {
+      return [viewAsRole];
+    }
     return roles;
   }
 
@@ -411,6 +424,54 @@
 
   function canAccessRecycleBin() {
     return hasRole("SuperAdmin");
+  }
+
+  function isActualSuperAdmin() {
+    const idToken = currentAccount?.idTokenClaims || {};
+    const groups = idToken.groups || [];
+    return groups.includes(GROUP_IDS.SuperAdmin);
+  }
+
+  // Wire up View As dropdown
+  function setupViewAsDropdown() {
+    const dropdown = document.getElementById("viewAsRole");
+    if (!dropdown) return;
+    
+    // Show only for actual Super Admins
+    if (isActualSuperAdmin()) {
+      dropdown.style.display = "inline-block";
+    }
+    
+    dropdown.addEventListener("change", (e) => {
+      viewAsRole = e.target.value === "SuperAdmin" ? null : e.target.value;
+      console.log(`[ViewAs] Now viewing as: ${viewAsRole || "SuperAdmin (actual)"}`);
+      // Re-render UI elements
+      refreshRoleBasedUI();
+    });
+  }
+
+  function refreshRoleBasedUI() {
+    // Update recycle bin button visibility
+    const recycleBinBtn = document.getElementById("recycleBinBtn");
+    if (recycleBinBtn) {
+      recycleBinBtn.style.display = canAccessRecycleBin() ? "inline-block" : "none";
+      // If viewing as non-SuperAdmin and recycle bin is showing, toggle back
+      if (!canAccessRecycleBin() && showingRecycleBin) {
+        toggleRecycleBin();
+      }
+    }
+    
+    // Reload reports to apply filtering
+    loadReports();
+    
+    // Refresh detail pane if a report is selected
+    if (activeId) {
+      const report = allReports.find(r => r.id === activeId) || filteredList.find(r => r.id === activeId);
+      if (report) {
+        document.getElementById("detailPane").innerHTML = buildReportHtml(report);
+        loadPhotos(activeId);
+      }
+    }
   }
 
   // ── MSAL setup ────────────────────────────────────────────────────────────
@@ -613,6 +674,9 @@
       document.getElementById("recycleBinBtn").style.display = "inline-block";
     }
 
+    // Setup View As dropdown for Super Admins
+    setupViewAsDropdown();
+
     loadReports();
   }
 
@@ -632,6 +696,7 @@
     document.getElementById("signOutBtn").style.display = "none";
     document.getElementById("authGate").style.display   = "flex";
     document.getElementById("recycleBinBtn").style.display = "none";
+    document.getElementById("viewAsRole").style.display = "none";
     document.getElementById("reportList").innerHTML =
       `<div style="padding:24px 18px;color:var(--muted);font-size:13px;font-style:italic;">Sign in to load reports.</div>`;
     document.getElementById("detailPane").innerHTML =
