@@ -199,7 +199,7 @@
     // ── MSAL Config (from admin.html) ──────────────────────────────────────
     const ADMIN_CLIENT_ID = "66d5787b-f69b-468a-af0b-6791dee76928";
     const TENANT_ID = "3e34eb62-b83a-4aa8-8ba8-d0959d15e612";
-    const WORKER_URL = "https://ast-report.alex-wascomb.workers.dev";
+    const API_SCOPE = `api://${ADMIN_CLIENT_ID}/Reports.Read`;
 
     const msalConfig = {
       auth: {
@@ -222,7 +222,7 @@
         const accounts = msalInstance.getAllAccounts();
         if (accounts.length > 0) {
           const silentRequest = {
-            scopes: [`${WORKER_URL}/.default`],
+            scopes: ["openid", "profile", API_SCOPE],
             account: accounts[0],
           };
           try {
@@ -237,7 +237,7 @@
 
         // Show popup login
         const loginRequest = {
-          scopes: [`${WORKER_URL}/.default`],
+          scopes: ["openid", "profile", API_SCOPE],
           prompt: "select_account",
         };
         await msalInstance.loginPopup(loginRequest);
