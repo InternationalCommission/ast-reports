@@ -659,7 +659,7 @@
       btn.style.background = "none";
       btn.style.color = "var(--navy)";
       document.getElementById("sidebarTitle").textContent = "Reports";
-      renderSidebar();
+      await loadReports(); // Reload reports when switching back
       if (activeId) {
         const report = filteredList.find(r => r.id === activeId);
         if (report) {
