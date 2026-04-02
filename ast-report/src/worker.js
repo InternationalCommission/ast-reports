@@ -408,16 +408,14 @@ async function handleShareLink(request, env, id) {
   try {
     const body = await request.json().catch(() => ({}));
     const days = Math.min(Math.max(parseInt(body.days, 10) || 30, 1), 365);
-    const expiryMs = days * 24 * 60 * 60 * 1000;
-    const expires = Date.now() + expiryMs;
+    const expires = Date.now() + (days * 24 * 60 * 60 * 1000);
     
-    const salt = generateUUID().substring(0, 8);
-    const dataToSign = `${id}:${expires}:${salt}`;
-    const signature = await signData(dataToSign, env.EDIT_TOKEN_SECRET);
-    const token = `${signature}:${salt}`;
+    const payload = `${id}:${expires}`;
+    const signature = await signData(payload, env.EDIT_TOKEN_SECRET);
+    const token = base64UrlEncode(JSON.stringify({ id, expires, sig: signature }));
     
     const origin = new URL(request.url).origin;
-    const shareUrl = `${origin}/share/${encodeURIComponent(token)}`;
+    const shareUrl = `${origin}/share.html?token=${encodeURIComponent(token)}`;
     
     return corsResponse({
       token,
@@ -437,19 +435,44 @@ async function handleShareLink(request, env, id) {
 // ────────────────────────────────────────────────────────────────────────────
 
 async function handleGetSharedReport(request, env, token) {
+  const acceptHeader = request.headers.get("Accept") || "";
+  const wantsJson = acceptHeader.includes("application/json");
+  
+  const jsonResponse = (body, status = 200) => new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+
   if (!env.EDIT_TOKEN_SECRET) {
-    return corsResponse({ error: "Share token secret not configured" }, 500, env);
+    return jsonResponse({ error: "Share link service not configured" }, 500);
   }
 
   try {
     const decodedToken = decodeURIComponent(token);
-    const parts = decodedToken.split(":");
-    if (parts.length < 2) {
-      return corsResponse({ error: "Invalid share link" }, 400, env);
+    let tokenData;
+    
+    try {
+      tokenData = JSON.parse(atob(decodedToken));
+    } catch (e) {
+      return jsonResponse({ error: "Invalid share link format" }, 400);
     }
     
-    const signature = parts[0];
-    const salt = parts.slice(1).join(":");
+    const { id, expires, sig } = tokenData;
+    
+    if (!id || !expires || !sig) {
+      return jsonResponse({ error: "Invalid share link data" }, 400);
+    }
+    
+    if (Date.now() > expires) {
+      return jsonResponse({ error: "Share link has expired. Please request a new one from the report admin." }, 410);
+    }
+    
+    const payload = `${id}:${expires}`;
+    const expectedSig = await signData(payload, env.EDIT_TOKEN_SECRET);
+    
+    if (sig !== expectedSig) {
+      return jsonResponse({ error: "Invalid share link signature" }, 401);
+    }
     
     const graphToken = await getAccessToken(env);
     const { siteId, listId } = await resolveListIds(env, graphToken);
@@ -460,97 +483,27 @@ async function handleGetSharedReport(request, env, token) {
       Prefer: "HonorNonIndexedQueriesWarningMayFailRandomly",
     };
     
-    const itemsRes = await graphFetch(
-      `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`
-        + `?expand=fields`
-        + `&$top=5000`,
-      { headers }
-    );
-    
-    const items = itemsRes.value || [];
-    let foundItem = null;
-    
-    for (const item of items) {
-      const expires = Date.now() + (30 * 24 * 60 * 60 * 1000);
-      const dataToSign = `${item.id}:${expires}:${salt}`;
-      const expectedToken = await signData(dataToSign, env.EDIT_TOKEN_SECRET);
-      
-      if (signature === expectedToken) {
-        foundItem = item;
-        break;
-      }
-      
-      for (let days = 1; days <= 365; days++) {
-        const testExpiry = Date.now() + (days * 24 * 60 * 60 * 1000);
-        const testSign = await signData(`${item.id}:${testExpiry}:${salt}`, env.EDIT_TOKEN_SECRET);
-        if (signature === testSign) {
-          if (Date.now() <= testExpiry) {
-            foundItem = item;
-            break;
-          }
-        }
-      }
-      
-      if (foundItem) break;
+    let item;
+    try {
+      item = await graphFetch(
+        `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${id}?expand=fields`,
+        { headers }
+      );
+    } catch (e) {
+      return jsonResponse({ error: "Report not found or access denied" }, 404);
     }
     
-    if (!foundItem) {
-      return corsResponse({ error: "Invalid or expired share link" }, 404, env);
+    if (!item.id) {
+      return jsonResponse({ error: "Report not found" }, 404);
     }
     
-    const report = normalizeItem(foundItem);
-    
+    const report = normalizeItem(item);
     const photos = await getReportPhotos(report, env);
     
-    return corsResponse({
-      report,
-      photos,
-    }, 200, env);
+    return jsonResponse({ report, photos });
   } catch (err) {
     console.error("GetSharedReport error:", err);
-    return corsResponse({ error: err.message }, 500, env);
-  }
-}
-
-async function getReportPhotos(report, env) {
-  try {
-    const sharePointToken = await getUserToken(env, 'sharepoint');
-    const spoHeaders = { Authorization: `Bearer ${sharePointToken}`, Accept: 'application/json;odata=verbose' };
-    const spoSiteUrl = env.SHAREPOINT_SITE_URL;
-    
-    if (!report.photoFolderServerRelativePath) {
-      return [];
-    }
-    
-    const encodedPath = report.photoFolderServerRelativePath.split('/').map(p => encodeURIComponent(p)).join('/');
-    
-    const filesRes = await fetch(
-      `${spoSiteUrl}/_api/web/getfolderbyserverrelativeurl('${encodedPath}')/files`,
-      { headers: spoHeaders }
-    );
-    
-    if (!filesRes.ok) return [];
-    
-    const filesData = await filesRes.json();
-    const files = filesData.d?.results || filesData.value || [];
-    
-    return files.map(file => {
-      const origin = new URL(env.SHAREPOINT_SITE_URL).origin;
-      const serverRelativeUrl = file.ServerRelativeUrl || file.name;
-      const webUrl = serverRelativeUrl ? `${origin}${serverRelativeUrl}` : null;
-      
-      return {
-        id: file.UniqueId || file.Name,
-        name: file.Name,
-        webUrl,
-        thumbnail: webUrl,
-        lastModified: file.TimeLastModified || null,
-        size: file.Length || null,
-      };
-    });
-  } catch (err) {
-    console.error("getReportPhotos error:", err);
-    return [];
+    return jsonResponse({ error: "Unable to load report: " + err.message }, 500);
   }
 }
 

@@ -452,8 +452,8 @@
   }
 
   async function init() {
-    const pathParts = window.location.pathname.split("/");
-    const token = pathParts[pathParts.length - 1];
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
 
     if (!token) {
       showError("No share link provided. Please check the URL and try again.");

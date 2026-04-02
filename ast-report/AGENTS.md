@@ -209,7 +209,7 @@ Reports can be shared via a public link that does not require sign-in:
 // Response:
 {
   "token": "abc123...",
-  "shareUrl": "https://domain.com/share/abc123...",
+  "shareUrl": "https://reports.internationalcommission.org/share.html?token=abc123...",
   "expires": 1234567890000,
   "reportId": "123",
   "days": 30
@@ -217,13 +217,13 @@ Reports can be shared via a public link that does not require sign-in:
 ```
 
 **Viewing a Shared Report:**
-- URL format: `/share/:token`
-- Returns report data without requiring authentication
+- URL format: `/share.html?token={token}`
+- Returns HTML page with report data without requiring authentication
 - Link expires based on the selected period (1 day to 1 year)
 - Photos are included in shared view
 
 **Frontend Pages:**
-- `share.html` - Public page for viewing shared reports (at project root)
+- `share.html` - Public page for viewing shared reports (served statically alongside admin.html)
 
 ### Recycle Bin Feature
 
