@@ -383,6 +383,7 @@
       .detail-pane { overflow: visible; }
       body, .app-body { overflow: visible; height: auto; display: block; }
       .report-header { position: static !important; padding: 20px 30px; display: flex; justify-content: space-between; align-items: flex-start; }
+      .report-header .print-header-content { flex: 1; min-width: 0; margin-right: 16px; }
       .report-body { padding: 20px 30px; }
       .print-logo { display: block !important; }
       .print-thanks { display: block !important; }
@@ -1597,14 +1598,16 @@
             🖨 Print
           </button>
         </div>
-        <div class="rh-title">${escHtml(r.projectTitle || "IC Project Report")}</div>
-        <div class="rh-meta">
-          ${[r.city, r.country].filter(Boolean).join(", ")}${r.area ? ` &nbsp;·&nbsp; ${escHtml(r.area)}` : ""}${dateRange ? ` &nbsp;·&nbsp; ${dateRange}` : ""}
-          ${submittedOn ? ` &nbsp;·&nbsp; Submitted ${submittedOn}` : ""}
-        </div>
-        <div class="rh-coordinator print-hide">
-          ${r.coordinatorName  ? `<span>👤 ${escHtml(r.coordinatorName)}</span>`  : ""}
-          ${r.coordinatorEmail ? `<span>✉ ${escHtml(r.coordinatorEmail)}</span>` : ""}
+        <div class="print-header-content">
+          <div class="rh-title">${escHtml(r.projectTitle || "IC Project Report")}</div>
+          <div class="rh-meta">
+            ${[r.city, r.country].filter(Boolean).join(", ")}${r.area ? ` &nbsp;·&nbsp; ${escHtml(r.area)}` : ""}${dateRange ? ` &nbsp;·&nbsp; ${dateRange}` : ""}
+            ${submittedOn ? ` &nbsp;·&nbsp; Submitted ${submittedOn}` : ""}
+          </div>
+          <div class="rh-coordinator print-hide">
+            ${r.coordinatorName  ? `<span>👤 ${escHtml(r.coordinatorName)}</span>`  : ""}
+            ${r.coordinatorEmail ? `<span>✉ ${escHtml(r.coordinatorEmail)}</span>` : ""}
+          </div>
         </div>
         <img src="https://internationalcommission.org/Files/IC-Primary-Logo.png.webp" alt="International Commission" class="print-logo" style="height:50px;width:auto;object-fit:contain;background:#fff;padding:4px;border-radius:4px;" />
       </div>
