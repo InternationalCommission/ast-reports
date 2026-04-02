@@ -251,6 +251,9 @@
       .detail-pane { overflow: visible; }
       body, .app-body { overflow: visible; height: auto; display: block; }
       .report-header { position: static !important; }
+      .rh-coordinator, .print-hide { display: none !important; }
+      .section-title, .stats-grid, .testimony, #photoGrid { page-break-inside: avoid; }
+      .report-body > div { page-break-inside: avoid; }
     }
     @media (max-width: 768px) {
       :root { --sidebar-w: 100%; }
@@ -1453,7 +1456,7 @@
           ${[r.city, r.country].filter(Boolean).join(", ")}${r.area ? ` &nbsp;·&nbsp; ${escHtml(r.area)}` : ""}${dateRange ? ` &nbsp;·&nbsp; ${dateRange}` : ""}
           ${submittedOn ? ` &nbsp;·&nbsp; Submitted ${submittedOn}` : ""}
         </div>
-        <div class="rh-coordinator">
+        <div class="rh-coordinator print-hide">
           ${r.coordinatorName  ? `<span>👤 ${escHtml(r.coordinatorName)}</span>`  : ""}
           ${r.coordinatorEmail ? `<span>✉ ${escHtml(r.coordinatorEmail)}</span>` : ""}
         </div>
@@ -1478,9 +1481,8 @@
             Loading photos…
           </div>
         </div>
-        <div class="section-title">5 — Financial Report</div>
-        ${financeHtml}
-      </div>`;
+        <div class="section-title print-hide">5 — Financial Report</div>
+        <div class="finance-wrap print-hide">${financeHtml}</div>
   }
 
   // ── Load photos for the open report ──────────────────────────────────────
@@ -1526,7 +1528,7 @@
       // If there's a folder link, add it below the grid
       if (data.folderUrl) {
         grid.insertAdjacentHTML("afterend", `
-          <a href="${escHtml(data.folderUrl)}" target="_blank" rel="noopener"
+          <a href="${escHtml(data.folderUrl)}" target="_blank" rel="noopener" class="print-hide"
             style="display:inline-block;font-size:13px;color:var(--navy);margin-bottom:24px;">
             📁 Open photo folder in SharePoint →
           </a>`);
