@@ -167,6 +167,7 @@ Set via `wrangler secret put`:
 - `TEST_MODE` - "true" to send emails to TEST_EMAIL_RECIPIENT
 - `TEST_EMAIL_RECIPIENT` - Override recipient in test mode
 - `EDIT_TOKEN_SECRET` - Secret key for signing edit tokens
+- `SHARE_ORIGIN` - Base URL for share links (e.g. https://reports.internationalcommission.org)
 - `SUPER_ADMIN_GROUP_ID` - Azure AD group ID for Super Admin role
 - `READWRITE_GROUP_ID` - Azure AD group ID for Read/Write role
 - `READONLY_GROUP_ID` - Azure AD group ID for Read-only role

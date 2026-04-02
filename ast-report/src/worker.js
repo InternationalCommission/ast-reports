@@ -425,7 +425,7 @@ async function handleShareLink(request, env, id) {
     const token = base64UrlEncode(JSON.stringify({ id, expires, sig: signature }));
     
     const tokenHash = await hashToken(token);
-    const origin = new URL(request.url).origin;
+    const origin = env.SHARE_ORIGIN || new URL(request.url).origin;
     const shareUrl = `${origin}/share.html?token=${encodeURIComponent(token)}`;
     
     const shareLinkData = {
@@ -472,12 +472,16 @@ async function hashToken(token) {
 // ────────────────────────────────────────────────────────────────────────────
 
 async function handleGetSharedReport(request, env, token) {
-  const acceptHeader = request.headers.get("Accept") || "";
-  const wantsJson = acceptHeader.includes("application/json");
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": env?.SHARE_ORIGIN || "*",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Content-Type": "application/json",
+  };
   
   const jsonResponse = (body, status = 200) => new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: corsHeaders,
   });
 
   if (!env.EDIT_TOKEN_SECRET) {
@@ -541,6 +545,48 @@ async function handleGetSharedReport(request, env, token) {
   } catch (err) {
     console.error("GetSharedReport error:", err);
     return jsonResponse({ error: "Unable to load report: " + err.message }, 500);
+  }
+}
+
+async function getReportPhotos(report, env) {
+  try {
+    const sharePointToken = await getUserToken(env, 'sharepoint');
+    const spoHeaders = { Authorization: `Bearer ${sharePointToken}`, Accept: 'application/json;odata=verbose' };
+    const spoSiteUrl = env.SHAREPOINT_SITE_URL;
+    
+    if (!report.photoFolderServerRelativePath) {
+      return [];
+    }
+    
+    const encodedPath = report.photoFolderServerRelativePath.split('/').map(p => encodeURIComponent(p)).join('/');
+    
+    const filesRes = await fetch(
+      `${spoSiteUrl}/_api/web/getfolderbyserverrelativeurl('${encodedPath}')/files`,
+      { headers: spoHeaders }
+    );
+    
+    if (!filesRes.ok) return [];
+    
+    const filesData = await filesRes.json();
+    const files = filesData.d?.results || filesData.value || [];
+    
+    return files.map(file => {
+      const origin = new URL(env.SHAREPOINT_SITE_URL).origin;
+      const serverRelativeUrl = file.ServerRelativeUrl || file.name;
+      const webUrl = serverRelativeUrl ? `${origin}${serverRelativeUrl}` : null;
+      
+      return {
+        id: file.UniqueId || file.Name,
+        name: file.Name,
+        webUrl,
+        thumbnail: webUrl,
+        lastModified: file.TimeLastModified || null,
+        size: file.Length || null,
+      };
+    });
+  } catch (err) {
+    console.error("getReportPhotos error:", err);
+    return [];
   }
 }
 
@@ -2626,7 +2672,7 @@ function corsResponse(body, status, env) {
     status,
     headers: {
       "Access-Control-Allow-Origin":  env?.ALLOWED_ORIGIN || "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
       "Content-Type": "application/json",
     },
