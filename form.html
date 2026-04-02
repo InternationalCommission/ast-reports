@@ -195,9 +195,11 @@
               <option value="Eastern Europe">Eastern Europe</option>
               <option value="Africa">Africa</option>
               <option value="North Africa / Middle East (N.A.M.E.)">North Africa / Middle East (N.A.M.E.)</option>
+              <option value="Central Asia">Central Asia</option>
               <option value="South Asia">South Asia</option>
               <option value="Asia">Asia</option>
               <option value="Oceania">Oceania</option>
+              <option value="North America">North America</option>
             </select>
           </div>
         </div>
@@ -417,6 +419,29 @@
 <script>
   // ── Configuration ────────────────────────────────────────────────────────
   const WORKER_URL = "https://ast-report.alex-wascomb.workers.dev";
+
+  // ── Load areas from AST VPs list ─────────────────────────────────────────
+  async function loadAreas() {
+    try {
+      const res = await fetch(WORKER_URL + "/areas");
+      const data = await res.json();
+      const select = document.getElementById("area");
+      const currentValue = select.value;
+      if (data.areas && data.areas.length > 0) {
+        select.innerHTML = '<option value="">Select area</option>';
+        data.areas.forEach(area => {
+          const option = document.createElement("option");
+          option.value = area;
+          option.textContent = area;
+          select.appendChild(option);
+        });
+        if (currentValue) select.value = currentValue;
+      }
+    } catch (err) {
+      console.error("Failed to load areas:", err);
+    }
+  }
+  loadAreas();
 
   // ── Parse URL parameters at load time ──────────────────────────────────
   const urlParams = new URLSearchParams(window.location.search);

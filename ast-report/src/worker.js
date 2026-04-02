@@ -96,6 +96,9 @@ export default {
     if (method === "GET"  && path === "/test-sharepoint") {
       return handleTestSharePoint(request, env);
     }
+    if (method === "GET"  && path === "/areas") {
+      return handleGetAreas(request, env);
+    }
     if (method === "GET"  && path.startsWith("/reports/")) {
       return handleGetReport(request, env, path.split("/reports/")[1]);
     }
@@ -107,6 +110,65 @@ export default {
 // ────────────────────────────────────────────────────────────────────────────
 // POST / — Submit a new report
 // ────────────────────────────────────────────────────────────────────────────
+
+// Cache for AST VPs list data
+let _cachedVpList = null;
+let _vpListFetchedAt = 0;
+const VP_LIST_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function getAreaVpMapping(env, token) {
+  const now = Date.now();
+  if (_cachedVpList && (now - _vpListFetchedAt) < VP_LIST_CACHE_TTL_MS) {
+    return _cachedVpList;
+  }
+
+  try {
+    // Fetch AST VPs list
+    const siteUrl = env.SHAREPOINT_SITE_URL;
+    const listName = "AST VPs";
+
+    const spoToken = await getUserToken(env, 'sharepoint');
+    const headers = { Authorization: `Bearer ${spoToken}`, Accept: 'application/json;odata=verbose' };
+
+    const res = await fetch(
+      `${siteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Title,Name,Email&$top=500`,
+      { headers }
+    );
+
+    if (!res.ok) {
+      console.error("[getAreaVpMapping] Failed to fetch AST VPs list:", res.status);
+      return _cachedVpList || {};
+    }
+
+    const data = await res.json();
+    const items = data.d?.results || [];
+
+    const mapping = {};
+    for (const item of items) {
+      const area = item.Title?.trim();
+      const name = item.Name || "";
+      const email = item.Email || "";
+
+      if (area) {
+        mapping[area] = { name, email };
+      }
+    }
+
+    console.log("[getAreaVpMapping] Area mapping:", JSON.stringify(mapping));
+    _cachedVpList = mapping;
+    _vpListFetchedAt = now;
+
+    return mapping;
+  } catch (err) {
+    console.error("[getAreaVpMapping] Error:", err.message);
+    return _cachedVpList || {};
+  }
+}
+
+function parseMultiEmail(emailStr) {
+  if (!emailStr) return [];
+  return emailStr.split(",").map(e => e.trim()).filter(e => e && e.includes("@"));
+}
 
 async function handleSubmit(request, env) {
   console.log(">>> HANDLING SUBMIT");
@@ -1243,6 +1305,21 @@ async function handleTestSharePoint(request, env) {
 		}, 200, env);
 	} catch (err) {
 		console.error('[TestSharePoint] error:', err);
+		return corsResponse({ error: err.message }, 500, env);
+	}
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// GET /areas — Return list of areas from AST VPs list
+// ────────────────────────────────────────────────────────────────────────────
+
+async function handleGetAreas(request, env) {
+	try {
+		const mapping = await getAreaVpMapping(env, null);
+		const areas = Object.keys(mapping).sort();
+		return corsResponse({ areas }, 200, env);
+	} catch (err) {
+		console.error('[handleGetAreas] error:', err);
 		return corsResponse({ error: err.message }, 500, env);
 	}
 }
@@ -2520,6 +2597,14 @@ function normalizePath(pathValue) {
 async function sendConfirmationEmail(fields, env, token) {
   const isTestMode = env.TEST_MODE === "true";
 
+  // Get VP emails based on area
+  const vpMapping = await getAreaVpMapping(env, token);
+  const area = fields.area;
+  const vpInfo = vpMapping[area];
+  const vpEmails = vpInfo ? parseMultiEmail(vpInfo.email) : [];
+
+  console.log(`[sendConfirmationEmail] Area: ${area}, VP emails: ${JSON.stringify(vpEmails)}`);
+
   const totalCoordTrip =
     (toNum(fields.ticketsCost)       || 0) +
     (toNum(fields.fuelCost)          || 0) +
@@ -2593,11 +2678,28 @@ async function sendConfirmationEmail(fields, env, token) {
   </div>
 </body></html>`;
 
-  // ── Routing: test mode sends only to TEST_EMAIL_RECIPIENT, no CC ──────────
+  // ── Routing: test mode sends only to TEST_EMAIL_RECIPIENT, no CC
+  // ── In production: send to EMAIL_RECIPIENT + VP emails based on area
   const recipient = isTestMode ? env.TEST_EMAIL_RECIPIENT : env.EMAIL_RECIPIENT;
   const subject   = isTestMode
     ? `[TEST] IC Project Report: ${fields.projectTitle || "New Submission"} — ${new Date().toLocaleDateString("en-US")}`
     : `IC Project Report: ${fields.projectTitle || "New Submission"} — ${new Date().toLocaleDateString("en-US")}`;
+
+  // Build recipient list: always include primary recipient
+  const toRecipients = [{ emailAddress: { address: recipient } }];
+  
+  // In production mode, add VP emails based on area
+  if (!isTestMode && vpEmails.length > 0) {
+    for (const email of vpEmails) {
+      toRecipients.push({ emailAddress: { address: email } });
+    }
+  }
+
+  // Build CC list: coordinator in production mode
+  const ccRecipients = [];
+  if (!isTestMode && fields.coordinatorEmail) {
+    ccRecipients.push({ emailAddress: { address: fields.coordinatorEmail, name: fields.coordinatorName || undefined } });
+  }
 
   const res = await fetch(
     `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(env.EMAIL_SENDER)}/sendMail`,
@@ -2608,18 +2710,15 @@ async function sendConfirmationEmail(fields, env, token) {
         message: {
           subject,
           body:         { contentType: "HTML", content: emailBody },
-          toRecipients: [{ emailAddress: { address: recipient } }],
-          // In test mode, suppress CC so coordinators don't receive test emails
-          ...(!isTestMode && fields.coordinatorEmail && {
-            ccRecipients: [{ emailAddress: { address: fields.coordinatorEmail, name: fields.coordinatorName || undefined } }],
-          }),
+          toRecipients: toRecipients,
+          ...(ccRecipients.length > 0 && { ccRecipients }),
         },
         saveToSentItems: true,
       }),
     }
   );
   if (!res.ok) throw new Error(`sendMail failed (${res.status}): ${await res.text()}`);
-  return { sent: true, testMode: isTestMode, recipient };
+  return { sent: true, testMode: isTestMode, recipient, vpEmails: vpEmails.length > 0 ? vpEmails : undefined };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
