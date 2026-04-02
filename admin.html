@@ -246,6 +246,137 @@
     }
     .print-btn:hover { background: rgba(255,255,255,.25); }
 
+    /* ── Share Modal ── */
+    .share-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.6);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .share-modal-overlay.active {
+      display: flex;
+    }
+    .share-modal {
+      background: var(--cream);
+      border-radius: 8px;
+      width: min(480px, 90vw);
+      box-shadow: 0 20px 60px rgba(0,0,0,.3);
+      overflow: hidden;
+    }
+    .share-modal-header {
+      background: var(--navy);
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .share-modal-header h3 {
+      font-family: 'Playfair Display', serif;
+      color: #fff;
+      font-size: 18px;
+    }
+    .share-modal-close {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,.7);
+      font-size: 24px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0;
+    }
+    .share-modal-close:hover { color: #fff; }
+    .share-modal-body {
+      padding: 24px;
+    }
+    .share-field {
+      margin-bottom: 16px;
+    }
+    .share-field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--navy);
+      margin-bottom: 6px;
+    }
+    .share-field select,
+    .share-field input[type="number"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 14px;
+      font-family: inherit;
+      background: #fff;
+    }
+    .share-field select:focus,
+    .share-field input:focus {
+      outline: none;
+      border-color: var(--gold);
+    }
+    .share-link-box {
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 12px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .share-link-box input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      color: var(--ink);
+      font-family: monospace;
+    }
+    .share-link-box input:focus {
+      outline: none;
+    }
+    .share-copy-btn {
+      background: var(--navy);
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .share-copy-btn:hover { background: #254e7a; }
+    .share-copy-btn.copied {
+      background: var(--green);
+    }
+    .share-generate-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--navy);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      font-family: inherit;
+      margin-top: 8px;
+    }
+    .share-generate-btn:hover { background: #254e7a; }
+    .share-generate-btn:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+    .share-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 20px;
+      color: var(--muted);
+    }
+
     @media print {
       .topbar, .sidebar, #authGate, .rh-actions { display: none !important; }
       .detail-pane { overflow: visible; }
@@ -1441,6 +1572,9 @@
     return `
       <div class="report-header">
         <div class="rh-actions" style="display:flex;gap:8px;margin-bottom:12px;">
+          <button type="button" onclick="openShareModal('${r.id}')" style="background:rgba(42,107,60,.5);border:1px solid rgba(42,107,60,.7);color:#fff;padding:6px 14px;border-radius:3px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;">
+            🔗 Share
+          </button>
           ${canEdit() ? `<button type="button" onclick="openEditForm('${r.id}')" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:3px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;">
             ✏️ Edit Report
           </button>` : ""}
@@ -1557,8 +1691,146 @@
     return `<tr class="${cls}${empty ? " ft-zero" : ""}"><td>${label}</td><td>${empty ? "—" : m}</td></tr>`;
   }
 
+  // ── Share Modal ────────────────────────────────────────────────────────────
+  let shareReportId = null;
+
+  window.openShareModal = function(reportId) {
+    shareReportId = reportId;
+    document.getElementById("shareModal").classList.add("active");
+    document.getElementById("shareLinkContainer").style.display = "none";
+    document.getElementById("shareLoading").style.display = "none";
+    document.getElementById("shareGenerateBtn").style.display = "block";
+    document.getElementById("shareGenerateBtn").disabled = false;
+    document.getElementById("shareExpiry").value = "30";
+  };
+
+  window.closeShareModal = function() {
+    document.getElementById("shareModal").classList.remove("active");
+    shareReportId = null;
+  };
+
+  window.generateShareLink = async function() {
+    if (!shareReportId) return;
+    
+    const days = parseInt(document.getElementById("shareExpiry").value, 10);
+    const btn = document.getElementById("shareGenerateBtn");
+    const loading = document.getElementById("shareLoading");
+    const container = document.getElementById("shareLinkContainer");
+    
+    btn.style.display = "none";
+    loading.style.display = "flex";
+    
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(`${WORKER_URL}/reports/${shareReportId}/share-link`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ days }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to generate share link");
+      }
+      
+      const data = await res.json();
+      document.getElementById("shareLinkInput").value = data.shareUrl;
+      container.style.display = "block";
+    } catch (err) {
+      showToast("Failed to generate share link: " + err.message, true);
+      btn.style.display = "block";
+    } finally {
+      loading.style.display = "none";
+    }
+  };
+
+  window.copyShareLink = async function() {
+    const input = document.getElementById("shareLinkInput");
+    const btn = document.getElementById("shareCopyBtn");
+    
+    try {
+      await navigator.clipboard.writeText(input.value);
+      btn.textContent = "Copied!";
+      btn.classList.add("copied");
+      setTimeout(() => {
+        btn.textContent = "Copy";
+        btn.classList.remove("copied");
+      }, 2000);
+    } catch (err) {
+      input.select();
+      document.execCommand("copy");
+      btn.textContent = "Copied!";
+      btn.classList.add("copied");
+      setTimeout(() => {
+        btn.textContent = "Copy";
+        btn.classList.remove("copied");
+      }, 2000);
+    }
+  };
+
+  // Close modal on overlay click
+  document.getElementById("shareModal").addEventListener("click", function(e) {
+    if (e.target === this) {
+      closeShareModal();
+    }
+  });
+
+  // Close modal on Escape key
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape" && document.getElementById("shareModal").classList.contains("active")) {
+      closeShareModal();
+    }
+  });
+
   }); // end DOMContentLoaded
 </script>
+
+<!-- Share Modal -->
+<div id="shareModal" class="share-modal-overlay">
+  <div class="share-modal">
+    <div class="share-modal-header">
+      <h3>🔗 Share Report</h3>
+      <button class="share-modal-close" onclick="closeShareModal()">×</button>
+    </div>
+    <div class="share-modal-body">
+      <div id="shareModalContent">
+        <div class="share-field">
+          <label for="shareExpiry">Link expires in</label>
+          <select id="shareExpiry">
+            <option value="1">1 day</option>
+            <option value="7">7 days</option>
+            <option value="30" selected>30 days (default)</option>
+            <option value="60">60 days</option>
+            <option value="90">90 days</option>
+            <option value="180">180 days</option>
+            <option value="365">1 year</option>
+          </select>
+        </div>
+        <div id="shareLinkContainer" style="display:none;">
+          <div class="share-field">
+            <label>Share link (copy to share)</label>
+            <div class="share-link-box">
+              <input type="text" id="shareLinkInput" readonly />
+              <button class="share-copy-btn" id="shareCopyBtn" onclick="copyShareLink()">Copy</button>
+            </div>
+          </div>
+          <p style="font-size:12px;color:var(--muted);margin-top:8px;">
+            This link will show only the report content without requiring sign-in.
+            It will expire based on the selected period.
+          </p>
+        </div>
+        <div id="shareLoading" class="share-loading" style="display:none;">
+          <div class="spinner-lg" style="width:20px;height:20px;border-width:2px;"></div>
+          <span>Generating link…</span>
+        </div>
+        <button class="share-generate-btn" id="shareGenerateBtn" onclick="generateShareLink()">Generate Share Link</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Photo Lightbox -->
 <div id="photoLightbox" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.9);

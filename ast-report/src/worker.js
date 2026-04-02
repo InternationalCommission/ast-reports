@@ -52,6 +52,14 @@ export default {
       const id = path.split("/reports/")[1].replace("/edit-token", "");
       return handleEditToken(request, env, id);
     }
+    if (method === "POST" && path.match(/^\/reports\/[^/]+\/share-link$/)) {
+      const id = path.split("/reports/")[1].replace("/share-link", "");
+      return handleShareLink(request, env, id);
+    }
+    if (method === "GET"  && path.match(/^\/share\/[^/]+$/)) {
+      const token = path.split("/share/")[1];
+      return handleGetSharedReport(request, env, token);
+    }
     if (method === "PATCH" && path.match(/^\/reports\/[^/]+$/)) {
       const id = path.split("/reports/")[1];
       return handleUpdateReport(request, env, id);
@@ -383,6 +391,167 @@ async function validateEditToken(reportId, token, expires, secret) {
   const expectedToken = await signData(dataToSign, secret);
   
   return token === expectedToken;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// POST /reports/:id/share-link — Generate a share link for a report
+// ────────────────────────────────────────────────────────────────────────────
+
+async function handleShareLink(request, env, id) {
+  const authError = await validateAzureToken(request, env);
+  if (authError) return corsResponse({ error: authError }, 401, env);
+
+  if (!env.EDIT_TOKEN_SECRET) {
+    return corsResponse({ error: "Share token secret not configured" }, 500, env);
+  }
+
+  try {
+    const body = await request.json().catch(() => ({}));
+    const days = Math.min(Math.max(parseInt(body.days, 10) || 30, 1), 365);
+    const expiryMs = days * 24 * 60 * 60 * 1000;
+    const expires = Date.now() + expiryMs;
+    
+    const salt = generateUUID().substring(0, 8);
+    const dataToSign = `${id}:${expires}:${salt}`;
+    const signature = await signData(dataToSign, env.EDIT_TOKEN_SECRET);
+    const token = `${signature}:${salt}`;
+    
+    const origin = new URL(request.url).origin;
+    const shareUrl = `${origin}/share/${encodeURIComponent(token)}`;
+    
+    return corsResponse({
+      token,
+      shareUrl,
+      expires,
+      reportId: id,
+      days,
+    }, 200, env);
+  } catch (err) {
+    console.error("ShareLink error:", err);
+    return corsResponse({ error: err.message }, 500, env);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// GET /share/:token — Validate share token and return report data
+// ────────────────────────────────────────────────────────────────────────────
+
+async function handleGetSharedReport(request, env, token) {
+  if (!env.EDIT_TOKEN_SECRET) {
+    return corsResponse({ error: "Share token secret not configured" }, 500, env);
+  }
+
+  try {
+    const decodedToken = decodeURIComponent(token);
+    const parts = decodedToken.split(":");
+    if (parts.length < 2) {
+      return corsResponse({ error: "Invalid share link" }, 400, env);
+    }
+    
+    const signature = parts[0];
+    const salt = parts.slice(1).join(":");
+    
+    const graphToken = await getAccessToken(env);
+    const { siteId, listId } = await resolveListIds(env, graphToken);
+    
+    const headers = {
+      Authorization: `Bearer ${graphToken}`,
+      Accept: "application/json",
+      Prefer: "HonorNonIndexedQueriesWarningMayFailRandomly",
+    };
+    
+    const itemsRes = await graphFetch(
+      `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`
+        + `?expand=fields`
+        + `&$top=5000`,
+      { headers }
+    );
+    
+    const items = itemsRes.value || [];
+    let foundItem = null;
+    
+    for (const item of items) {
+      const expires = Date.now() + (30 * 24 * 60 * 60 * 1000);
+      const dataToSign = `${item.id}:${expires}:${salt}`;
+      const expectedToken = await signData(dataToSign, env.EDIT_TOKEN_SECRET);
+      
+      if (signature === expectedToken) {
+        foundItem = item;
+        break;
+      }
+      
+      for (let days = 1; days <= 365; days++) {
+        const testExpiry = Date.now() + (days * 24 * 60 * 60 * 1000);
+        const testSign = await signData(`${item.id}:${testExpiry}:${salt}`, env.EDIT_TOKEN_SECRET);
+        if (signature === testSign) {
+          if (Date.now() <= testExpiry) {
+            foundItem = item;
+            break;
+          }
+        }
+      }
+      
+      if (foundItem) break;
+    }
+    
+    if (!foundItem) {
+      return corsResponse({ error: "Invalid or expired share link" }, 404, env);
+    }
+    
+    const report = normalizeItem(foundItem);
+    
+    const photos = await getReportPhotos(report, env);
+    
+    return corsResponse({
+      report,
+      photos,
+    }, 200, env);
+  } catch (err) {
+    console.error("GetSharedReport error:", err);
+    return corsResponse({ error: err.message }, 500, env);
+  }
+}
+
+async function getReportPhotos(report, env) {
+  try {
+    const sharePointToken = await getUserToken(env, 'sharepoint');
+    const spoHeaders = { Authorization: `Bearer ${sharePointToken}`, Accept: 'application/json;odata=verbose' };
+    const spoSiteUrl = env.SHAREPOINT_SITE_URL;
+    
+    if (!report.photoFolderServerRelativePath) {
+      return [];
+    }
+    
+    const encodedPath = report.photoFolderServerRelativePath.split('/').map(p => encodeURIComponent(p)).join('/');
+    
+    const filesRes = await fetch(
+      `${spoSiteUrl}/_api/web/getfolderbyserverrelativeurl('${encodedPath}')/files`,
+      { headers: spoHeaders }
+    );
+    
+    if (!filesRes.ok) return [];
+    
+    const filesData = await filesRes.json();
+    const files = filesData.d?.results || filesData.value || [];
+    
+    return files.map(file => {
+      const origin = new URL(env.SHAREPOINT_SITE_URL).origin;
+      const serverRelativeUrl = file.ServerRelativeUrl || file.name;
+      const webUrl = serverRelativeUrl ? `${origin}${serverRelativeUrl}` : null;
+      
+      return {
+        id: file.UniqueId || file.Name,
+        name: file.Name,
+        webUrl,
+        thumbnail: webUrl,
+        lastModified: file.TimeLastModified || null,
+        size: file.Length || null,
+      };
+    });
+  } catch (err) {
+    console.error("getReportPhotos error:", err);
+    return [];
+  }
 }
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -131,6 +131,12 @@ ast-report/
 ├── form.html              # Public submission form (frontend)
 ├── admin.html             # Admin viewer (frontend)
 └── AGENTS.md              # This file
+
+# At project root (served statically):
+share.html                 # Public share view page
+admin.html                 # Admin dashboard
+form.html                  # Report submission form
+index.html                 # Landing page
 ```
 
 ---
@@ -184,10 +190,40 @@ Set via `wrangler secret put`:
 | GET | `/reports` | Any authenticated | List active reports |
 | GET | `/reports/recycle-bin` | SuperAdmin | List recycled reports |
 | GET | `/reports/:id` | Any authenticated | Get single report |
+| POST | `/reports/:id/share-link` | Any authenticated | Generate share link with configurable expiry |
+| GET | `/share/:token` | None | View shared report (no auth required) |
 | PATCH | `/reports/:id` | ReadWrite+ | Update report |
 | POST | `/reports/:id/recycle` | ReadWrite+ | Move to recycle bin |
 | POST | `/reports/:id/restore` | SuperAdmin | Restore from recycle bin |
 | DELETE | `/reports/:id/permanent` | SuperAdmin | Permanently delete |
+
+### Share Link Feature
+
+Reports can be shared via a public link that does not require sign-in:
+
+**Creating a Share Link:**
+```javascript
+// POST /reports/:id/share-link
+// Body: { "days": 30 }  // 1-365 days, default 30
+
+// Response:
+{
+  "token": "abc123...",
+  "shareUrl": "https://domain.com/share/abc123...",
+  "expires": 1234567890000,
+  "reportId": "123",
+  "days": 30
+}
+```
+
+**Viewing a Shared Report:**
+- URL format: `/share/:token`
+- Returns report data without requiring authentication
+- Link expires based on the selected period (1 day to 1 year)
+- Photos are included in shared view
+
+**Frontend Pages:**
+- `share.html` - Public page for viewing shared reports (at project root)
 
 ### Recycle Bin Feature
 

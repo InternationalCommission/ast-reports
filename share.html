@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IC Project Report — Shared View</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy:   #1a3a5c;
+      --navy2:  #112840;
+      --gold:   #c8a96e;
+      --cream:  #f9f7f4;
+      --paper:  #f2ede6;
+      --ink:    #1a1a1a;
+      --muted:  #6b6660;
+      --border: #d8d0c6;
+      --red:    #9b2335;
+      --green:  #2a6b3c;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body { font-family: 'Source Serif 4', Georgia, serif; background: var(--paper); color: var(--ink); }
+
+    /* ── Error/Loading states ── */
+    .message-page {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .message-box {
+      background: var(--cream);
+      border-radius: 8px;
+      padding: 48px;
+      max-width: 480px;
+      text-align: center;
+      box-shadow: 0 4px 24px rgba(0,0,0,.1);
+    }
+    .message-box .icon { font-size: 48px; margin-bottom: 16px; }
+    .message-box h1 { font-family: 'Playfair Display', serif; color: var(--navy); margin-bottom: 12px; font-size: 24px; }
+    .message-box p { color: var(--muted); line-height: 1.6; margin-bottom: 24px; }
+    .message-box a {
+      display: inline-block;
+      padding: 12px 24px;
+      background: var(--navy);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .message-box a:hover { background: #254e7a; }
+    .error-box { border-left: 4px solid var(--red); background: rgba(155,35,53,.05); }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--navy);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Report layout ── */
+    .report-wrapper {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 32px 24px 64px;
+    }
+    .report-header {
+      background: var(--navy);
+      padding: 32px 40px;
+      margin-bottom: 32px;
+      border-radius: 8px 8px 0 0;
+    }
+    .report-header .rh-title { font-family: 'Playfair Display', serif; font-size: 28px; color: #fff; margin-bottom: 8px; }
+    .report-header .rh-meta  { color: #a8c4e0; font-size: 14px; line-height: 1.6; }
+    .report-header .rh-meta span { margin-right: 16px; }
+    .report-header .rh-coordinator { margin-top: 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .report-header .rh-coordinator span { background: rgba(255,255,255,.1); border-radius: 20px; padding: 6px 14px; font-size: 13px; color: rgba(255,255,255,.85); }
+
+    .report-body { background: #fff; padding: 36px 40px; border-radius: 0 0 8px 8px; }
+    .section-title { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--navy); border-bottom: 2px solid var(--gold); padding-bottom: 8px; margin-bottom: 20px; margin-top: 40px; }
+    .section-title:first-child { margin-top: 0; }
+
+    .intro-text { line-height: 1.8; font-size: 15px; color: #333; white-space: pre-wrap; }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 24px; }
+    .stat-cell { background: #fff; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+    .stat-cell .sc-label { font-size: 12px; color: var(--muted); }
+    .stat-cell .sc-value { font-weight: 700; font-size: 22px; color: var(--navy); }
+    .stat-cell .sc-value.zero { color: var(--border); font-weight: 400; font-size: 18px; }
+
+    .testimony { border-left: 3px solid var(--gold); padding: 16px 20px; margin-bottom: 20px; background: rgba(200,169,110,.05); border-radius: 0 4px 4px 0; }
+    .testimony:last-child { margin-bottom: 0; }
+    .testimony-author { font-weight: 600; font-size: 14px; color: var(--navy); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .testimony-text { font-size: 14px; line-height: 1.75; color: #333; white-space: pre-wrap; }
+
+    .finance-wrap { border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+    .finance-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .finance-table tr { border-bottom: 1px solid #f0ece6; }
+    .finance-table tr:last-child { border-bottom: none; }
+    .finance-table td { padding: 10px 14px; }
+    .finance-table td:last-child { text-align: right; font-weight: 600; }
+    .finance-table .ft-group td:first-child { font-weight: 600; color: var(--navy); }
+    .finance-table .ft-group { background: rgba(26,58,92,.03); }
+    .finance-table .ft-sub td:first-child { color: var(--muted); padding-left: 32px; font-style: italic; }
+    .finance-table .ft-total { background: rgba(200,169,110,.12); }
+    .finance-table .ft-total td { font-weight: 700; font-size: 15px; }
+    .finance-table .ft-zero td { color: var(--border); }
+
+    .photo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .photo-grid a {
+      display: block;
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      text-decoration: none;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .photo-grid a:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    }
+    .photo-grid img {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      display: block;
+    }
+    .photo-grid .photo-name {
+      padding: 8px;
+      font-size: 11px;
+      color: var(--muted);
+      background: var(--cream);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .no-data { color: var(--muted); font-style: italic; font-size: 14px; }
+
+    .shared-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(42,107,60,.1);
+      color: var(--green);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      margin-bottom: 16px;
+    }
+
+    /* ── Lightbox ── */
+    #photoLightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0,0,0,0.9);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #photoLightbox.active { display: flex; }
+    #lightboxClose {
+      position: absolute;
+      top: 16px;
+      right: 24px;
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 32px;
+      cursor: pointer;
+      z-index: 10000;
+      line-height: 1;
+    }
+    #lightboxContent {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      width: 100%;
+      padding: 60px 80px;
+    }
+    #lightboxImg {
+      max-width: 90vw;
+      max-height: 80vh;
+      object-fit: contain;
+      border-radius: 4px;
+    }
+    #lightboxPrev, #lightboxNext {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: #fff;
+      font-size: 40px;
+      cursor: pointer;
+      padding: 16px 20px;
+      border-radius: 4px;
+    }
+    #lightboxPrev { left: 16px; }
+    #lightboxNext { right: 16px; }
+    #lightboxInfo {
+      color: #fff;
+      font-size: 13px;
+      padding: 12px 0 16px;
+      text-align: center;
+      width: 100%;
+      background: rgba(0,0,0,0.4);
+    }
+
+    @media (max-width: 768px) {
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .report-header { padding: 24px; }
+      .report-body { padding: 24px; }
+      .report-wrapper { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<!-- Photo Lightbox -->
+<div id="photoLightbox">
+  <button id="lightboxClose">×</button>
+  <div id="lightboxContent">
+    <button id="lightboxPrev">‹</button>
+    <img id="lightboxImg" src="" alt="" />
+    <button id="lightboxNext">›</button>
+  </div>
+  <div id="lightboxInfo">
+    <span id="lightboxFilename"></span>
+    <span id="lightboxCounter" style="margin-left: 16px; opacity: 0.6;"></span>
+  </div>
+</div>
+
+<script>
+(function() {
+  const WORKER_URL = "https://ast-report.alex-wascomb.workers.dev";
+
+  const app = document.getElementById("app");
+
+  function showLoading() {
+    app.innerHTML = `
+      <div class="message-page">
+        <div class="message-box">
+          <div class="spinner"></div>
+          <h1>Loading Report</h1>
+          <p>Please wait while we load the shared report…</p>
+        </div>
+      </div>
+    `;
+  }
+
+  function showError(message) {
+    app.innerHTML = `
+      <div class="message-page">
+        <div class="message-box error-box">
+          <div class="icon">⚠️</div>
+          <h1>Unable to Load Report</h1>
+          <p>${escHtml(message)}</p>
+          <a href="/">Go to Home</a>
+        </div>
+      </div>
+    `;
+  }
+
+  function escHtml(str) {
+    return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function fmt(d) {
+    const dt = new Date(d);
+    return isNaN(dt.getTime()) ? d : dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  function money(val) {
+    const n = parseFloat(val);
+    return isNaN(n) ? null : `USD $${n.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+  }
+
+  function fRow(label, val, cls = "") {
+    const m = money(val);
+    const empty = m === null || parseFloat(val) === 0;
+    return `<tr class="${cls}${empty ? " ft-zero" : ""}"><td>${label}</td><td>${empty ? "—" : m}</td></tr>`;
+  }
+
+  // ── Lightbox ──
+  const lightbox = {
+    photos: [],
+    index: 0,
+    open(photos, index) {
+      this.photos = photos;
+      this.index = index;
+      this.update();
+      document.getElementById("photoLightbox").classList.add("active");
+      document.body.style.overflow = "hidden";
+    },
+    close() {
+      document.getElementById("photoLightbox").classList.remove("active");
+      document.body.style.overflow = "";
+    },
+    prev() {
+      this.index = (this.index - 1 + this.photos.length) % this.photos.length;
+      this.update();
+    },
+    next() {
+      this.index = (this.index + 1) % this.photos.length;
+      this.update();
+    },
+    update() {
+      const photo = this.photos[this.index];
+      document.getElementById("lightboxImg").src = photo.webUrl || photo.thumbnail || "";
+      document.getElementById("lightboxImg").alt = photo.name || "";
+      document.getElementById("lightboxCounter").textContent = `${this.index + 1} / ${this.photos.length}`;
+      document.getElementById("lightboxFilename").textContent = photo.name || "";
+      document.getElementById("lightboxPrev").style.visibility = this.photos.length > 1 ? "visible" : "hidden";
+      document.getElementById("lightboxNext").style.visibility = this.photos.length > 1 ? "visible" : "hidden";
+    }
+  };
+
+  document.getElementById("lightboxClose").addEventListener("click", () => lightbox.close());
+  document.getElementById("lightboxPrev").addEventListener("click", () => lightbox.prev());
+  document.getElementById("lightboxNext").addEventListener("click", () => lightbox.next());
+
+  document.addEventListener("keydown", e => {
+    if (document.getElementById("photoLightbox").classList.contains("active")) {
+      if (e.key === "Escape") lightbox.close();
+      else if (e.key === "ArrowLeft") lightbox.prev();
+      else if (e.key === "ArrowRight") lightbox.next();
+    }
+  });
+
+  function buildReportHtml(r, photos) {
+    const dateRange = r.projectDateFrom
+      ? (r.projectDateTo ? `${fmt(r.projectDateFrom)} – ${fmt(r.projectDateTo)}` : fmt(r.projectDateFrom))
+      : "";
+    const submittedOn = r.submittedAt
+      ? new Date(r.submittedAt).toLocaleString("en-US", { dateStyle: "long", timeStyle: "short" })
+      : "";
+
+    const testimonies = r.testimonies || [];
+    const testimoniesHtml = testimonies.length
+      ? testimonies.map((t, i) => `
+          <div class="testimony">
+            <div class="testimony-author">
+              ${t.author ? escHtml(t.author) : '<em style="color:var(--muted);font-weight:400;">Anonymous</em>'}
+            </div>
+            <div class="testimony-text">${escHtml(t.text || "")}</div>
+          </div>`).join("")
+      : `<p class="no-data">No testimonies recorded.</p>`;
+
+    const stats = [
+      ["# Churches Participated", r.churchesParticipated],
+      ["# National Participants", r.nationalParticipants],
+      ["# USA Participants", r.usaParticipants],
+      ["# Other Country Participants", r.otherCountriesParticipants],
+      ["# People Who Heard the Gospel", r.peopleHeardGospel],
+      ["# Professions of Faith", r.professionsOfFaith],
+      ["# Rededications to Christ", r.rededications],
+      ["# Baptisms", r.baptisms],
+      ["# New Churches Planted", r.newChurchesPlanted],
+    ];
+
+    const statsHtml = `<div class="stats-grid">
+      ${stats.map(([label, val]) => {
+        const empty = val === null || val === undefined || val === 0;
+        return `<div class="stat-cell">
+          <span class="sc-label">${label}</span>
+          <span class="sc-value${empty ? " zero" : ""}">${empty ? "—" : val}</span>
+        </div>`;
+      }).join("")}
+    </div>`;
+
+    const totalTrip = (r.ticketsCost || 0) + (r.fuelCost || 0) + (r.accommodationCost || 0) + (r.foodCost || 0);
+
+    const financeHtml = `<div class="finance-wrap"><table class="finance-table">
+      ${fRow("Total Funds Sent by IC", r.totalFundsSent, "ft-total")}
+      ${fRow("Materials", r.spentOnMaterials, "ft-group")}
+      <tr class="ft-group"><td colspan="2" style="padding:8px 12px 4px;font-weight:600;color:var(--navy);">Coordinator Trips</td></tr>
+      ${fRow("Tickets", r.ticketsCost, "ft-sub")}
+      ${fRow("Fuel / Taxi", r.fuelCost, "ft-sub")}
+      ${fRow("Accommodation", r.accommodationCost, "ft-sub")}
+      ${fRow("Food", r.foodCost, "ft-sub")}
+      ${fRow("Trips Total", totalTrip, "ft-group")}
+      ${fRow("Financial Help to Participants", r.financialHelpParticipants, "ft-group")}
+      ${r.numParticipantsHelp ? `<tr class="ft-sub"><td>Participants Receiving Help</td><td>${r.numParticipantsHelp}</td></tr>` : ""}
+      ${fRow("Rallies Expenses", r.ralliesExpenses, "ft-group")}
+      ${r.ralliesDescription ? `<tr class="ft-sub"><td colspan="2" style="color:var(--muted);font-style:italic;">${escHtml(r.ralliesDescription)}</td></tr>` : ""}
+      ${fRow("Additional Expenses", r.additionalExpenses, "ft-group")}
+      ${r.additionalNeedDescription ? `<tr class="ft-sub"><td colspan="2" style="color:var(--muted);font-style:italic;">${escHtml(r.additionalNeedDescription)}</td></tr>` : ""}
+    </table></div>`;
+
+    const photosHtml = photos && photos.length
+      ? `<div class="photo-grid">
+          ${photos.map((p, i) => `
+            <a href="#" onclick="event.preventDefault();lightbox.open(${JSON.stringify(photos).replace(/"/g, "&quot;")}, ${i});">
+              <img src="${escHtml(p.thumbnail || p.webUrl || "")}" alt="${escHtml(p.name || "")}" loading="lazy" />
+              <div class="photo-name">${escHtml(p.name || "")}</div>
+            </a>`).join("")}
+        </div>`
+      : `<p class="no-data">No photos attached to this report.</p>`;
+
+    return `
+      <div class="report-wrapper">
+        <div class="report-header">
+          <div class="rh-title">${escHtml(r.projectTitle || "IC Project Report")}</div>
+          <div class="rh-meta">
+            <span>${[r.city, r.country].filter(Boolean).join(", ")}</span>
+            ${r.area ? `<span>${escHtml(r.area)}</span>` : ""}
+            ${dateRange ? `<span>${dateRange}</span>` : ""}
+            ${submittedOn ? `<span>Submitted ${submittedOn}</span>` : ""}
+          </div>
+          <div class="rh-coordinator">
+            ${r.coordinatorName ? `<span>👤 ${escHtml(r.coordinatorName)}</span>` : ""}
+            ${r.coordinatorEmail ? `<span>✉ ${escHtml(r.coordinatorEmail)}</span>` : ""}
+          </div>
+        </div>
+        <div class="report-body">
+          <div class="section-title">Introduction</div>
+          <p class="intro-text">${escHtml(r.introduction || "")}</p>
+
+          <div class="section-title">Statistics</div>
+          ${statsHtml}
+
+          <div class="section-title">Testimonies
+            <span style="font-family:'Source Serif 4',serif;font-weight:400;font-size:13px;color:var(--muted);margin-left:10px;">
+              ${testimonies.length} testimon${testimonies.length === 1 ? "y" : "ies"}
+            </span>
+          </div>
+          ${testimoniesHtml}
+
+          <div class="section-title">Photos</div>
+          ${photosHtml}
+
+          <div class="section-title">Financial Report</div>
+          ${financeHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  async function init() {
+    const pathParts = window.location.pathname.split("/");
+    const token = pathParts[pathParts.length - 1];
+
+    if (!token) {
+      showError("No share link provided. Please check the URL and try again.");
+      return;
+    }
+
+    showLoading();
+
+    try {
+      const res = await fetch(`${WORKER_URL}/share/${encodeURIComponent(token)}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        showError(data.error || "This share link is invalid or has expired.");
+        return;
+      }
+
+      const { report, photos } = data;
+      app.innerHTML = buildReportHtml(report, photos || []);
+
+      window.lightbox = lightbox;
+
+    } catch (err) {
+      console.error("Share page error:", err);
+      showError("Unable to load the shared report. Please try again later.");
+    }
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
