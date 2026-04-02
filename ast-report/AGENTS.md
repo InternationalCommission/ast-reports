@@ -141,6 +141,14 @@ index.html                 # Landing page
 
 ---
 
+## KV Namespaces
+
+| Binding | Purpose |
+|---------|---------|
+| `SHARE_LINKS` | Stores share link metadata for management |
+
+Create with: `wrangler kv:namespace create SHARE_LINKS`
+
 ## Environment Variables (Secrets)
 
 Set via `wrangler secret put`:
@@ -191,6 +199,8 @@ Set via `wrangler secret put`:
 | GET | `/reports/recycle-bin` | SuperAdmin | List recycled reports |
 | GET | `/reports/:id` | Any authenticated | Get single report |
 | POST | `/reports/:id/share-link` | Any authenticated | Generate share link with configurable expiry |
+| GET | `/reports/:id/share-links` | SuperAdmin | List all share links for a report |
+| DELETE | `/reports/:id/share-links/:tokenHash` | SuperAdmin | Delete a share link |
 | GET | `/share/:token` | None | View shared report (no auth required) |
 | PATCH | `/reports/:id` | ReadWrite+ | Update report |
 | POST | `/reports/:id/recycle` | ReadWrite+ | Move to recycle bin |
@@ -221,6 +231,12 @@ Reports can be shared via a public link that does not require sign-in:
 - Returns HTML page with report data without requiring authentication
 - Link expires based on the selected period (1 day to 1 year)
 - Photos are included in shared view
+
+**Share Link Management (SuperAdmin):**
+- Super Admins can view all share links for any report
+- Links are stored in Cloudflare KV (`SHARE_LINKS` binding)
+- Expired links are automatically cleaned up when viewing the list
+- Links can be deleted to immediately revoke access
 
 **Frontend Pages:**
 - `share.html` - Public page for viewing shared reports (served statically alongside admin.html)

@@ -80,6 +80,16 @@ export default {
       const id = path.split("/reports/")[1].replace("/photos", "");
       return handleGetPhotos(request, env, id);
     }
+    if (method === "GET"  && path.match(/^\/reports\/[^/]+\/share-links$/)) {
+      const id = path.split("/reports/")[1].replace("/share-links", "");
+      return handleListShareLinks(request, env, id);
+    }
+    if (method === "DELETE" && path.match(/^\/reports\/[^/]+\/share-links\/[^/]+$/)) {
+      const parts = path.split("/reports/")[1].split("/share-links/");
+      const id = parts[0];
+      const tokenHash = parts[1];
+      return handleDeleteShareLink(request, env, id, tokenHash);
+    }
     if (method === "GET"  && path.startsWith("/proxy/photo")) {
       return handlePhotoProxy(request, env);
     }
@@ -414,8 +424,26 @@ async function handleShareLink(request, env, id) {
     const signature = await signData(payload, env.EDIT_TOKEN_SECRET);
     const token = base64UrlEncode(JSON.stringify({ id, expires, sig: signature }));
     
+    const tokenHash = await hashToken(token);
     const origin = new URL(request.url).origin;
     const shareUrl = `${origin}/share.html?token=${encodeURIComponent(token)}`;
+    
+    const shareLinkData = {
+      tokenHash,
+      reportId: id,
+      expires,
+      createdAt: Date.now(),
+      days,
+      url: shareUrl,
+    };
+    
+    if (env.SHARE_LINKS) {
+      await env.SHARE_LINKS.put(`share:${id}:${tokenHash}`, JSON.stringify(shareLinkData));
+      const reportLinks = await env.SHARE_LINKS.get(`report-links:${id}`);
+      const linkIds = reportLinks ? JSON.parse(reportLinks) : [];
+      linkIds.push({ tokenHash, expires });
+      await env.SHARE_LINKS.put(`report-links:${id}`, JSON.stringify(linkIds));
+    }
     
     return corsResponse({
       token,
@@ -423,11 +451,20 @@ async function handleShareLink(request, env, id) {
       expires,
       reportId: id,
       days,
+      tokenHash,
     }, 200, env);
   } catch (err) {
     console.error("ShareLink error:", err);
     return corsResponse({ error: err.message }, 500, env);
   }
+}
+
+async function hashToken(token) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(token);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -504,6 +541,93 @@ async function handleGetSharedReport(request, env, token) {
   } catch (err) {
     console.error("GetSharedReport error:", err);
     return jsonResponse({ error: "Unable to load report: " + err.message }, 500);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// GET /reports/:id/share-links — List all share links for a report (SuperAdmin)
+// ────────────────────────────────────────────────────────────────────────────
+
+async function handleListShareLinks(request, env, id) {
+  const authError = await validateAzureToken(request, env);
+  if (authError) return corsResponse({ error: authError }, 401, env);
+
+  const roleCheck = await requireRole(request, env, ["SuperAdmin"]);
+  if (roleCheck.error) return corsResponse({ error: roleCheck.error }, 403, env);
+
+  try {
+    if (!env.SHARE_LINKS) {
+      return corsResponse({ links: [], message: "Share link storage not configured" }, 200, env);
+    }
+
+    const reportLinksData = await env.SHARE_LINKS.get(`report-links:${id}`);
+    if (!reportLinksData) {
+      return corsResponse({ links: [] }, 200, env);
+    }
+
+    const linkEntries = JSON.parse(reportLinksData);
+    const links = [];
+    const now = Date.now();
+    const expiredTokens = [];
+
+    for (const entry of linkEntries) {
+      const linkData = await env.SHARE_LINKS.get(`share:${id}:${entry.tokenHash}`);
+      if (linkData) {
+        const data = JSON.parse(linkData);
+        links.push({
+          tokenHash: entry.tokenHash,
+          expires: data.expires,
+          createdAt: data.createdAt,
+          days: data.days,
+          url: data.url,
+          isExpired: data.expires < now,
+        });
+      } else {
+        expiredTokens.push(entry.tokenHash);
+      }
+    }
+
+    if (expiredTokens.length > 0) {
+      const updatedLinks = linkEntries.filter(e => !expiredTokens.includes(e.tokenHash));
+      await env.SHARE_LINKS.put(`report-links:${id}`, JSON.stringify(updatedLinks));
+    }
+
+    return corsResponse({ links }, 200, env);
+  } catch (err) {
+    console.error("ListShareLinks error:", err);
+    return corsResponse({ error: err.message }, 500, env);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// DELETE /reports/:id/share-links/:tokenHash — Delete a share link (SuperAdmin)
+// ────────────────────────────────────────────────────────────────────────────
+
+async function handleDeleteShareLink(request, env, id, tokenHash) {
+  const authError = await validateAzureToken(request, env);
+  if (authError) return corsResponse({ error: authError }, 401, env);
+
+  const roleCheck = await requireRole(request, env, ["SuperAdmin"]);
+  if (roleCheck.error) return corsResponse({ error: roleCheck.error }, 403, env);
+
+  try {
+    if (!env.SHARE_LINKS) {
+      return corsResponse({ error: "Share link storage not configured" }, 500, env);
+    }
+
+    await env.SHARE_LINKS.delete(`share:${id}:${tokenHash}`);
+
+    const reportLinksData = await env.SHARE_LINKS.get(`report-links:${id}`);
+    if (reportLinksData) {
+      const linkEntries = JSON.parse(reportLinksData);
+      const updatedLinks = linkEntries.filter(e => e.tokenHash !== tokenHash);
+      await env.SHARE_LINKS.put(`report-links:${id}`, JSON.stringify(updatedLinks));
+    }
+
+    return corsResponse({ success: true, message: "Share link deleted" }, 200, env);
+  } catch (err) {
+    console.error("DeleteShareLink error:", err);
+    return corsResponse({ error: err.message }, 500, env);
   }
 }
 

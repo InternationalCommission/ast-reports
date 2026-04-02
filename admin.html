@@ -592,6 +592,10 @@
     return hasRole("SuperAdmin");
   }
 
+  function isSuperAdmin() {
+    return hasRole("SuperAdmin");
+  }
+
   function isActualSuperAdmin() {
     const idToken = currentAccount?.idTokenClaims || {};
     const groups = idToken.groups || [];
@@ -1575,6 +1579,9 @@
           <button type="button" onclick="openShareModal('${r.id}')" style="background:rgba(42,107,60,.5);border:1px solid rgba(42,107,60,.7);color:#fff;padding:6px 14px;border-radius:3px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;">
             🔗 Share
           </button>
+          ${isSuperAdmin ? `<button type="button" onclick="openManageShareLinksModal('${r.id}')" style="background:rgba(42,107,60,.3);border:1px solid rgba(42,107,60,.5);color:#fff;padding:6px 14px;border-radius:3px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;">
+            🔑 Manage Links
+          </button>` : ""}
           ${canEdit() ? `<button type="button" onclick="openEditForm('${r.id}')" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:3px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;">
             ✏️ Edit Report
           </button>` : ""}
@@ -1771,6 +1778,151 @@
     }
   };
 
+  // ── Manage Share Links Modal ────────────────────────────────────────────────
+  let manageShareLinksReportId = null;
+
+  window.openManageShareLinksModal = async function(reportId) {
+    manageShareLinksReportId = reportId;
+    document.getElementById("manageShareLinksModal").classList.add("active");
+    document.getElementById("manageShareLinksLoading").style.display = "flex";
+    document.getElementById("manageShareLinksList").innerHTML = "";
+    
+    await loadShareLinks();
+  };
+
+  window.closeManageShareLinksModal = function() {
+    document.getElementById("manageShareLinksModal").classList.remove("active");
+    manageShareLinksReportId = null;
+  };
+
+  async function loadShareLinks() {
+    if (!manageShareLinksReportId) return;
+    
+    const loading = document.getElementById("manageShareLinksLoading");
+    const list = document.getElementById("manageShareLinksList");
+    
+    loading.style.display = "flex";
+    
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(`${WORKER_URL}/reports/${manageShareLinksReportId}/share-links`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to load share links");
+      }
+      
+      const links = data.links || [];
+      
+      if (links.length === 0) {
+        list.innerHTML = `
+          <div style="text-align:center;padding:24px;color:var(--muted);">
+            <div style="font-size:32px;margin-bottom:8px;">🔗</div>
+            <p>No share links for this report.</p>
+            <p style="font-size:12px;margin-top:8px;">Use the "Share" button to create a new link.</p>
+          </div>
+        `;
+      } else {
+        const now = Date.now();
+        list.innerHTML = `
+          <div style="max-height:400px;overflow-y:auto;">
+            ${links.map(link => {
+              const isExpired = link.expires < now;
+              const expiresDate = new Date(link.expires).toLocaleDateString("en-US", { 
+                month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit"
+              });
+              const createdDate = new Date(link.createdAt).toLocaleDateString("en-US", {
+                month: "short", day: "numeric", year: "numeric"
+              });
+              return `
+                <div style="background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:8px;">
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+                    <div style="flex:1;min-width:0;">
+                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                        <span style="font-size:12px;color:${isExpired ? 'var(--red)' : 'var(--green)'};font-weight:600;">
+                          ${isExpired ? '❌ Expired' : '✓ Active'}
+                        </span>
+                        <span style="font-size:11px;color:var(--muted);">· ${link.days} days</span>
+                      </div>
+                      <div style="font-size:12px;color:var(--muted);margin-bottom:2px;">
+                        Created: ${createdDate}
+                      </div>
+                      <div style="font-size:12px;color:var(--muted);">
+                        Expires: ${expiresDate}
+                      </div>
+                      <div style="margin-top:8px;display:flex;gap:6px;align-items:center;">
+                        <input type="text" readonly value="${link.url}" 
+                          style="flex:1;font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:3px;background:#fff;font-family:monospace;overflow:hidden;text-overflow:ellipsis;"
+                          onclick="this.select()" />
+                        <button onclick="copyLinkUrl('${link.url.replace(/'/g, "\\'")}')" 
+                          style="background:var(--navy);color:#fff;border:none;padding:6px 10px;border-radius:3px;font-size:11px;cursor:pointer;white-space:nowrap;">
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                    <button onclick="deleteShareLink('${link.tokenHash}')" 
+                      style="background:rgba(155,35,53,.1);color:var(--red);border:1px solid rgba(155,35,53,.3);padding:6px 10px;border-radius:3px;font-size:11px;cursor:pointer;white-space:nowrap;">
+                      🗑️ Delete
+                    </button>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        `;
+      }
+    } catch (err) {
+      list.innerHTML = `
+        <div style="text-align:center;padding:24px;color:var(--red);">
+          <p>Error loading share links: ${escHtml(err.message)}</p>
+        </div>
+      `;
+    } finally {
+      loading.style.display = "none";
+    }
+  }
+
+  window.copyLinkUrl = async function(url) {
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast("Link copied!", false);
+    } catch (err) {
+      const input = document.createElement("input");
+      input.value = url;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+      showToast("Link copied!", false);
+    }
+  };
+
+  window.deleteShareLink = async function(tokenHash) {
+    if (!confirm("Delete this share link? Anyone with the link will no longer be able to view the report.")) {
+      return;
+    }
+    
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(`${WORKER_URL}/reports/${manageShareLinksReportId}/share-links/${tokenHash}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete share link");
+      }
+      
+      showToast("Share link deleted", false);
+      await loadShareLinks();
+    } catch (err) {
+      showToast("Failed to delete: " + err.message, true);
+    }
+  };
+
   // Close modal on overlay click
   document.getElementById("shareModal").addEventListener("click", function(e) {
     if (e.target === this) {
@@ -1778,10 +1930,19 @@
     }
   });
 
+  document.getElementById("manageShareLinksModal").addEventListener("click", function(e) {
+    if (e.target === this) {
+      closeManageShareLinksModal();
+    }
+  });
+
   // Close modal on Escape key
   document.addEventListener("keydown", function(e) {
     if (e.key === "Escape" && document.getElementById("shareModal").classList.contains("active")) {
       closeShareModal();
+    }
+    if (e.key === "Escape" && document.getElementById("manageShareLinksModal").classList.contains("active")) {
+      closeManageShareLinksModal();
     }
   });
 
@@ -1827,6 +1988,25 @@
           <span>Generating link…</span>
         </div>
         <button class="share-generate-btn" id="shareGenerateBtn" onclick="generateShareLink()">Generate Share Link</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Manage Share Links Modal -->
+<div id="manageShareLinksModal" class="share-modal-overlay">
+  <div class="share-modal" style="max-width:600px;">
+    <div class="share-modal-header">
+      <h3>🔑 Manage Share Links</h3>
+      <button class="share-modal-close" onclick="closeManageShareLinksModal()">×</button>
+    </div>
+    <div class="share-modal-body">
+      <div id="manageShareLinksContent">
+        <div id="manageShareLinksLoading" class="share-loading" style="display:none;">
+          <div class="spinner-lg" style="width:20px;height:20px;border-width:2px;"></div>
+          <span>Loading share links…</span>
+        </div>
+        <div id="manageShareLinksList"></div>
       </div>
     </div>
   </div>

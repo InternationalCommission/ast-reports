@@ -4,6 +4,12 @@
   "workers_dev": true,
   "preview_urls": false,
   "compatibility_date": "2026-03-17",
+  "kv_namespaces": [
+    {
+      "binding": "SHARE_LINKS",
+      "id": "YOUR_KV_NAMESPACE_ID"
+    }
+  ],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,
