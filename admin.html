@@ -382,12 +382,15 @@
       .topbar, .sidebar, #authGate, .rh-actions { display: none !important; }
       .detail-pane { overflow: visible; }
       body, .app-body { overflow: visible; height: auto; display: block; }
-      .report-header { position: static !important; padding: 20px 30px; }
+      .report-header { position: static !important; padding: 20px 30px; display: flex; justify-content: space-between; align-items: flex-start; }
       .report-body { padding: 20px 30px; }
+      .print-logo { display: block !important; }
+      .print-thanks { display: block !important; }
       .rh-coordinator, .print-hide { display: none !important; }
       .section-title, .stats-grid, .testimony, #photoGrid { page-break-inside: avoid; }
       .report-body > div { page-break-inside: avoid; }
     }
+    .print-logo, .print-thanks { display: none; }
     @media (max-width: 768px) {
       :root { --sidebar-w: 100%; }
       .app-body { flex-direction: column; }
@@ -1603,6 +1606,7 @@
           ${r.coordinatorName  ? `<span>👤 ${escHtml(r.coordinatorName)}</span>`  : ""}
           ${r.coordinatorEmail ? `<span>✉ ${escHtml(r.coordinatorEmail)}</span>` : ""}
         </div>
+        <img src="https://internationalcommission.org/Files/IC-Primary-Logo.png.webp" alt="International Commission" class="print-logo" style="height:50px;width:auto;object-fit:contain;" />
       </div>
       <div class="report-body">
         <div class="section-title">1 — Introduction</div>
@@ -1626,6 +1630,9 @@
         </div>
         <div class="section-title print-hide">5 — Financial Report</div>
         <div class="finance-wrap print-hide">${financeHtml}</div>
+        <p class="print-thanks" style="margin-top:30px;font-style:italic;color:var(--navy);text-align:center;">
+          Thank you for your generous support and prayers for this project.
+        </p>
       </div>`;
   }
 
