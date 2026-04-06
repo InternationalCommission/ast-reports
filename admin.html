@@ -421,6 +421,44 @@
       .topbar-actions { flex: 1 1 100%; }
       .search-wrap { flex: 1 1 100%; max-width: none; margin-top: 8px; }
       .topbar-divider { display: block; }
+    .topbar.mobile-hidden { display: none; }
+    .btn-translate.mobile-hidden { display: none; }
+    .mobile-translate-btn {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--navy);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 56px;
+      height: 56px;
+      font-size: 24px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,.3);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .mobile-translate-btn.active { background: #5a4b82; }
+    .mobile-translate-btn {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--navy);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 56px;
+      height: 56px;
+      font-size: 24px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,.3);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
     }
     .mobile-back-btn {
       display: none;
@@ -592,7 +630,7 @@
     document.getElementById("refreshBtn").addEventListener("click", () => loadReports());
     document.getElementById("loadMoreBtn").addEventListener("click",() => loadMore());
     document.getElementById("searchInput").addEventListener("input",() => filterReports());
-    document.getElementById("translateBtn").addEventListener("click",() => toggleTranslation());
+    document.getElementById("translateBtn").addEventListener("click",() => window.toggleTranslation());
 
   // ── Configuration — update these three values ─────────────────────────────
   const WORKER_URL      = "https://ast-report.alex-wascomb.workers.dev";
@@ -868,8 +906,9 @@
     };
   }
 
-  async function toggleTranslation() {
+  window.toggleTranslation = async function() {
     const btn = document.getElementById("translateBtn");
+    const mobileBtn = document.getElementById("mobileTranslateBtn");
     if (loading) return;
     if (!currentReportCache) {
       showToast("Please select a report first", true);
@@ -877,6 +916,7 @@
     }
     translationEnabled = !translationEnabled;
     btn.classList.toggle("active", translationEnabled);
+    mobileBtn?.classList.toggle("active", translationEnabled);
     if (translationEnabled) {
       btn.disabled = true;
       document.getElementById("translateBtnText").innerHTML = '<span class="translation-loading"><span class="translation-spinner"></span>Translating…</span>';
@@ -890,6 +930,7 @@
         showToast("Translation failed", true);
         translationEnabled = false;
         btn.classList.remove("active");
+        mobileBtn?.classList.remove("active");
         document.getElementById("translateBtnText").textContent = "Translate";
       }
       btn.disabled = false;
@@ -1586,17 +1627,32 @@
     
     // Mobile: switch to detail view
     if (window.innerWidth <= 768) {
+      const topbar = document.querySelector(".topbar");
       const sidebar = document.querySelector(".sidebar");
       const detailPane = document.getElementById("detailPane");
+      const translateBtn = document.getElementById("translateBtn");
+      const mobileTranslateBtn = document.getElementById("mobileTranslateBtn");
+      if (topbar) topbar.classList.add("mobile-hidden");
+      if (translateBtn) translateBtn.classList.add("mobile-hidden");
       if (sidebar) sidebar.classList.add("mobile-hidden");
+      if (mobileTranslateBtn) mobileTranslateBtn.style.display = "flex";
       detailPane.classList.add("mobile-show");
     }
   }
   
   // ── Mobile back to list ──────────────────────────────────────────────────
   window.mobileBackToList = function() {
+    const topbar = document.querySelector(".topbar");
     const sidebar = document.querySelector(".sidebar");
     const detailPane = document.getElementById("detailPane");
+    const translateBtn = document.getElementById("translateBtn");
+    const mobileTranslateBtn = document.getElementById("mobileTranslateBtn");
+    if (topbar) topbar.classList.remove("mobile-hidden");
+    if (translateBtn) {
+      translateBtn.classList.remove("mobile-hidden");
+      translateBtn.style.display = "none";
+    }
+    if (mobileTranslateBtn) mobileTranslateBtn.style.display = "none";
     if (sidebar) sidebar.classList.remove("mobile-hidden");
     if (detailPane) {
       detailPane.classList.remove("mobile-show");
@@ -1607,9 +1663,18 @@
   // ── Handle window resize ──────────────────────────────────────────────────
   window.addEventListener("resize", function() {
     if (window.innerWidth > 768) {
+      const topbar = document.querySelector(".topbar");
       const sidebar = document.querySelector(".sidebar");
       const detailPane = document.getElementById("detailPane");
+      const translateBtn = document.getElementById("translateBtn");
+      const mobileTranslateBtn = document.getElementById("mobileTranslateBtn");
+      if (topbar) topbar.classList.remove("mobile-hidden");
       if (sidebar) sidebar.classList.remove("mobile-hidden");
+      if (translateBtn) {
+        translateBtn.classList.remove("mobile-hidden");
+        translateBtn.style.display = "";
+      }
+      if (mobileTranslateBtn) mobileTranslateBtn.style.display = "none";
       if (detailPane) {
         detailPane.classList.remove("mobile-hidden", "mobile-show");
       }
@@ -1771,6 +1836,7 @@
         </div>
         <img src="https://internationalcommission.org/Files/IC-Primary-Logo.png.webp" alt="International Commission" class="print-logo" style="height:50px;width:auto;object-fit:contain;background:#fff;padding:4px;border-radius:4px;" />
       </div>
+      <button type="button" id="mobileTranslateBtn" class="mobile-translate-btn" onclick="toggleTranslation()">🌐</button>
       <div class="report-body">
         <div class="section-title">1 — Introduction</div>
         <p class="intro-text">${escHtml(r.introduction || "")}</p>
