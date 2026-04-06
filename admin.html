@@ -123,6 +123,14 @@
     }
     .btn-refresh:hover { background: rgba(255,255,255,.2); }
 
+    .btn-simulate {
+      padding: 6px 14px; background: rgba(255,255,255,.1);
+      border: 1px solid rgba(255,255,255,.2); color: #fff;
+      border-radius: 3px; font-size: 13px; cursor: pointer;
+      font-family: inherit; transition: background .15s;
+    }
+    .btn-simulate:hover { background: rgba(255,255,255,.2); }
+
     .btn-translate {
       padding: 6px 14px; background: rgba(255,255,255,.1);
       border: 1px solid rgba(255,255,255,.2); color: #fff;
@@ -451,11 +459,26 @@
       <span id="translateBtnText">Translate</span>
     </button>
     <button class="btn-refresh" id="refreshBtn">↻ Refresh</button>
+    <button class="btn-simulate" id="simulateBtn" style="display:none;">👤 Simulate</button>
+    <button class="btn-simulate" id="clearSimulateBtn" style="display:none;" onclick="clearSimulation()">👤 Clear</button>
     <div class="user-chip" id="userChip" style="display:none;">
       <div class="user-avatar" id="userAvatar">?</div>
       <span class="user-name" id="userName"></span>
     </div>
     <button class="btn-signout" id="signOutBtn" style="display:none;">Sign out</button>
+  </div>
+</div>
+
+<!-- ── Simulate User Modal ── -->
+<div id="simulateModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:6px;padding:28px 32px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+    <h3 style="margin:0 0 16px;font-family:'Playfair Display',serif;font-size:18px;color:var(--navy);">Simulate User</h3>
+    <p style="margin:0 0 16px;font-size:13px;color:var(--muted);">Enter an email address to view reports as that user.</p>
+    <input type="email" id="simulateUserInput" placeholder="user@email.com" style="width:100%;padding:10px 12px;font-size:14px;border:1px solid var(--border);border-radius:3px;box-sizing:border-box;margin-bottom:16px;" />
+    <div style="display:flex;justify-content:flex-end;gap:10px;">
+      <button onclick="closeSimulateModal()" style="padding:8px 16px;border:1px solid var(--border);border-radius:3px;background:#fff;color:var(--ink);cursor:pointer;font-size:13px;">Cancel</button>
+      <button onclick="simulateUser()" style="padding:8px 16px;border:none;border-radius:3px;background:var(--navy);color:#fff;cursor:pointer;font-size:13px;">Simulate</button>
+    </div>
   </div>
 </div>
 
@@ -465,11 +488,6 @@
     <div class="sidebar-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
       <span id="sidebarTitle">Reports</span>
       <div style="display:flex;align-items:center;gap:6px;">
-        <div id="simulateUserContainer" style="display:none;align-items:center;gap:4px;">
-          <input type="email" id="simulateUserInput" placeholder="user@email.com" style="font-size:11px;padding:2px 6px;border:1px solid rgba(26,58,92,.3);border-radius:3px;width:160px;" title="Simulate another user (SuperAdmin only)" />
-          <button id="simulateBtn" onclick="simulateUser()" style="font-size:11px;padding:2px 6px;border:1px solid rgba(26,58,92,.3);border-radius:3px;background:rgba(26,58,92,.1);color:var(--navy);cursor:pointer;" title="Apply simulation">Simulate</button>
-          <button id="clearSimulateBtn" onclick="clearSimulation()" style="display:none;font-size:11px;padding:2px 6px;border:none;color:var(--muted);cursor:pointer;" title="Clear simulation">✕</button>
-        </div>
         <button id="recycleBinBtn" onclick="toggleRecycleBin()" style="display:none;background:none;border:1px solid rgba(26,58,92,.3);color:var(--navy);padding:2px 8px;border-radius:3px;font-size:11px;cursor:pointer;" title="View Recycle Bin">♻️ Recycle Bin</button>
       </div>
     </div>
@@ -606,28 +624,47 @@
 
   // ── Simulate User helpers ────────────────────────────────────────────────────
   function setupSimulateUser() {
-    const container = document.getElementById("simulateUserContainer");
-    const input = document.getElementById("simulateUserInput");
-    const clearBtn = document.getElementById("clearSimulateBtn");
-    if (!container || !input) return;
+    const btn = document.getElementById("simulateBtn");
+    if (!btn) return;
     
     // Show only for actual Super Admins
     if (isActualSuperAdmin()) {
-      container.style.display = "flex";
+      btn.style.display = "inline-block";
     }
 
-    // Enter key triggers simulation
-    input.addEventListener("keypress", (e) => {
+    // Click opens modal
+    btn.addEventListener("click", () => {
+      document.getElementById("simulateModal").style.display = "flex";
+      document.getElementById("simulateUserInput").focus();
+    });
+
+    // Enter key in input triggers simulation
+    document.getElementById("simulateUserInput").addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
         simulateUser();
       }
     });
+
+    // Escape key closes modal
+    document.getElementById("simulateUserInput").addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeSimulateModal();
+    });
+
+    // Click outside modal closes it
+    document.getElementById("simulateModal").addEventListener("click", (e) => {
+      if (e.target === document.getElementById("simulateModal")) {
+        closeSimulateModal();
+      }
+    });
   }
 
-  function simulateUser() {
+  window.closeSimulateModal = function() {
+    document.getElementById("simulateModal").style.display = "none";
+  };
+
+  window.simulateUser = function() {
     const input = document.getElementById("simulateUserInput");
-    const clearBtn = document.getElementById("clearSimulateBtn");
     const email = input.value.trim().toLowerCase();
     
     if (!email) {
@@ -636,25 +673,25 @@
     }
 
     simulatedUser = email;
-    clearBtn.style.display = "inline";
+    window.closeSimulateModal();
+    document.getElementById("simulateBtn").style.display = "none";
+    document.getElementById("clearSimulateBtn").style.display = "inline-block";
     console.log(`[Simulate] Now viewing as: ${email}`);
     showToast(`Viewing as ${email}`, false);
     loadReports();
-  }
+  };
 
-  function clearSimulation() {
-    const input = document.getElementById("simulateUserInput");
-    const clearBtn = document.getElementById("clearSimulateBtn");
+  window.clearSimulation = function() {
     const sidebarTitle = document.getElementById("sidebarTitle");
     
     simulatedUser = null;
-    input.value = "";
-    clearBtn.style.display = "none";
     if (sidebarTitle) sidebarTitle.textContent = "Reports";
+    document.getElementById("simulateBtn").style.display = "inline-block";
+    document.getElementById("clearSimulateBtn").style.display = "none";
     console.log("[Simulate] Cleared simulation, viewing as actual user");
     showToast("Simulation cleared", false);
     loadReports();
-  }
+  };
 
   function refreshRoleBasedUI() {
     // Update recycle bin button visibility
