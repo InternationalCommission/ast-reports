@@ -57,13 +57,15 @@
 
     /* ── Top bar ── */
     .topbar {
-      background: var(--navy); padding: 0 24px;
-      display: flex; align-items: center; gap: 16px;
-      height: 56px; flex-shrink: 0;
+      background: var(--navy); padding: 12px 24px;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+      flex-shrink: 0;
       box-shadow: 0 2px 8px rgba(0,0,0,.2);
     }
-    .topbar h1 { font-family: 'Playfair Display', serif; font-size: 18px; color: #fff; letter-spacing: .3px; white-space: nowrap; }
-    .topbar-divider { width: 1px; height: 24px; background: rgba(255,255,255,.2); }
+    .topbar-top { display: flex; align-items: center; gap: 16px; flex: 1; }
+    .topbar h1 { font-family: 'Playfair Display', serif; font-size: 18px; color: #fff; letter-spacing: .3px; white-space: nowrap; margin: 0; }
+    .topbar-divider { width: 100%; height: 1px; background: rgba(255,255,255,.15); display: none; }
+    .topbar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .search-wrap { position: relative; flex: 1; max-width: 360px; }
     .search-wrap input {
       width: 100%; padding: 7px 12px 7px 34px;
@@ -91,29 +93,7 @@
       color: rgba(255,255,255,.6);
       font-size: 12px;
     }
-    .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
     .report-count { color: rgba(255,255,255,.6); font-size: 13px; white-space: nowrap; }
-
-    /* Mobile search bar */
-    .mobile-search {
-      display: none;
-      background: var(--navy);
-      padding: 10px 16px;
-      border-bottom: 1px solid rgba(255,255,255,.1);
-    }
-    .mobile-search .search-wrap input {
-      width: 100%;
-      padding: 8px 12px 8px 34px;
-      background: rgba(255,255,255,.15);
-      border: 1px solid rgba(255,255,255,.25);
-      border-radius: 4px;
-      color: #fff;
-      font-size: 15px;
-      font-family: inherit;
-    }
-    .mobile-search .search-wrap input::placeholder { color: rgba(255,255,255,.5); }
-    .mobile-search .search-wrap input:focus { outline: none; border-color: var(--gold); }
-    .mobile-search .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 14px; opacity: .5; }
 
     /* User chip */
     .user-chip {
@@ -184,8 +164,9 @@
     .report-list::-webkit-scrollbar { width: 6px; }
     .report-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-    .report-card { padding: 14px 18px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .15s; }
+    .report-card { padding: 14px 18px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .15s; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
     .report-card:hover  { background: rgba(26,58,92,.04); }
+    .report-card:active { background: rgba(26,58,92,.12); }
     .report-card.active { background: rgba(26,58,92,.08); border-left: 3px solid var(--navy); padding-left: 15px; }
     .report-card .rc-title { font-weight: 600; font-size: 14px; color: var(--navy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .report-card .rc-loc   { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -428,14 +409,18 @@
     @media (max-width: 768px) {
       :root { --sidebar-w: 100%; }
       .app-body { flex-direction: column; }
-      .sidebar { width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border); flex: 1; }
+      .sidebar { width: 100%; min-height: 200px; border-right: none; border-bottom: 1px solid var(--border); flex: 1; display: flex; }
       .sidebar.mobile-hidden { display: none; }
+      .report-list { flex: 1; min-height: 200px; }
       .detail-pane { width: 100%; flex: 1; display: none; }
       .detail-pane.mobile-show { display: block !important; }
       .mobile-back-btn { display: flex !important; }
       .report-header { position: relative; }
-      .mobile-search { display: block; }
-      .topbar .search-wrap { display: none; }
+      .topbar { padding: 10px 16px; }
+      .topbar-top { flex: 1 1 100%; }
+      .topbar-actions { flex: 1 1 100%; }
+      .search-wrap { flex: 1 1 100%; max-width: none; margin-top: 8px; }
+      .topbar-divider { display: block; }
     }
     .mobile-back-btn {
       display: none;
@@ -478,14 +463,11 @@
 
 <!-- ── Top bar ── -->
 <div class="topbar">
-  <h1>IC Project Reports</h1>
-  <div class="topbar-divider"></div>
-  <div class="topbar-right">
+  <div class="topbar-top">
+    <h1>IC Project Reports</h1>
     <span class="report-count" id="reportCount"></span>
-    <button class="btn-translate" id="translateBtn" title="Toggle translation" style="display:none;">
-      <span id="translateBtnIcon">🌐</span>
-      <span id="translateBtnText">Translate</span>
-    </button>
+  </div>
+  <div class="topbar-actions">
     <button class="btn-refresh" id="refreshBtn">↻ Refresh</button>
     <button class="btn-simulate" id="simulateBtn" style="display:none;">👤 Simulate</button>
     <button class="btn-simulate" id="clearSimulateBtn" style="display:none;" onclick="clearSimulation()">👤 Clear</button>
@@ -496,13 +478,10 @@
     </div>
     <button class="btn-signout" id="signOutBtn" style="display:none;">Sign out</button>
   </div>
-</div>
-
-<!-- ── Mobile search bar ── -->
-<div class="mobile-search">
-  <div class="search-wrap" style="position: relative; flex: 1;">
+  <div class="topbar-divider"></div>
+  <div class="search-wrap">
     <span class="search-icon">🔍</span>
-    <input type="text" id="searchInput" placeholder="Search reports..." autocomplete="off" />
+    <input type="text" id="searchInput" placeholder="Type / to filter, e.g., /area Latin America /country United States" autocomplete="off" />
     <div id="suggestions" style="
       display: none;
       position: absolute;
@@ -518,6 +497,10 @@
       z-index: 100;
     "></div>
   </div>
+  <button class="btn-translate" id="translateBtn" title="Toggle translation" style="display:none;">
+    <span id="translateBtnIcon">🌐</span>
+    <span id="translateBtnText">Translate</span>
+  </button>
 </div>
 
 <!-- ── Simulate User Modal ── -->
