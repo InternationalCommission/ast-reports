@@ -694,11 +694,11 @@
     loadReports();
   };
 
-  function openNewReport() {
+  window.openNewReport = function() {
     const formUrl = "https://reports.internationalcommission.org/form.html";
     const returnUrl = encodeURIComponent(window.location.origin + window.location.pathname);
     window.location.href = formUrl + "?returnUrl=" + returnUrl;
-  }
+  };
 
   function refreshRoleBasedUI() {
     // Update recycle bin button visibility
