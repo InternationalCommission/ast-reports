@@ -457,6 +457,17 @@
       return [];
     }
   })();
+  const returnUrl = urlParams.get("returnUrl") || null;
+
+  // Show admin bar if return URL is provided or in edit mode
+  if (returnUrl || isEditMode) {
+    document.getElementById("adminBar").style.display = "flex";
+    if (returnUrl) {
+      document.getElementById("backAdminBtn").onclick = function() {
+        window.location.href = returnUrl;
+      };
+    }
+  }
 
   // ── Initialize edit mode UI (called after testimonies array is defined) ──
   function applyEditMode() {
@@ -682,6 +693,15 @@
 
       if (data.success || res.ok) {
         sessionStorage.setItem("lastEditedReportId", EDIT_MODE_REPORT_ID || data.listItemId || "");
+        
+        // If return URL is provided, redirect after success
+        if (returnUrl) {
+          const reportId = EDIT_MODE_REPORT_ID || data.listItemId;
+          const redirectUrl = reportId ? returnUrl + (returnUrl.includes('?') ? '&' : '?') + "report=" + reportId : returnUrl;
+          window.location.href = redirectUrl;
+          return;
+        }
+        
         const message = EDIT_MODE_REPORT_ID ? "✓ Report updated successfully!" : "✓ Report submitted successfully!";
         showToast(message, false);
         if (EDIT_MODE_REPORT_ID) {

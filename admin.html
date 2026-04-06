@@ -461,6 +461,7 @@
     <button class="btn-refresh" id="refreshBtn">↻ Refresh</button>
     <button class="btn-simulate" id="simulateBtn" style="display:none;">👤 Simulate</button>
     <button class="btn-simulate" id="clearSimulateBtn" style="display:none;" onclick="clearSimulation()">👤 Clear</button>
+    <a id="newReportBtn" class="btn-refresh" style="text-decoration:none;" onclick="openNewReport()">+ New Report</a>
     <div class="user-chip" id="userChip" style="display:none;">
       <div class="user-avatar" id="userAvatar">?</div>
       <span class="user-name" id="userName"></span>
@@ -692,6 +693,12 @@
     showToast("Simulation cleared", false);
     loadReports();
   };
+
+  function openNewReport() {
+    const formUrl = "https://reports.internationalcommission.org/form.html";
+    const returnUrl = encodeURIComponent(window.location.origin + window.location.pathname);
+    window.location.href = formUrl + "?returnUrl=" + returnUrl;
+  }
 
   function refreshRoleBasedUI() {
     // Update recycle bin button visibility
@@ -1139,6 +1146,9 @@
 
     // Setup Simulate User feature for Super Admins
     setupSimulateUser();
+
+    // Show New Report button when signed in
+    document.getElementById("newReportBtn").style.display = "inline-block";
 
     loadReports();
   }
