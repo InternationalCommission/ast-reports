@@ -465,11 +465,11 @@
     <div class="sidebar-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
       <span id="sidebarTitle">Reports</span>
       <div style="display:flex;align-items:center;gap:6px;">
-        <select id="viewAsRole" style="display:none;font-size:11px;padding:2px 4px;border:1px solid rgba(26,58,92,.3);border-radius:3px;background:#fff;color:var(--navy);" title="View as different role">
-          <option value="SuperAdmin">Super Admin</option>
-          <option value="ReadWrite">Read/Write</option>
-          <option value="ReadOnly">Read Only</option>
-        </select>
+        <div id="simulateUserContainer" style="display:none;align-items:center;gap:4px;">
+          <input type="email" id="simulateUserInput" placeholder="user@email.com" style="font-size:11px;padding:2px 6px;border:1px solid rgba(26,58,92,.3);border-radius:3px;width:160px;" title="Simulate another user (SuperAdmin only)" />
+          <button id="simulateBtn" onclick="simulateUser()" style="font-size:11px;padding:2px 6px;border:1px solid rgba(26,58,92,.3);border-radius:3px;background:rgba(26,58,92,.1);color:var(--navy);cursor:pointer;" title="Apply simulation">Simulate</button>
+          <button id="clearSimulateBtn" onclick="clearSimulation()" style="display:none;font-size:11px;padding:2px 6px;border:none;color:var(--muted);cursor:pointer;" title="Clear simulation">✕</button>
+        </div>
         <button id="recycleBinBtn" onclick="toggleRecycleBin()" style="display:none;background:none;border:1px solid rgba(26,58,92,.3);color:var(--navy);padding:2px 8px;border-radius:3px;font-size:11px;cursor:pointer;" title="View Recycle Bin">♻️ Recycle Bin</button>
       </div>
     </div>
@@ -562,7 +562,7 @@
   const PAGE_SIZE = 25;
 
   // ── Role helpers ────────────────────────────────────────────────────────────
-  let viewAsRole = null; // null = use actual roles, otherwise override with this role
+  let simulatedUser = null; // null = use actual user, otherwise simulate this user email
 
   function getUserRoles() {
     const idToken = currentAccount?.idTokenClaims || {};
@@ -571,10 +571,6 @@
     if (groups.includes(GROUP_IDS.SuperAdmin)) roles.push("SuperAdmin");
     if (groups.includes(GROUP_IDS.ReadWrite)) roles.push("ReadWrite");
     if (groups.includes(GROUP_IDS.ReadOnly)) roles.push("ReadOnly");
-    // If "View As" mode is active for Super Admin, override with selected role
-    if (viewAsRole && roles.includes("SuperAdmin")) {
-      return [viewAsRole];
-    }
     return roles;
   }
 
@@ -608,22 +604,56 @@
     return groups.includes(GROUP_IDS.SuperAdmin);
   }
 
-  // Wire up View As dropdown
-  function setupViewAsDropdown() {
-    const dropdown = document.getElementById("viewAsRole");
-    if (!dropdown) return;
+  // ── Simulate User helpers ────────────────────────────────────────────────────
+  function setupSimulateUser() {
+    const container = document.getElementById("simulateUserContainer");
+    const input = document.getElementById("simulateUserInput");
+    const clearBtn = document.getElementById("clearSimulateBtn");
+    if (!container || !input) return;
     
     // Show only for actual Super Admins
     if (isActualSuperAdmin()) {
-      dropdown.style.display = "inline-block";
+      container.style.display = "flex";
     }
-    
-    dropdown.addEventListener("change", (e) => {
-      viewAsRole = e.target.value === "SuperAdmin" ? null : e.target.value;
-      console.log(`[ViewAs] Now viewing as: ${viewAsRole || "SuperAdmin (actual)"}`);
-      // Re-render UI elements
-      refreshRoleBasedUI();
+
+    // Enter key triggers simulation
+    input.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        simulateUser();
+      }
     });
+  }
+
+  function simulateUser() {
+    const input = document.getElementById("simulateUserInput");
+    const clearBtn = document.getElementById("clearSimulateBtn");
+    const email = input.value.trim().toLowerCase();
+    
+    if (!email) {
+      showToast("Please enter an email address", true);
+      return;
+    }
+
+    simulatedUser = email;
+    clearBtn.style.display = "inline";
+    console.log(`[Simulate] Now viewing as: ${email}`);
+    showToast(`Viewing as ${email}`, false);
+    loadReports();
+  }
+
+  function clearSimulation() {
+    const input = document.getElementById("simulateUserInput");
+    const clearBtn = document.getElementById("clearSimulateBtn");
+    const sidebarTitle = document.getElementById("sidebarTitle");
+    
+    simulatedUser = null;
+    input.value = "";
+    clearBtn.style.display = "none";
+    if (sidebarTitle) sidebarTitle.textContent = "Reports";
+    console.log("[Simulate] Cleared simulation, viewing as actual user");
+    showToast("Simulation cleared", false);
+    loadReports();
   }
 
   function refreshRoleBasedUI() {
@@ -1070,8 +1100,8 @@
       document.getElementById("recycleBinBtn").style.display = "inline-block";
     }
 
-    // Setup View As dropdown for Super Admins
-    setupViewAsDropdown();
+    // Setup Simulate User feature for Super Admins
+    setupSimulateUser();
 
     loadReports();
   }
@@ -1298,7 +1328,14 @@
     document.getElementById("reportList").innerHTML =
       `<div class="loading-state"><div class="spinner-lg"></div><span>Loading…</span></div>`;
     document.getElementById("loadMoreBtn").disabled = true;
-    await fetchPage(`${WORKER_URL}/reports?top=${PAGE_SIZE}`);
+    
+    // Build URL with simulateUser parameter if set
+    let url = `${WORKER_URL}/reports?top=${PAGE_SIZE}`;
+    if (simulatedUser) {
+      url += `&simulateUser=${encodeURIComponent(simulatedUser)}`;
+    }
+    
+    await fetchPage(url);
     loading = false;
     initialLoadComplete = true;
     checkUrlForReport();
@@ -1344,6 +1381,15 @@
       allReports = [...allReports, ...(data.items || [])];
       nextLink   = data.nextLink || null;
       document.getElementById("loadMoreBtn").disabled = !nextLink;
+      
+      // Show simulation indicator if active
+      if (data.simulated) {
+        const areaInfo = data.restrictedArea ? ` (area: ${data.restrictedArea})` : " (no access)";
+        showToast(`Simulating ${data.simulated}${areaInfo}`, false);
+        const sidebarTitle = document.getElementById("sidebarTitle");
+        if (sidebarTitle) sidebarTitle.textContent = `Reports (${data.simulated.split("@")[0]})`;
+      }
+      
       filterReports();
     } catch (err) {
       document.getElementById("reportList").innerHTML =

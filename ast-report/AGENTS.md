@@ -171,6 +171,7 @@ Set via `wrangler secret put`:
 - `SUPER_ADMIN_GROUP_ID` - Azure AD group ID for Super Admin role
 - `READWRITE_GROUP_ID` - Azure AD group ID for Read/Write role
 - `READONLY_GROUP_ID` - Azure AD group ID for Read-only role
+- `VP_GROUP_ID` - Azure AD group ID for AST VP role (restricts view to their area)
 
 ---
 
@@ -183,6 +184,7 @@ Set via `wrangler secret put`:
 | Read-only | ✓ | ✗ | ✗ | ✗ | ✗ |
 | Read/Write | ✓ | ✓ | ✓ | ✗ | ✗ |
 | Super Admin | ✓ | ✓ | ✓ | ✓ | ✓ |
+| AST VP | Area only | ✗ | ✗ | ✗ | ✗ |
 
 ### Azure AD Group IDs (Current)
 
@@ -191,6 +193,7 @@ Set via `wrangler secret put`:
 | Super Admin | `a21edf30-1be1-4a2c-b13b-411e130d41e2` |
 | Read/Write | `2a94d6d7-85d8-482b-92a1-7dda91f3daba` |
 | Read-only | `ba1c0013-5cbb-4b5a-b625-19ae165953e5` |
+| AST VP | `2577bd66-1710-4b98-9b56-89255c743830` |
 
 ### API Endpoints
 

@@ -170,6 +170,71 @@ function parseMultiEmail(emailStr) {
   return emailStr.split(",").map(e => e.trim()).filter(e => e && e.includes("@"));
 }
 
+function getEmailFromToken(token) {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(b64urlDecode(parts[1]));
+    // Check common email claims
+    return payload.email || payload.preferred_username || payload.upn || null;
+  } catch {
+    return null;
+  }
+}
+
+async function getVpAreaForEmail(env, email) {
+  if (!email) return null;
+  
+  const mapping = await getAreaVpMapping(env, null);
+  const normalizedEmail = email.toLowerCase();
+  
+  // Find area where email matches (handling multi-email VP entries)
+  for (const [area, vpInfo] of Object.entries(mapping)) {
+    const emails = parseMultiEmail(vpInfo.email);
+    if (emails.some(e => e.toLowerCase() === normalizedEmail)) {
+      console.log(`[getVpAreaForEmail] User ${email} matched VP for area "${area}"`);
+      return area;
+    }
+  }
+  
+  return null;
+}
+
+async function isUserAdmin(request, env) {
+  const authHeader = request.headers.get("Authorization") || "";
+  if (!authHeader.startsWith("Bearer ")) return false;
+  
+  const token = authHeader.slice(7).trim();
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  
+  try {
+    const payload = JSON.parse(b64urlDecode(parts[1]));
+    const roles = getUserRoles(payload, env);
+    return roles.length > 0; // Any role means they have admin access
+  } catch {
+    return false;
+  }
+}
+
+async function isVpFromGroup(request, env) {
+  const authHeader = request.headers.get("Authorization") || "";
+  if (!authHeader.startsWith("Bearer ")) return false;
+  if (!env.VP_GROUP_ID) return false;
+  
+  const token = authHeader.slice(7).trim();
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  
+  try {
+    const payload = JSON.parse(b64urlDecode(parts[1]));
+    const groups = payload.groups || [];
+    return groups.includes(env.VP_GROUP_ID);
+  } catch {
+    return false;
+  }
+}
+
 async function handleSubmit(request, env) {
   console.log(">>> HANDLING SUBMIT");
   const origin = request.headers.get("Origin") || "";
@@ -257,7 +322,47 @@ async function handleGetReports(request, env, url) {
 
     const top    = url.searchParams.get("top")    || "50";
     const cursor = url.searchParams.get("cursor") || null;
-    const area   = url.searchParams.get("area")   || null;
+    const simulateUser = url.searchParams.get("simulateUser") || null;
+
+    // Get user email and check if they're a VP (via group membership)
+    const authHeader = request.headers.get("Authorization") || "";
+    const jwtToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+    const actualUserEmail = jwtToken ? getEmailFromToken(jwtToken) : null;
+    const isActualAdmin = await isUserAdmin(request, env);
+
+    // If simulateUser is provided and requester is SuperAdmin, use simulated user's email
+    let userEmail = actualUserEmail;
+    let isSimulating = false;
+    if (simulateUser && isActualAdmin) {
+      userEmail = simulateUser.toLowerCase();
+      isSimulating = true;
+      console.log(`[handleGetReports] SuperAdmin simulating user: ${userEmail}`);
+    }
+
+    const isVp = simulateUser && isActualAdmin ? false : await isVpFromGroup(request, env);
+    const vpArea = isVp && userEmail ? await getVpAreaForEmail(env, userEmail) : (isSimulating ? await getVpAreaForEmail(env, userEmail) : null);
+
+    // Check if user has admin role (SuperAdmin, ReadWrite, ReadOnly all have access)
+    const isAdmin = isSimulating ? false : await isUserAdmin(request, env);
+
+    // VP in group but not on VP list = no access
+    if (!isSimulating && isVp && !vpArea && !isAdmin) {
+      console.log(`[handleGetReports] VP ${userEmail} not found in VP list - no access`);
+      return corsResponse({ items: [], nextLink: null, restricted: true, message: "No reports available for your account." }, 200, env);
+    }
+
+    // If simulating a non-VP user, return no access
+    if (isSimulating && !vpArea && !isAdmin) {
+      console.log(`[handleGetReports] Simulated user ${userEmail} not in VP list - no access`);
+      return corsResponse({ items: [], nextLink: null, restricted: true, simulated: userEmail, message: "No reports available for this user." }, 200, env);
+    }
+
+    // VPs restricted to their area, admins see all
+    let area = url.searchParams.get("area") || null;
+    if (!isAdmin && vpArea && !area) {
+      area = vpArea;
+      console.log(`[handleGetReports] VP restriction: user ${userEmail} restricted to area "${area}"`);
+    }
 
     // Prefer header: lets Graph query non-indexed columns without erroring.
     // Results may occasionally be inconsistent on very large lists, but is
@@ -372,7 +477,12 @@ async function handleGetReports(request, env, url) {
       ? `${new URL(request.url).origin}/reports?cursor=${encodeURIComponent(spNextLink)}`
       : null;
 
-    return corsResponse({ items, nextLink: workerNextLink }, 200, env);
+    return corsResponse({ 
+      items, 
+      nextLink: workerNextLink,
+      simulated: isSimulating ? userEmail : null,
+      restrictedArea: isSimulating && vpArea ? vpArea : null,
+    }, 200, env);
   } catch (err) {
     console.error("GetReports error:", err);
     return corsResponse({ error: err.message }, 500, env);
