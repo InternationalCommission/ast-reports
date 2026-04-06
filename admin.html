@@ -94,6 +94,27 @@
     .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
     .report-count { color: rgba(255,255,255,.6); font-size: 13px; white-space: nowrap; }
 
+    /* Mobile search bar */
+    .mobile-search {
+      display: none;
+      background: var(--navy);
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(255,255,255,.1);
+    }
+    .mobile-search .search-wrap input {
+      width: 100%;
+      padding: 8px 12px 8px 34px;
+      background: rgba(255,255,255,.15);
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: 4px;
+      color: #fff;
+      font-size: 15px;
+      font-family: inherit;
+    }
+    .mobile-search .search-wrap input::placeholder { color: rgba(255,255,255,.5); }
+    .mobile-search .search-wrap input:focus { outline: none; border-color: var(--gold); }
+    .mobile-search .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 14px; opacity: .5; }
+
     /* User chip */
     .user-chip {
       display: flex; align-items: center; gap: 8px;
@@ -413,6 +434,8 @@
       .detail-pane.mobile-show { display: block !important; }
       .mobile-back-btn { display: flex !important; }
       .report-header { position: relative; }
+      .mobile-search { display: block; }
+      .topbar .search-wrap { display: none; }
     }
     .mobile-back-btn {
       display: none;
@@ -457,24 +480,6 @@
 <div class="topbar">
   <h1>IC Project Reports</h1>
   <div class="topbar-divider"></div>
-  <div class="search-wrap" style="position: relative;">
-    <span class="search-icon">🔍</span>
-    <input type="text" id="searchInput" placeholder="Type / to filter, e.g., /area Latin America /country United States" autocomplete="off" />
-    <div id="suggestions" style="
-      display: none;
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      background: var(--navy);
-      border: 1px solid rgba(255,255,255,.2);
-      border-top: none;
-      border-radius: 0 0 3px 3px;
-      max-height: 200px;
-      overflow-y: auto;
-      z-index: 100;
-    "></div>
-  </div>
   <div class="topbar-right">
     <span class="report-count" id="reportCount"></span>
     <button class="btn-translate" id="translateBtn" title="Toggle translation" style="display:none;">
@@ -490,6 +495,28 @@
       <span class="user-name" id="userName"></span>
     </div>
     <button class="btn-signout" id="signOutBtn" style="display:none;">Sign out</button>
+  </div>
+</div>
+
+<!-- ── Mobile search bar ── -->
+<div class="mobile-search">
+  <div class="search-wrap" style="position: relative; flex: 1;">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="searchInput" placeholder="Search reports..." autocomplete="off" />
+    <div id="suggestions" style="
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--navy);
+      border: 1px solid rgba(255,255,255,.2);
+      border-top: none;
+      border-radius: 0 0 3px 3px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 100;
+    "></div>
   </div>
 </div>
 
