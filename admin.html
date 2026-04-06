@@ -414,51 +414,36 @@
       .report-list { flex: 1; min-height: 200px; }
       .detail-pane { width: 100%; flex: 1; display: none; }
       .detail-pane.mobile-show { display: block !important; }
+      .report-body { padding-bottom: 100px; }
       .mobile-back-btn { display: flex !important; }
       .report-header { position: relative; }
+      .rh-actions { flex-wrap: wrap !important; }
       .topbar { padding: 10px 16px; }
       .topbar-top { flex: 1 1 100%; }
       .topbar-actions { flex: 1 1 100%; }
       .search-wrap { flex: 1 1 100%; max-width: none; margin-top: 8px; }
       .topbar-divider { display: block; }
-    .topbar.mobile-hidden { display: none; }
-    .btn-translate.mobile-hidden { display: none; }
-    .mobile-translate-btn {
-      display: none;
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: var(--navy);
-      color: #fff;
-      border: none;
-      border-radius: 50%;
-      width: 56px;
-      height: 56px;
-      font-size: 24px;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0,0,0,.3);
-      z-index: 100;
-      align-items: center;
-      justify-content: center;
-    }
-    .mobile-translate-btn.active { background: #5a4b82; }
-    .mobile-translate-btn {
-      display: none;
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: var(--navy);
-      color: #fff;
-      border: none;
-      border-radius: 50%;
-      width: 56px;
-      height: 56px;
-      font-size: 24px;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0,0,0,.3);
-      z-index: 100;
-      align-items: center;
-      justify-content: center;
+      .topbar.mobile-hidden { display: none; }
+      .btn-translate.mobile-hidden { display: none; }
+      .mobile-translate-btn {
+        display: none;
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: var(--navy);
+        color: #fff;
+        border: none;
+        border-radius: 50%;
+        width: 56px;
+        height: 56px;
+        font-size: 24px;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0,0,0,.3);
+        z-index: 100;
+        align-items: center;
+        justify-content: center;
+      }
+      .mobile-translate-btn.active { background: #5a4b82; }
     }
     .mobile-back-btn {
       display: none;
@@ -1806,7 +1791,7 @@
         <button type="button" onclick="mobileBackToList()" class="mobile-back-btn">
           ← Back to Reports
         </button>
-        <div class="rh-actions" style="display:flex;gap:8px;margin-bottom:12px;">
+        <div class="rh-actions" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
           <button type="button" onclick="openShareModal('${r.id}')" style="background:rgba(42,107,60,.5);border:1px solid rgba(42,107,60,.7);color:#fff;padding:6px 14px;border-radius:3px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;">
             🔗 Share
           </button>
