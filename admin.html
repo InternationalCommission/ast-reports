@@ -1637,31 +1637,6 @@
     }
   }
   
-  // ── Mobile back to list ──────────────────────────────────────────────────
-  window.mobileBackToList = function() {
-    const topbar = document.querySelector(".topbar");
-    const sidebar = document.querySelector(".sidebar");
-    const detailPane = document.getElementById("detailPane");
-    const translateBtn = document.getElementById("translateBtn");
-    if (topbar) topbar.classList.remove("mobile-hidden");
-    if (translateBtn) {
-      translateBtn.classList.remove("mobile-hidden");
-      translateBtn.style.display = "";
-    }
-    if (sidebar) sidebar.classList.remove("mobile-hidden");
-    if (detailPane) {
-      detailPane.classList.remove("mobile-show");
-      detailPane.classList.add("mobile-hidden");
-    }
-  }
-    if (mobileTranslateBtn) mobileTranslateBtn.style.display = "none";
-    if (sidebar) sidebar.classList.remove("mobile-hidden");
-    if (detailPane) {
-      detailPane.classList.remove("mobile-show");
-      detailPane.classList.add("mobile-hidden");
-    }
-  }
-  
   // ── Handle window resize ──────────────────────────────────────────────────
   window.addEventListener("resize", function() {
     if (window.innerWidth > 768) {
