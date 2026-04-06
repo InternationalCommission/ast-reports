@@ -414,7 +414,7 @@
       .report-list { flex: 1; min-height: 200px; }
       .detail-pane { width: 100%; flex: 1; display: none; }
       .detail-pane.mobile-show { display: block !important; }
-      .report-body { padding-bottom: 100px; }
+      .report-body { padding-bottom: 40px; }
       .mobile-back-btn { display: flex !important; }
       .report-header { position: relative; }
       .rh-actions { flex-wrap: wrap !important; }
@@ -425,26 +425,22 @@
       .topbar-divider { display: block; }
       .topbar.mobile-hidden { display: none; }
       .btn-translate.mobile-hidden { display: none; }
-      .mobile-translate-btn {
-        display: none;
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: var(--navy);
-        color: #fff;
-        border: none;
-        border-radius: 50%;
-        width: 56px;
-        height: 56px;
-        font-size: 24px;
-        cursor: pointer;
-        box-shadow: 0 4px 12px rgba(0,0,0,.3);
-        z-index: 100;
-        align-items: center;
-        justify-content: center;
-      }
-      .mobile-translate-btn.active { background: #5a4b82; }
+      .mobile-translate-inline { display: inline-flex !important; }
     }
+    .mobile-translate-inline {
+      display: none;
+      background: rgba(255,255,255,.15);
+      border: 1px solid rgba(255,255,255,.25);
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 3px;
+      font-size: 13px;
+      cursor: pointer;
+      align-items: center;
+      gap: 6px;
+    }
+    .mobile-translate-inline:hover { background: rgba(255,255,255,.25); }
+    .mobile-translate-inline.active { background: rgba(118,75,162,.5); }
     .mobile-back-btn {
       display: none;
       align-items: center;
@@ -1616,11 +1612,9 @@
       const sidebar = document.querySelector(".sidebar");
       const detailPane = document.getElementById("detailPane");
       const translateBtn = document.getElementById("translateBtn");
-      const mobileTranslateBtn = document.getElementById("mobileTranslateBtn");
       if (topbar) topbar.classList.add("mobile-hidden");
       if (translateBtn) translateBtn.classList.add("mobile-hidden");
       if (sidebar) sidebar.classList.add("mobile-hidden");
-      if (mobileTranslateBtn) mobileTranslateBtn.style.display = "flex";
       detailPane.classList.add("mobile-show");
     }
   }
@@ -1631,12 +1625,36 @@
     const sidebar = document.querySelector(".sidebar");
     const detailPane = document.getElementById("detailPane");
     const translateBtn = document.getElementById("translateBtn");
-    const mobileTranslateBtn = document.getElementById("mobileTranslateBtn");
     if (topbar) topbar.classList.remove("mobile-hidden");
     if (translateBtn) {
       translateBtn.classList.remove("mobile-hidden");
-      translateBtn.style.display = "none";
+      translateBtn.style.display = "";
     }
+    if (sidebar) sidebar.classList.remove("mobile-hidden");
+    if (detailPane) {
+      detailPane.classList.remove("mobile-show");
+      detailPane.classList.add("mobile-hidden");
+    }
+  }
+  }
+  
+  // ── Mobile back to list ──────────────────────────────────────────────────
+  window.mobileBackToList = function() {
+    const topbar = document.querySelector(".topbar");
+    const sidebar = document.querySelector(".sidebar");
+    const detailPane = document.getElementById("detailPane");
+    const translateBtn = document.getElementById("translateBtn");
+    if (topbar) topbar.classList.remove("mobile-hidden");
+    if (translateBtn) {
+      translateBtn.classList.remove("mobile-hidden");
+      translateBtn.style.display = "";
+    }
+    if (sidebar) sidebar.classList.remove("mobile-hidden");
+    if (detailPane) {
+      detailPane.classList.remove("mobile-show");
+      detailPane.classList.add("mobile-hidden");
+    }
+  }
     if (mobileTranslateBtn) mobileTranslateBtn.style.display = "none";
     if (sidebar) sidebar.classList.remove("mobile-hidden");
     if (detailPane) {
@@ -1652,14 +1670,12 @@
       const sidebar = document.querySelector(".sidebar");
       const detailPane = document.getElementById("detailPane");
       const translateBtn = document.getElementById("translateBtn");
-      const mobileTranslateBtn = document.getElementById("mobileTranslateBtn");
       if (topbar) topbar.classList.remove("mobile-hidden");
       if (sidebar) sidebar.classList.remove("mobile-hidden");
       if (translateBtn) {
         translateBtn.classList.remove("mobile-hidden");
         translateBtn.style.display = "";
       }
-      if (mobileTranslateBtn) mobileTranslateBtn.style.display = "none";
       if (detailPane) {
         detailPane.classList.remove("mobile-hidden", "mobile-show");
       }
@@ -1807,6 +1823,7 @@
           <button type="button" onclick="window.print()" class="print-btn" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:3px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;">
             🖨 Print
           </button>
+          <button type="button" id="mobileTranslateBtn" class="mobile-translate-inline" onclick="window.toggleTranslation()">🌐 Translate</button>
         </div>
         <div class="print-header-content">
           <div class="rh-title">${escHtml(r.projectTitle || "IC Project Report")}</div>
@@ -1821,7 +1838,6 @@
         </div>
         <img src="https://internationalcommission.org/Files/IC-Primary-Logo.png.webp" alt="International Commission" class="print-logo" style="height:50px;width:auto;object-fit:contain;background:#fff;padding:4px;border-radius:4px;" />
       </div>
-      <button type="button" id="mobileTranslateBtn" class="mobile-translate-btn" onclick="toggleTranslation()">🌐</button>
       <div class="report-body">
         <div class="section-title">1 — Introduction</div>
         <p class="intro-text">${escHtml(r.introduction || "")}</p>
