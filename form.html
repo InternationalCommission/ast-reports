@@ -99,7 +99,7 @@
     /* File upload */
     .file-drop { border: 2px dashed var(--border); border-radius: 4px; padding: 28px 20px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; background: #fff; position: relative; }
     .file-drop:hover, .file-drop.drag-over { border-color: var(--navy); background: rgba(26,58,92,.03); }
-    .file-drop input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .file-drop input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; z-index: 20; }
     .file-drop .upload-icon { font-size: 28px; margin-bottom: 8px; position: relative; }
     .file-drop p { color: var(--muted); font-size: 14px; position: relative; }
     .file-drop strong { color: var(--navy); }
