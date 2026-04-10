@@ -161,6 +161,23 @@
       display: flex; flex-direction: column; overflow: hidden;
     }
     .sidebar-header { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+    .sidebar-search { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--cream); }
+    .sidebar-search .search-wrap { position: relative; max-width: none; }
+    .sidebar-search .search-wrap input {
+      width: 100%; padding: 7px 12px 7px 34px;
+      background: #fff; border: 1px solid var(--border); border-radius: 3px;
+      color: var(--ink); font-size: 14px; font-family: inherit;
+    }
+    .sidebar-search .search-wrap input::placeholder { color: var(--muted); }
+    .sidebar-search .search-wrap input:focus { outline: none; border-color: var(--gold); }
+    .sidebar-search .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 14px; opacity: .5; pointer-events: none; }
+    .sidebar-search #suggestions {
+      background: var(--cream); border: 1px solid var(--border); border-top: none;
+    }
+    .sidebar-search .suggestion-item { color: var(--ink); }
+    .sidebar-search .suggestion-item:hover, .sidebar-search .suggestion-item.active { background: rgba(26,58,92,.08); }
+    .sidebar-search .suggestion-item .command { color: var(--navy); font-weight: 600; }
+    .sidebar-search .suggestion-item .description { color: var(--muted); }
     .report-list { flex: 1; overflow-y: auto; }
     .report-list::-webkit-scrollbar { width: 6px; }
     .report-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -412,6 +429,7 @@
       .app-body { flex-direction: column; }
       .sidebar { width: 100%; min-height: 200px; border-right: none; border-bottom: 1px solid var(--border); flex: 1; display: flex; }
       .sidebar.mobile-hidden { display: none; }
+      .sidebar-search { display: none; }
       .report-list { flex: 1; min-height: 200px; }
       .detail-pane { width: 100%; flex: 1; display: none; }
       .detail-pane.mobile-show { display: block !important; }
@@ -422,11 +440,16 @@
       .topbar { padding: 10px 16px; }
       .topbar-top { flex: 1 1 100%; }
       .topbar-actions { flex: 1 1 100%; }
-      .search-wrap { flex: 1 1 100%; max-width: none; margin-top: 8px; }
+      .sidebar-search .search-wrap { display: none !important; }
+      #searchInputMobile { display: block !important; }
       .topbar-divider { display: block; }
       .topbar.mobile-hidden { display: none; }
       .btn-translate.mobile-hidden { display: none; }
       .mobile-translate-inline { display: inline-flex !important; }
+    }
+    #searchInputMobile { display: none; }
+    @media (min-width: 769px) {
+      #searchInputMobile { display: none !important; }
     }
     .mobile-translate-inline {
       display: none;
@@ -499,23 +522,9 @@
     <button class="btn-signout" id="signOutBtn" style="display:none;">Sign out</button>
   </div>
   <div class="topbar-divider"></div>
-  <div class="search-wrap">
+  <div class="search-wrap" style="display:none;">
     <span class="search-icon">🔍</span>
-    <input type="text" id="searchInput" placeholder="Type / to filter, e.g., /area Latin America /country United States" autocomplete="off" />
-    <div id="suggestions" style="
-      display: none;
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      background: var(--navy);
-      border: 1px solid rgba(255,255,255,.2);
-      border-top: none;
-      border-radius: 0 0 3px 3px;
-      max-height: 200px;
-      overflow-y: auto;
-      z-index: 100;
-    "></div>
+    <input type="text" id="searchInputMobile" placeholder="Type / to filter, e.g., /area Latin America" autocomplete="off" />
   </div>
   <button class="btn-translate" id="translateBtn" title="Toggle translation" style="display:none;">
     <span id="translateBtnIcon">🌐</span>
@@ -539,6 +548,26 @@
 <!-- ── App body ── -->
 <div class="app-body">
   <div class="sidebar">
+    <div class="sidebar-search">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" placeholder="Type / to filter, e.g., /area Latin America /country United States" autocomplete="off" />
+        <div id="suggestions" style="
+          display: none;
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          background: var(--navy);
+          border: 1px solid rgba(255,255,255,.2);
+          border-top: none;
+          border-radius: 0 0 3px 3px;
+          max-height: 200px;
+          overflow-y: auto;
+          z-index: 100;
+        "></div>
+      </div>
+    </div>
     <div class="sidebar-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
       <span id="sidebarTitle">Reports</span>
       <div style="display:flex;align-items:center;gap:6px;">
@@ -980,7 +1009,26 @@
   
   // DOM elements
   const searchInput = document.getElementById('searchInput');
+  const searchInputMobile = document.getElementById('searchInputMobile');
   const suggestionsDiv = document.getElementById('suggestions');
+
+  // Sync search inputs between sidebar (desktop) and topbar (mobile)
+  function getActiveSearchInput() {
+    return window.innerWidth <= 768 ? searchInputMobile : searchInput;
+  }
+  function syncSearchInputs(source) {
+    const target = source === searchInput ? searchInputMobile : searchInput;
+    if (target && target.value !== source.value) {
+      target.value = source.value;
+      target.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+  if (searchInput) {
+    searchInput.addEventListener('input', () => syncSearchInputs(searchInput));
+  }
+  if (searchInputMobile) {
+    searchInputMobile.addEventListener('input', () => syncSearchInputs(searchInputMobile));
+  }
   
   function updateSuggestions() {
     const value = searchInput.value;
@@ -1502,7 +1550,8 @@
 
   // ── Filter ────────────────────────────────────────────────────────────────
   function filterReports() {
-    const raw = document.getElementById("searchInput").value.trim();
+    const activeInput = getActiveSearchInput();
+    const raw = (activeInput ? activeInput.value : document.getElementById("searchInput").value).trim();
     
     // Parse slash commands
     const commands = parseSlashCommands(raw);
