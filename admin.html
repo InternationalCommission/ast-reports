@@ -1355,7 +1355,7 @@
       const date = r.submittedAt ? new Date(r.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
       const location = [r.city, r.country].filter(Boolean).join(", ");
       return `<div class="report-card${r.id === activeId ? " active" : ""}" onclick="showRecycleBinReport('${r.id}')" style="border-left:3px solid var(--muted);">
-        <div class="rc-title">${escHtml('${r.country} - ${r.city} - ${new Date(r.projectDateTo).getFullYear()}' || "Untitled Report")}</div>
+        <div class="rc-title">${escHtml(`${r.country} - ${r.city} - ${new Date(r.projectDateTo).getFullYear()}` || "Untitled Report")}</div>
         <div class="rc-loc">${escHtml(location)}</div>
         ${date ? `<div class="rc-date">Deleted: ${date}</div>` : ""}
       </div>`;
