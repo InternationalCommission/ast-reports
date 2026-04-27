@@ -616,7 +616,7 @@
     update() {
       const photo = this.photos[this.index];
       const img = document.getElementById("lightboxImg");
-      img.src = photo.webUrl;
+      img.src = photo.thumbnail;
       img.alt = photo.name;
       document.getElementById("lightboxCounter").textContent = `${this.index + 1} / ${this.photos.length}`;
       document.getElementById("lightboxFilename").textContent = photo.name;
