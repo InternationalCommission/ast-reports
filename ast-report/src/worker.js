@@ -120,6 +120,10 @@ let _cachedVpList = null;
 let _vpListFetchedAt = 0;
 const VP_LIST_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const TRANSLATION_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
+const DEFAULT_SUBMISSION_MIN_INTERVAL_SECONDS = 15; // lenient anti-burst
+const DEFAULT_SUBMISSION_WINDOW_SECONDS = 10 * 60; // 10 minutes
+const DEFAULT_SUBMISSION_MAX_PER_WINDOW = 20; // lenient throughput
+const _submissionRateLimitCache = new Map();
 
 async function getAreaVpMapping(env, token) {
   const now = Date.now();
@@ -190,7 +194,7 @@ async function getVpAreaForEmail(env, email) {
   for (const [area, vpInfo] of Object.entries(mapping)) {
     const emails = parseMultiEmail(vpInfo.email);
     if (emails.some(e => e.toLowerCase() === normalizedEmail)) {
-      console.log(`[getVpAreaForEmail] User ${email} matched VP for area "${area}"`);
+      console.log(`[getVpAreaForEmail] Matched VP area "${area}"`);
       return area;
     }
   }
@@ -221,6 +225,20 @@ async function handleSubmit(request, env) {
   allowedOrigins.push("http://localhost:8080");
   if (env.ALLOWED_ORIGIN && !allowedOrigins.includes(origin)) {
     return corsResponse({ error: "Forbidden origin" }, 403, env);
+  }
+
+  const rateLimitResult = await enforceSubmissionRateLimit(request, env);
+  if (!rateLimitResult.ok) {
+    return corsResponse(
+      {
+        error: "Too many submissions. Please try again shortly.",
+        retryAfterSeconds: rateLimitResult.retryAfterSeconds,
+        details: rateLimitResult.reason,
+      },
+      429,
+      env,
+      { "Retry-After": String(rateLimitResult.retryAfterSeconds) }
+    );
   }
 
   try {
@@ -1002,12 +1020,9 @@ async function validateAzureToken(request, env) {
 function getUserRoles(payload, env) {
   const groups = payload.groups || [];
   const roles = [];
-  console.log("[DEBUG] Token groups claim:", groups);
-  console.log("[DEBUG] Expected Group IDs - SuperAdmin:", env.SUPER_ADMIN_GROUP_ID, "ReadWrite:", env.READWRITE_GROUP_ID, "ReadOnly:", env.READONLY_GROUP_ID);
   if (groups.includes(env.SUPER_ADMIN_GROUP_ID)) roles.push("SuperAdmin");
   if (groups.includes(env.READWRITE_GROUP_ID)) roles.push("ReadWrite");
   if (groups.includes(env.READONLY_GROUP_ID)) roles.push("ReadOnly");
-  console.log("[DEBUG] Resolved roles:", roles);
   return roles;
 }
 
@@ -1332,14 +1347,11 @@ async function handlePhotoProxy(request, env) {
 		console.log(`[PhotoProxy] Response status: ${imageRes.status}, Content-Type: ${imageRes.headers.get("Content-Type")}`);
 		
 		if (!imageRes.ok) {
-			// Log response body for error details
-			let errorBody = '';
 			try {
-				errorBody = await imageRes.text();
-				console.error(`[PhotoProxy] Failed to fetch ${photoUrl}: ${imageRes.status}, body: ${errorBody.substring(0, 500)}`);
+				await imageRes.text();
+				console.error(`[PhotoProxy] Failed to fetch photo (${imageRes.status})`);
 			} catch (e) {
-				console.error(`[PhotoProxy] Failed to fetch ${photoUrl}: ${imageRes.status}, could not read body`);
-				errorBody = 'Could not read error response';
+				console.error(`[PhotoProxy] Failed to fetch photo (${imageRes.status}), could not read body`);
 			}
 				// Return a sanitized error response (avoid leaking upstream response details)
 				return new Response(JSON.stringify({
@@ -1988,12 +2000,8 @@ async function uploadPhotos(photoFiles, fields, env) {
 async function uploadPhotoPowerAutomate({ webhookUrl, siteUrl, folderPath, fileName, contentType, buffer, projectTitle }) {
 	console.log(`[uploadPhotoPowerAutomate] ${fileName}: ${buffer.length} bytes via Power Automate`);
 	
-	// Convert buffer to base64 without spreading (avoid stack overflow for large files)
-	let binary = '';
-	for (let i = 0; i < buffer.length; i++) {
-		binary += String.fromCharCode(buffer[i]);
-	}
-	const base64Content = btoa(binary);
+	// Convert buffer to base64 in chunks to avoid massive intermediate strings for large images.
+	const base64Content = uint8ToBase64(buffer);
 	
 	// Strip site path from folderPath - SharePoint only needs relative path
 	const sitePath = new URL(siteUrl).pathname;
@@ -2014,7 +2022,7 @@ async function uploadPhotoPowerAutomate({ webhookUrl, siteUrl, folderPath, fileN
 		projectTitle: projectTitle,
 	};
 	
-	console.log(`[uploadPhotoPowerAutomate] Sending to webhook: ${webhookUrl.substring(0, 50)}...`);
+	console.log('[uploadPhotoPowerAutomate] Sending payload to configured webhook endpoint');
 	
 	const response = await fetch(webhookUrl, {
 		method: 'POST',
@@ -2131,7 +2139,7 @@ async function uploadPhotoSPO({ siteUrl, sharePointToken, folderServerRelativePa
 		: folderServerRelativePath;
 	
 	const requestDigest = await getSharePointRequestDigest(siteUrl, sharePointToken);
-	console.log(`[uploadPhotoSPO] Got digest: ${requestDigest.substring(0, 50)}...`);
+	console.log('[uploadPhotoSPO] Got SharePoint request digest');
 	
 	// Strip site path prefix since SharePoint REST API is already at that site
 	const sitePath = new URL(siteUrl).pathname;
@@ -2222,7 +2230,7 @@ async function getSharePointToken(env) {
 
 async function getUserToken(env, scope) {
 	const scopeLabel = scope === 'graph' ? 'Graph' : 'SharePoint';
-	console.log(`[getUserToken] Getting ${scopeLabel} user token via ROPC flow`);
+	console.log(`[getUserToken] Getting ${scopeLabel} user token`);
 	
 	if (!env.SERVICE_ACCOUNT_USERNAME || !env.SERVICE_ACCOUNT_PASSWORD) {
 		throw new Error('SERVICE_ACCOUNT_USERNAME and SERVICE_ACCOUNT_PASSWORD are required for user authentication');
@@ -2236,8 +2244,6 @@ async function getUserToken(env, scope) {
 		tokenScope = `https://${hostname}/.default`;
 	}
 	
-	console.log(`[getUserToken] Scope: ${tokenScope}`);
-
 	const body = new URLSearchParams({
 		client_id: env.AZURE_CLIENT_ID,
 		client_secret: env.AZURE_CLIENT_SECRET || '',
@@ -2260,15 +2266,6 @@ async function getUserToken(env, scope) {
 		throw new Error(`User token failed: ${data.error_description || data.error}`);
 	}
 	
-	// Decode token to check scopes
-	try {
-		const tokenParts = data.access_token.split('.');
-		const payload = JSON.parse(atob(tokenParts[1]));
-		console.log(`[getUserToken] ${scopeLabel} token scopes:`, payload.scp || payload.roles || 'no scopes');
-	} catch (e) {
-		console.log('[getUserToken] Could not decode token payload');
-	}
-
 	console.log(`[getUserToken] ${scopeLabel} user token obtained successfully`);
 	return data.access_token;
 }
@@ -2299,7 +2296,7 @@ async function getSharePointTokenWithKeyVault(env, scope) {
 		throw new Error('Certificate thumbprint (x5t) not found in Key Vault certificate');
 	}
 
-	console.log('[getSharePointToken] Got certificate thumbprint from Key Vault:', certX5t);
+	console.log('[getSharePointToken] Got certificate metadata from Key Vault');
 
 	const now = Math.floor(Date.now() / 1000);
 	const header = {
@@ -2445,7 +2442,7 @@ async function getSharePointTokenWithCert(env, scope) {
 		const now = Math.floor(Date.now() / 1000);
 
 		const thumbprint = await getCertThumbprint(env.AZURE_CLIENT_CERTIFICATE);
-		console.log('[getSharePointToken] Certificate thumbprint:', thumbprint);
+		console.log('[getSharePointToken] Certificate loaded');
 
 		const header = {
 			alg: 'RS256',
@@ -2454,7 +2451,7 @@ async function getSharePointTokenWithCert(env, scope) {
 		};
 
 		const jti = generateUUID();
-		console.log('[getSharePointToken] Generated JWT ID:', jti);
+		console.log('[getSharePointToken] Generated JWT assertion ID');
 
 		const payload = {
 			aud: `https://login.microsoftonline.com/${env.AZURE_TENANT_ID}/v2.0`,
@@ -2806,6 +2803,15 @@ function sanitizeFileName(fileName) {
 	return String(fileName || 'upload.bin').replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
+function uint8ToBase64(bytes, chunkSize = 0x8000) {
+	let binary = '';
+	for (let i = 0; i < bytes.length; i += chunkSize) {
+		const chunk = bytes.subarray(i, i + chunkSize);
+		binary += String.fromCharCode(...chunk);
+	}
+	return btoa(binary);
+}
+
 function normalizePath(pathValue) {
 	const normalized = String(pathValue || '').trim().replace(/\\/g, '/').replace(/\/+/g, '/');
 	if (!normalized) return '';
@@ -2825,7 +2831,7 @@ async function sendConfirmationEmail(fields, env, token) {
   const vpInfo = vpMapping[area];
   const vpEmails = vpInfo ? parseMultiEmail(vpInfo.email) : [];
 
-  console.log(`[sendConfirmationEmail] Area: ${area}, VP emails: ${JSON.stringify(vpEmails)}`);
+  console.log(`[sendConfirmationEmail] Area: ${area}, VP recipients resolved: ${vpEmails.length}`);
 
   const totalCoordTrip =
     (toNum(fields.ticketsCost)       || 0) +
@@ -2954,7 +2960,7 @@ async function getAccessToken(env) {
   const clientSecret = env.AZURE_CLIENT_SECRET;
   const graphScope = 'https://graph.microsoft.com/.default';
 
-  console.log(`>>> Token scope: ${graphScope}`);
+  console.log('>>> Token scope configured');
   return fetchTokenV2(tenantId, clientId, clientSecret, graphScope);
 }
 
@@ -2988,7 +2994,7 @@ function toNum(val) {
   return isNaN(n) ? null : n;
 }
 
-function corsResponse(body, status, env) {
+function corsResponse(body, status, env, extraHeaders = {}) {
   return new Response(body ? JSON.stringify(body) : null, {
     status,
     headers: {
@@ -2996,8 +3002,74 @@ function corsResponse(body, status, env) {
       "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
       "Content-Type": "application/json",
+      ...extraHeaders,
     },
   });
+}
+
+function getClientIdentifier(request) {
+	const cfIp = request.headers.get("CF-Connecting-IP");
+	if (cfIp) return cfIp.trim();
+	const xff = request.headers.get("X-Forwarded-For");
+	if (xff) return xff.split(",")[0].trim();
+	return "unknown-client";
+}
+
+async function enforceSubmissionRateLimit(request, env) {
+	const clientId = getClientIdentifier(request);
+	const now = Date.now();
+	const minIntervalMs = Math.max(0, (parseInt(env.RATE_LIMIT_MIN_INTERVAL_SECONDS, 10) || DEFAULT_SUBMISSION_MIN_INTERVAL_SECONDS) * 1000);
+	const windowMs = Math.max(60_000, (parseInt(env.RATE_LIMIT_WINDOW_SECONDS, 10) || DEFAULT_SUBMISSION_WINDOW_SECONDS) * 1000);
+	const maxPerWindow = Math.max(1, parseInt(env.RATE_LIMIT_MAX_SUBMISSIONS, 10) || DEFAULT_SUBMISSION_MAX_PER_WINDOW);
+	const key = `ratelimit:submit:${clientId}`;
+
+	let state = null;
+
+	// Prefer KV if present for cross-isolate consistency. Fall back to in-memory cache.
+	if (env.SHARE_LINKS) {
+		try {
+			const raw = await env.SHARE_LINKS.get(key);
+			state = raw ? JSON.parse(raw) : null;
+		} catch (err) {
+			console.warn("[rateLimit] Failed to read KV state, falling back to memory cache");
+			state = _submissionRateLimitCache.get(key) || null;
+		}
+	} else {
+		state = _submissionRateLimitCache.get(key) || null;
+	}
+
+	if (!state || typeof state !== "object") state = { lastSubmissionAt: 0, timestamps: [] };
+	if (!Array.isArray(state.timestamps)) state.timestamps = [];
+
+	state.timestamps = state.timestamps.filter(ts => (now - ts) <= windowMs);
+
+	if (state.lastSubmissionAt && (now - state.lastSubmissionAt) < minIntervalMs) {
+		const retryAfterSeconds = Math.ceil((minIntervalMs - (now - state.lastSubmissionAt)) / 1000);
+		return { ok: false, retryAfterSeconds, reason: "min_interval" };
+	}
+
+	if (state.timestamps.length >= maxPerWindow) {
+		const oldestTs = state.timestamps[0];
+		const retryAfterSeconds = Math.ceil(((oldestTs + windowMs) - now) / 1000);
+		return { ok: false, retryAfterSeconds: Math.max(retryAfterSeconds, 1), reason: "window_quota" };
+	}
+
+	state.lastSubmissionAt = now;
+	state.timestamps.push(now);
+	state.timestamps.sort((a, b) => a - b);
+
+	if (env.SHARE_LINKS) {
+		try {
+			await env.SHARE_LINKS.put(key, JSON.stringify(state), { expirationTtl: Math.ceil(windowMs / 1000) + 3600 });
+		} catch (err) {
+			console.warn("[rateLimit] Failed to persist KV state, using memory cache fallback");
+			_submissionRateLimitCache.set(key, state);
+		}
+	} else {
+		_submissionRateLimitCache.set(key, state);
+	}
+
+	return { ok: true, retryAfterSeconds: 0, reason: null };
 }
 
 function statRow(label, value) {
