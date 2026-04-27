@@ -869,34 +869,48 @@
   let currentReportCache = null;
 
   // ── Translation API helpers ────────────────────────────────────────────────
-  async function translateWithGoogle(text, sourceLang = "auto", targetLang = "en") {
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sourceLang)}&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(text)}`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`Google Translate HTTP ${res.status}`);
+  function splitForTranslation(text, maxLen = 3500) {
+    if (!text || text.length <= maxLen) return [text];
+    const chunks = [];
+    let cursor = 0;
+    while (cursor < text.length) {
+      let end = Math.min(cursor + maxLen, text.length);
+      if (end < text.length) {
+        const breakOn = Math.max(
+          text.lastIndexOf(". ", end),
+          text.lastIndexOf("\n", end),
+          text.lastIndexOf(" ", end)
+        );
+        if (breakOn > cursor + 400) end = breakOn + 1;
+      }
+      chunks.push(text.slice(cursor, end).trim());
+      cursor = end;
     }
-    const data = await res.json();
-    if (!Array.isArray(data) || !Array.isArray(data[0])) {
-      throw new Error("Unexpected Google Translate response shape");
-    }
-    const translated = data[0]
-      .map((entry) => Array.isArray(entry) ? entry[0] : "")
-      .join("")
-      .trim();
-    if (!translated) {
-      throw new Error("Google Translate returned empty text");
-    }
-    return translated;
+    return chunks.filter(Boolean);
   }
 
-  async function translateWithMyMemory(text, sourceLang = "auto", targetLang = "en") {
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sourceLang}|${targetLang}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.responseStatus === 200 && data.responseData?.translatedText) {
-      return data.responseData.translatedText;
+  async function translateWithGoogle(text, sourceLang = "auto", targetLang = "en") {
+    const chunks = splitForTranslation(text);
+    const translatedChunks = [];
+
+    for (const chunk of chunks) {
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sourceLang)}&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(chunk)}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`Google Translate HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (!Array.isArray(data) || !Array.isArray(data[0])) {
+        throw new Error("Unexpected Google Translate response shape");
+      }
+      const translated = data[0]
+        .map((entry) => Array.isArray(entry) ? entry[0] : "")
+        .join("")
+        .trim();
+      translatedChunks.push(translated || chunk);
     }
-    throw new Error(`MyMemory responseStatus ${data.responseStatus || res.status}`);
+
+    return translatedChunks.join(" ").trim();
   }
 
   async function translateText(text, sourceLang = "auto", targetLang = "en") {
@@ -906,24 +920,12 @@
       return translationCache.get(cacheKey);
     }
 
-    const providers = [
-      () => translateWithGoogle(text, sourceLang, targetLang),
-      () => translateWithMyMemory(text, sourceLang, targetLang),
-    ];
-
     try {
-      for (const provider of providers) {
-        try {
-          const translation = await provider();
-          translationCache.set(cacheKey, translation);
-          return translation;
-        } catch (providerErr) {
-          console.warn("Translation provider failed:", providerErr?.message || providerErr);
-        }
-      }
-      return text;
+      const translation = await translateWithGoogle(text, sourceLang, targetLang);
+      translationCache.set(cacheKey, translation);
+      return translation;
     } catch (err) {
-      console.error("Translation error:", err);
+      console.error("Translation error (Google):", err);
       return text;
     }
   }
