@@ -868,50 +868,86 @@
   let translationCache   = new Map();
   let currentReportCache = null;
 
-  // ── Translation API (MyMemory - free, no API key required) ─────────────────
+  // ── Translation API helpers ────────────────────────────────────────────────
+  function splitForTranslation(text, maxLen = 3500) {
+    if (!text || text.length <= maxLen) return [text];
+    const chunks = [];
+    let cursor = 0;
+    while (cursor < text.length) {
+      let end = Math.min(cursor + maxLen, text.length);
+      if (end < text.length) {
+        const breakOn = Math.max(
+          text.lastIndexOf(". ", end),
+          text.lastIndexOf("\n", end),
+          text.lastIndexOf(" ", end)
+        );
+        if (breakOn > cursor + 400) end = breakOn + 1;
+      }
+      chunks.push(text.slice(cursor, end).trim());
+      cursor = end;
+    }
+    return chunks.filter(Boolean);
+  }
+
+  async function translateWithGoogle(text, sourceLang = "auto", targetLang = "en") {
+    const chunks = splitForTranslation(text);
+    const translatedChunks = [];
+
+    for (const chunk of chunks) {
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sourceLang)}&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(chunk)}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`Google Translate HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (!Array.isArray(data) || !Array.isArray(data[0])) {
+        throw new Error("Unexpected Google Translate response shape");
+      }
+      const translated = data[0]
+        .map((entry) => Array.isArray(entry) ? entry[0] : "")
+        .join("")
+        .trim();
+      translatedChunks.push(translated || chunk);
+    }
+
+    return translatedChunks.join(" ").trim();
+  }
+
   async function translateText(text, sourceLang = "auto", targetLang = "en") {
     if (!text || !text.trim()) return text;
     const cacheKey = `${sourceLang}:${targetLang}:${text}`;
     if (translationCache.has(cacheKey)) {
       return translationCache.get(cacheKey);
     }
+
     try {
-      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sourceLang}|${targetLang}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.responseStatus === 200 && data.responseData?.translatedText) {
-        const translation = data.responseData.translatedText;
-        translationCache.set(cacheKey, translation);
-        return translation;
-      }
-      console.warn("Translation API issue:", data.responseStatus, data);
-      return text;
+      const translation = await translateWithGoogle(text, sourceLang, targetLang);
+      translationCache.set(cacheKey, translation);
+      return translation;
     } catch (err) {
-      console.error("Translation error:", err);
+      console.error("Translation error (Google):", err);
       return text;
     }
   }
 
   async function translateReport(r) {
     if (!r) return null;
+
+    // Translate only user-submitted narrative text (not UI labels or location metadata)
     const translateField = async (val) => val ? await translateText(String(val)) : val;
-    const translateTestimonies = async (testimonies) => {
-      if (!Array.isArray(testimonies)) return testimonies;
-      const translated = await Promise.all(testimonies.map(async (t) => ({
-        ...t,
-        text: t.text ? await translateText(t.text) : t.text,
-        author: t.author ? await translateText(t.author) : t.author,
-      })));
-      return translated;
-    };
+
+    const translatedTestimonies = Array.isArray(r.testimonies)
+      ? await Promise.all((r.testimonies || []).map(async (t) => ({
+          ...t,
+          text: await translateField(t.text),
+          // Keep author names as submitted; translating proper names is usually undesirable.
+        })))
+      : r.testimonies;
+
     return {
       ...r,
-      projectTitle: await translateField(r.projectTitle),
-      city: await translateField(r.city),
-      country: await translateField(r.country),
-      area: await translateField(r.area),
       introduction: await translateField(r.introduction),
-      testimonies: await translateTestimonies(r.testimonies),
+      testimonies: translatedTestimonies,
       ralliesDescription: await translateField(r.ralliesDescription),
       additionalNeedDescription: await translateField(r.additionalNeedDescription),
     };
