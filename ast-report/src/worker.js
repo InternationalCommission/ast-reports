@@ -1260,22 +1260,22 @@ async function handleGetPhotos(request, env, id) {
 			files = filesData.d?.results || filesData.value || [];
 		}
 		
-		const photos = files.map(file => {
-			const origin = new URL(env.SHAREPOINT_SITE_URL).origin;
-			const serverRelativeUrl = file.ServerRelativeUrl || file.name;
-			const webUrl = serverRelativeUrl ? `${origin}${serverRelativeUrl}` : null;
-			// Use proxy URL for thumbnails so all authenticated users can view them
-			const proxyUrl = webUrl ? `${new URL(request.url).origin}/proxy/photo?url=${encodeURIComponent(webUrl)}` : null;
-			
-			return {
-				id: file.UniqueId || file.Name,
-				name: file.Name,
-				webUrl,
-				thumbnail: proxyUrl,
-				lastModified: file.TimeLastModified || null,
-				size: file.Length || null,
-			};
-		});
+			const photos = await Promise.all(files.map(async (file) => {
+				const origin = new URL(env.SHAREPOINT_SITE_URL).origin;
+				const serverRelativeUrl = file.ServerRelativeUrl || file.name;
+				const webUrl = serverRelativeUrl ? `${origin}${serverRelativeUrl}` : null;
+				// Use signed proxy URLs for thumbnails so <img> requests work without Authorization headers.
+				const proxyUrl = webUrl ? await buildSignedPhotoProxyUrl(request, env, webUrl) : null;
+				
+				return {
+					id: file.UniqueId || file.Name,
+					name: file.Name,
+					webUrl,
+					thumbnail: proxyUrl,
+					lastModified: file.TimeLastModified || null,
+					size: file.Length || null,
+				};
+			}));
 
 		return corsResponse({ photos, folderUrl }, 200, env);
 	} catch (err) {
@@ -1289,15 +1289,27 @@ async function handleGetPhotos(request, env, id) {
 // ────────────────────────────────────────────────────────────────────────────
 
 async function handlePhotoProxy(request, env) {
-	const authError = await validateAzureToken(request, env);
-	if (authError) return corsResponse({ error: authError }, 401, env);
-
 	try {
 		const url = new URL(request.url);
 		const photoUrl = url.searchParams.get("url");
+		const expires = parseInt(url.searchParams.get("expires") || "0", 10);
+		const sig = url.searchParams.get("sig") || "";
 		
 		if (!photoUrl) {
 			return corsResponse({ error: "Missing url parameter" }, 400, env);
+		}
+
+		if (!env.EDIT_TOKEN_SECRET) {
+			return corsResponse({ error: "Photo proxy not configured" }, 500, env);
+		}
+
+		if (!expires || Date.now() > expires) {
+			return corsResponse({ error: "Photo link expired" }, 401, env);
+		}
+
+		const isValidSignature = await validateEditToken(photoUrl, sig, expires, env.EDIT_TOKEN_SECRET);
+		if (!isValidSignature) {
+			return corsResponse({ error: "Invalid photo signature" }, 401, env);
 		}
 		
 		let photoUrlObj;
@@ -1315,10 +1327,13 @@ async function handlePhotoProxy(request, env) {
 			? normalizePath(configuredFolder)
 			: normalizePath(`${sitePath}/${configuredFolder}`);
 
-		// Validate exact tenant host + site/folder prefix
-		const normalizedPath = normalizePath(photoUrlObj.pathname);
+		// Validate exact tenant host + site/folder prefix, with decoded paths for encoded URLs.
+		const decodedPhotoPath = safeDecodePath(photoUrlObj.pathname);
+		const normalizedPath = normalizePath(decodedPhotoPath);
+		const normalizedAllowedFolderPrefix = normalizePath(safeDecodePath(allowedFolderPrefix));
 		const inAllowedFolder = normalizedPath === allowedFolderPrefix || normalizedPath.startsWith(`${allowedFolderPrefix}/`);
-		if (photoUrlObj.protocol !== "https:" || photoUrlObj.hostname !== allowedHost || !inAllowedFolder) {
+		const inAllowedDecodedFolder = normalizedPath === normalizedAllowedFolderPrefix || normalizedPath.startsWith(`${normalizedAllowedFolderPrefix}/`);
+		if (photoUrlObj.protocol !== "https:" || photoUrlObj.hostname !== allowedHost || (!inAllowedFolder && !inAllowedDecodedFolder)) {
 			return corsResponse({ error: "Invalid URL" }, 400, env);
 		}
 		
@@ -1329,11 +1344,12 @@ async function handlePhotoProxy(request, env) {
 		console.log(`[PhotoProxy] Token obtained, length: ${sharePointToken.length}`);
 		
 		// Extract server-relative path from the URL
-		const serverRelativePath = photoUrlObj.pathname; // e.g., /sites/ASTReports/Documents/Report Photos/...
+		const serverRelativePath = decodedPhotoPath; // e.g., /sites/ASTReports/Documents/Report Photos/...
 		console.log(`[PhotoProxy] Server-relative path: ${serverRelativePath}`);
 		
 		// Build SharePoint REST API URL to get file content
-		const apiUrl = `${env.SHAREPOINT_SITE_URL}/_api/web/GetFileByServerRelativeUrl('${serverRelativePath}')/$value`;
+		const escapedPath = serverRelativePath.replace(/'/g, "''");
+		const apiUrl = `${env.SHAREPOINT_SITE_URL}/_api/web/GetFileByServerRelativeUrl('${escapedPath}')/$value`;
 		console.log(`[PhotoProxy] API URL: ${apiUrl}`);
 		
 		const imageRes = await fetch(apiUrl, {
@@ -2816,6 +2832,24 @@ function normalizePath(pathValue) {
 	const normalized = String(pathValue || '').trim().replace(/\\/g, '/').replace(/\/+/g, '/');
 	if (!normalized) return '';
 	return normalized.startsWith('/') ? normalized : `/${normalized}`;
+}
+
+function safeDecodePath(pathValue) {
+	try {
+		return decodeURIComponent(pathValue);
+	} catch {
+		return pathValue;
+	}
+}
+
+async function buildSignedPhotoProxyUrl(request, env, webUrl) {
+	if (!env.EDIT_TOKEN_SECRET) {
+		return `${new URL(request.url).origin}/proxy/photo?url=${encodeURIComponent(webUrl)}`;
+	}
+
+	const expires = Date.now() + (60 * 60 * 1000); // 1 hour
+	const sig = await signData(`${webUrl}:${expires}`, env.EDIT_TOKEN_SECRET);
+	return `${new URL(request.url).origin}/proxy/photo?url=${encodeURIComponent(webUrl)}&expires=${expires}&sig=${sig}`;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
