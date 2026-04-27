@@ -175,16 +175,9 @@ function parseMultiEmail(emailStr) {
   return emailStr.split(",").map(e => e.trim()).filter(e => e && e.includes("@"));
 }
 
-function getEmailFromToken(token) {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(b64urlDecode(parts[1]));
-    // Check common email claims
-    return payload.email || payload.preferred_username || payload.upn || null;
-  } catch {
-    return null;
-  }
+function getEmailFromPayload(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  return payload.email || payload.preferred_username || payload.upn || null;
 }
 
 async function getVpAreaForEmail(env, email) {
@@ -205,39 +198,20 @@ async function getVpAreaForEmail(env, email) {
   return null;
 }
 
-async function isUserAdmin(request, env) {
-  const authHeader = request.headers.get("Authorization") || "";
-  if (!authHeader.startsWith("Bearer ")) return false;
-  
-  const token = authHeader.slice(7).trim();
-  const parts = token.split(".");
-  if (parts.length !== 3) return false;
-  
-  try {
-    const payload = JSON.parse(b64urlDecode(parts[1]));
-    const roles = getUserRoles(payload, env);
-    return roles.length > 0; // Any role means they have admin access
-  } catch {
-    return false;
-  }
+async function isUserAdmin(request, env, verifiedPayload = null) {
+  const payload = verifiedPayload || (await parseAndValidateAzureToken(request, env)).payload;
+  if (!payload) return false;
+  const roles = getUserRoles(payload, env);
+  return roles.length > 0; // Any role means they have admin access
 }
 
-async function isVpFromGroup(request, env) {
-  const authHeader = request.headers.get("Authorization") || "";
-  if (!authHeader.startsWith("Bearer ")) return false;
+async function isVpFromGroup(request, env, verifiedPayload = null) {
   if (!env.VP_GROUP_ID) return false;
-  
-  const token = authHeader.slice(7).trim();
-  const parts = token.split(".");
-  if (parts.length !== 3) return false;
-  
-  try {
-    const payload = JSON.parse(b64urlDecode(parts[1]));
-    const groups = payload.groups || [];
-    return groups.includes(env.VP_GROUP_ID);
-  } catch {
-    return false;
-  }
+
+  const payload = verifiedPayload || (await parseAndValidateAzureToken(request, env)).payload;
+  if (!payload) return false;
+  const groups = payload.groups || [];
+  return groups.includes(env.VP_GROUP_ID);
 }
 
 async function handleSubmit(request, env) {
@@ -318,8 +292,8 @@ async function handleSubmit(request, env) {
 // ────────────────────────────────────────────────────────────────────────────
 
 async function handleGetReports(request, env, url) {
-  const authError = await validateAzureToken(request, env);
-  if (authError) return corsResponse({ error: authError }, 401, env);
+  const tokenValidation = await parseAndValidateAzureToken(request, env);
+  if (tokenValidation.error) return corsResponse({ error: tokenValidation.error }, 401, env);
 
   try {
     const token = await getAccessToken(env);
@@ -330,10 +304,8 @@ async function handleGetReports(request, env, url) {
     const simulateUser = url.searchParams.get("simulateUser") || null;
 
     // Get user email and check if they're a VP (via group membership)
-    const authHeader = request.headers.get("Authorization") || "";
-    const jwtToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-    const actualUserEmail = jwtToken ? getEmailFromToken(jwtToken) : null;
-    const isActualAdmin = await isUserAdmin(request, env);
+    const actualUserEmail = getEmailFromPayload(tokenValidation.payload);
+    const isActualAdmin = await isUserAdmin(request, env, tokenValidation.payload);
 
     // If simulateUser is provided and requester is SuperAdmin, use simulated user's email
     let userEmail = actualUserEmail;
@@ -344,11 +316,11 @@ async function handleGetReports(request, env, url) {
       console.log(`[handleGetReports] SuperAdmin simulating user: ${userEmail}`);
     }
 
-    const isVp = simulateUser && isActualAdmin ? false : await isVpFromGroup(request, env);
+    const isVp = simulateUser && isActualAdmin ? false : await isVpFromGroup(request, env, tokenValidation.payload);
     const vpArea = isVp && userEmail ? await getVpAreaForEmail(env, userEmail) : (isSimulating ? await getVpAreaForEmail(env, userEmail) : null);
 
     // Check if user has admin role (SuperAdmin, ReadWrite, ReadOnly all have access)
-    const isAdmin = isSimulating ? false : await isUserAdmin(request, env);
+    const isAdmin = isSimulating ? false : await isUserAdmin(request, env, tokenValidation.payload);
 
     // VP in group but not on VP list = no access
     if (!isSimulating && isVp && !vpArea && !isAdmin) {
@@ -914,6 +886,8 @@ async function handleUpdateReport(request, env, id) {
 // Module-level JWKS cache (lives for the duration of the Worker isolate)
 const _jwksCache = { keys: null, fetchedAt: 0 };
 const JWKS_TTL_MS = 60 * 60 * 1000; // 1 hour
+const JWT_CLOCK_SKEW_SECONDS = 60;
+const ALLOWED_JWT_ALGS = new Set(["RS256"]);
 
 async function getJwks(tenantId) {
   const now = Date.now();
@@ -925,6 +899,87 @@ async function getJwks(tenantId) {
   _jwksCache.keys      = data.keys;
   _jwksCache.fetchedAt = now;
   return data.keys;
+}
+
+async function parseAndValidateAzureToken(request, env) {
+  const authHeader = request.headers.get("Authorization") || "";
+  if (!authHeader.startsWith("Bearer ")) {
+    return { error: "Missing Bearer token", payload: null, header: null, token: null };
+  }
+
+  const token = authHeader.slice(7).trim();
+  const parts = token.split(".");
+  if (parts.length !== 3) return { error: "Malformed JWT", payload: null, header: null, token: null };
+
+  let header, payload;
+  try {
+    header = JSON.parse(b64urlDecode(parts[0]));
+    payload = JSON.parse(b64urlDecode(parts[1]));
+  } catch {
+    return { error: "Could not decode JWT", payload: null, header: null, token: null };
+  }
+
+  if (!ALLOWED_JWT_ALGS.has(header.alg)) {
+    return { error: `Unsupported JWT alg: ${header.alg || "unknown"}`, payload: null, header: null, token: null };
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const exp = Number(payload.exp);
+  if (!Number.isFinite(exp) || exp <= now - JWT_CLOCK_SKEW_SECONDS) {
+    return { error: "Token expired", payload: null, header: null, token: null };
+  }
+
+  if (payload.nbf !== undefined) {
+    const nbf = Number(payload.nbf);
+    if (!Number.isFinite(nbf) || nbf > now + JWT_CLOCK_SKEW_SECONDS) {
+      return { error: "Token not yet valid", payload: null, header: null, token: null };
+    }
+  }
+
+  if (payload.iat !== undefined) {
+    const iat = Number(payload.iat);
+    if (!Number.isFinite(iat) || iat > now + JWT_CLOCK_SKEW_SECONDS) {
+      return { error: "Token issued in the future", payload: null, header: null, token: null };
+    }
+  }
+
+  // Issuer — accept both Azure AD v1.0 (sts.windows.net) and v2.0 (login.microsoftonline.com)
+  const validIssuers = [
+    `https://login.microsoftonline.com/${env.AZURE_TENANT_ID}/v2.0`,
+    `https://sts.windows.net/${env.AZURE_TENANT_ID}/`,
+  ];
+  if (!validIssuers.includes(payload.iss)) {
+    return { error: `Invalid issuer: ${payload.iss}`, payload: null, header: null, token: null };
+  }
+
+  // Audience — accept both bare GUID and api:// URI forms
+  const adminClientId = env.ADMIN_CLIENT_ID || env.AZURE_CLIENT_ID;
+  const validAudiences = [adminClientId, `api://${adminClientId}`];
+  if (!validAudiences.includes(payload.aud)) {
+    return { error: `Invalid audience: ${payload.aud}`, payload: null, header: null, token: null };
+  }
+
+  try {
+    const keys = await getJwks(env.AZURE_TENANT_ID);
+    const jwk = keys.find(k => k.kid === header.kid);
+    if (!jwk) return { error: `No matching key for kid=${header.kid}`, payload: null, header: null, token: null };
+
+    const cryptoKey = await crypto.subtle.importKey(
+      "jwk", jwk,
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false, ["verify"]
+    );
+
+    const signingInput = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
+    const signature = b64urlToBytes(parts[2]);
+    const valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", cryptoKey, signature, signingInput);
+    if (!valid) return { error: "Invalid signature", payload: null, header: null, token: null };
+  } catch (err) {
+    console.error("JWT sig verification error:", err);
+    return { error: "Signature verification failed", payload: null, header: null, token: null };
+  }
+
+  return { error: null, payload, header, token };
 }
 
 /**
@@ -939,66 +994,9 @@ async function getJwks(tenantId) {
  *  - RSA-SHA256 signature verified against Azure AD's public JWKS
  */
 async function validateAzureToken(request, env) {
-  const authHeader = request.headers.get("Authorization") || "";
-  if (!authHeader.startsWith("Bearer ")) return "Missing Bearer token";
-
-  const token = authHeader.slice(7).trim();
-  const parts = token.split(".");
-  if (parts.length !== 3) return "Malformed JWT";
-
-  let header, payload;
-  try {
-    header  = JSON.parse(b64urlDecode(parts[0]));
-    payload = JSON.parse(b64urlDecode(parts[1]));
-  } catch {
-    return "Could not decode JWT";
-  }
-
-  // Expiry
-  if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-    return "Token expired";
-  }
-
-  // Issuer — accept both Azure AD v1.0 (sts.windows.net) and v2.0 (login.microsoftonline.com)
-  const validIssuers = [
-    `https://login.microsoftonline.com/${env.AZURE_TENANT_ID}/v2.0`,
-    `https://sts.windows.net/${env.AZURE_TENANT_ID}/`,
-  ];
-  if (!validIssuers.includes(payload.iss)) {
-    return `Invalid issuer: ${payload.iss}`;
-  }
-
-  // Audience — accept both bare GUID and api:// URI forms
-  const adminClientId = env.ADMIN_CLIENT_ID || env.AZURE_CLIENT_ID;
-  const validAudiences = [adminClientId, `api://${adminClientId}`];
-  if (!validAudiences.includes(payload.aud)) {
-    return `Invalid audience: ${payload.aud}`;
-  }
-
-  // Signature
-  try {
-    const keys    = await getJwks(env.AZURE_TENANT_ID);
-    const jwk     = keys.find(k => k.kid === header.kid);
-    if (!jwk) return `No matching key for kid=${header.kid}`;
-
-    const cryptoKey = await crypto.subtle.importKey(
-      "jwk", jwk,
-      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-      false, ["verify"]
-    );
-
-    const signingInput = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
-    const signature    = b64urlToBytes(parts[2]);
-    const valid        = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", cryptoKey, signature, signingInput);
-
-    if (!valid) return "Invalid signature";
-  } catch (err) {
-    console.error("JWT sig verification error:", err);
-    return "Signature verification failed";
-  }
-
-  console.log("[DEBUG] Token payload:", JSON.stringify(payload, null, 2));
-  return null; // ✓ valid
+  const result = await parseAndValidateAzureToken(request, env);
+  if (result.error) return result.error;
+  return null;
 }
 
 function getUserRoles(payload, env) {
@@ -1014,21 +1012,9 @@ function getUserRoles(payload, env) {
 }
 
 async function requireRole(request, env, requiredRoles) {
-  const authHeader = request.headers.get("Authorization") || "";
-  if (!authHeader.startsWith("Bearer ")) return { error: "Missing Bearer token", roles: [] };
-
-  const token = authHeader.slice(7).trim();
-  const parts = token.split(".");
-  if (parts.length !== 3) return { error: "Malformed JWT", roles: [] };
-
-  let header, payload;
-  try {
-    header  = JSON.parse(b64urlDecode(parts[0]));
-    payload = JSON.parse(b64urlDecode(parts[1]));
-  } catch {
-    return { error: "Could not decode JWT", roles: [] };
-  }
-
+  const tokenValidation = await parseAndValidateAzureToken(request, env);
+  if (tokenValidation.error) return { error: tokenValidation.error, roles: [] };
+  const payload = tokenValidation.payload;
   const roles = getUserRoles(payload, env);
   const hasRole = requiredRoles.some(role => roles.includes(role));
 
