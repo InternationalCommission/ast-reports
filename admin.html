@@ -1638,7 +1638,7 @@
       const tCount = (r.testimonies || []).length;
       const location = [r.city, r.country].filter(Boolean).join(", ");
       return `<div class="report-card${r.id === activeId ? " active" : ""}" onclick="showReport('${r.id}')">
-        <div class="rc-title">${escHtml(r.projectTitle || "Untitled Report")}</div>
+        <div class="rc-title">${escHtml(`${r.country} - ${r.city} - ${new Date(r.projectDateTo).getFullYear()}` || "Untitled Report")}</div>
         <div class="rc-loc">${escHtml(location)}</div>
         ${date ? `<div class="rc-date">${date}</div>` : ""}
         ${tCount ? `<span class="rc-badge">📖 ${tCount} testimon${tCount === 1 ? "y" : "ies"}</span>` : ""}
@@ -1855,7 +1855,7 @@
           <button type="button" id="mobileTranslateBtn" class="mobile-translate-inline" onclick="window.toggleTranslation()">🌐 Translate</button>
         </div>
         <div class="print-header-content">
-          <div class="rh-title">${escHtml(r.projectTitle || "IC Project Report")}</div>
+          <div class="rh-title">${escHtml(`${r.country} - ${r.city} - ${new Date(r.projectDateTo).getFullYear()}` || "IC Project Report")}</div>
           <div class="rh-meta">
             ${[r.city, r.country].filter(Boolean).join(", ")}${r.area ? ` &nbsp;·&nbsp; ${escHtml(r.area)}` : ""}${dateRange ? ` &nbsp;·&nbsp; ${dateRange}` : ""}
             ${submittedOn ? ` &nbsp;·&nbsp; Submitted ${submittedOn}` : ""}
