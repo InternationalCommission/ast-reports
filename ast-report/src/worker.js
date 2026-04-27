@@ -11,6 +11,7 @@
  * POST /reports/:id/restore — Restore report from recycle bin (requires SuperAdmin role)
  * DELETE /reports/:id/permanent — Permanently delete report (requires SuperAdmin role)
  * GET  /reports/:id/photos — List photos in report's folder
+ * POST /translate-text — Translate narrative text with edge caching (requires Azure AD JWT)
  *
  * Required Environment Variables (wrangler secret put ...):
  *   AZURE_TENANT_ID         - Azure AD tenant ID
@@ -99,6 +100,9 @@ export default {
     if (method === "GET"  && path === "/areas") {
       return handleGetAreas(request, env);
     }
+    if (method === "POST" && path === "/translate-text") {
+      return handleTranslateText(request, env);
+    }
     if (method === "GET"  && path.startsWith("/reports/")) {
       return handleGetReport(request, env, path.split("/reports/")[1]);
     }
@@ -115,6 +119,7 @@ export default {
 let _cachedVpList = null;
 let _vpListFetchedAt = 0;
 const VP_LIST_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const TRANSLATION_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
 async function getAreaVpMapping(env, token) {
   const now = Date.now();
@@ -1432,6 +1437,102 @@ async function handleGetAreas(request, env) {
 		console.error('[handleGetAreas] error:', err);
 		return corsResponse({ error: err.message }, 500, env);
 	}
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// POST /translate-text — Translate text and cache by content hash
+// ────────────────────────────────────────────────────────────────────────────
+
+async function handleTranslateText(request, env) {
+	const authError = await validateAzureToken(request, env);
+	if (authError) return corsResponse({ error: authError }, 401, env);
+
+	let body;
+	try {
+		body = await request.json();
+	} catch {
+		return corsResponse({ error: "Invalid JSON body" }, 400, env);
+	}
+
+	const text = typeof body?.text === "string" ? body.text : "";
+	const sourceLang = typeof body?.sourceLang === "string" ? body.sourceLang : "auto";
+	const targetLang = typeof body?.targetLang === "string" ? body.targetLang : "en";
+
+	if (!text.trim()) {
+		return corsResponse({ translation: text, cached: false }, 200, env);
+	}
+	if (text.length > 20000) {
+		return corsResponse({ error: "Text too long (max 20000 chars)" }, 400, env);
+	}
+
+	try {
+		const cacheKeyHash = await hashToken(`${sourceLang}:${targetLang}:${text}`);
+		const cacheUrl = new URL(request.url);
+		cacheUrl.pathname = `/__translation-cache/${cacheKeyHash}`;
+		cacheUrl.search = "";
+		const cacheRequest = new Request(cacheUrl.toString(), { method: "GET" });
+
+		const cached = await caches.default.match(cacheRequest);
+		if (cached) {
+			const cachedData = await cached.json();
+			return corsResponse({ ...cachedData, cached: true }, 200, env);
+		}
+
+		const translation = await translateWithGoogle(text, sourceLang, targetLang);
+		const cacheBody = { translation, sourceLang, targetLang };
+		const cacheResponse = new Response(JSON.stringify(cacheBody), {
+			headers: {
+				"Content-Type": "application/json",
+				"Cache-Control": `public, max-age=${TRANSLATION_CACHE_TTL_SECONDS}`,
+			},
+		});
+		await caches.default.put(cacheRequest, cacheResponse);
+
+		return corsResponse({ translation, cached: false }, 200, env);
+	} catch (err) {
+		console.error("[handleTranslateText] error:", err);
+		return corsResponse({ error: "Translation failed" }, 500, env);
+	}
+}
+
+function splitForTranslation(text, maxLen = 3500) {
+	if (!text || text.length <= maxLen) return [text];
+	const chunks = [];
+	let cursor = 0;
+	while (cursor < text.length) {
+		let end = Math.min(cursor + maxLen, text.length);
+		if (end < text.length) {
+			const breakOn = Math.max(text.lastIndexOf(". ", end), text.lastIndexOf("\n", end), text.lastIndexOf(" ", end));
+			if (breakOn > cursor + 400) end = breakOn + 1;
+		}
+		chunks.push(text.slice(cursor, end).trim());
+		cursor = end;
+	}
+	return chunks.filter(Boolean);
+}
+
+async function translateWithGoogle(text, sourceLang = "auto", targetLang = "en") {
+	const chunks = splitForTranslation(text);
+	const translatedChunks = [];
+
+	for (const chunk of chunks) {
+		const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sourceLang)}&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(chunk)}`;
+		const res = await fetch(url);
+		if (!res.ok) {
+			throw new Error(`Google Translate HTTP ${res.status}`);
+		}
+		const data = await res.json();
+		if (!Array.isArray(data) || !Array.isArray(data[0])) {
+			throw new Error("Unexpected Google Translate response shape");
+		}
+		const translated = data[0]
+			.map(entry => (Array.isArray(entry) ? entry[0] : ""))
+			.join("")
+			.trim();
+		translatedChunks.push(translated || chunk);
+	}
+
+	return translatedChunks.join(" ").trim();
 }
 
 // ────────────────────────────────────────────────────────────────────────────

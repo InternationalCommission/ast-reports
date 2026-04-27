@@ -869,50 +869,6 @@
   let currentReportCache = null;
 
   // ── Translation API helpers ────────────────────────────────────────────────
-  function splitForTranslation(text, maxLen = 3500) {
-    if (!text || text.length <= maxLen) return [text];
-    const chunks = [];
-    let cursor = 0;
-    while (cursor < text.length) {
-      let end = Math.min(cursor + maxLen, text.length);
-      if (end < text.length) {
-        const breakOn = Math.max(
-          text.lastIndexOf(". ", end),
-          text.lastIndexOf("\n", end),
-          text.lastIndexOf(" ", end)
-        );
-        if (breakOn > cursor + 400) end = breakOn + 1;
-      }
-      chunks.push(text.slice(cursor, end).trim());
-      cursor = end;
-    }
-    return chunks.filter(Boolean);
-  }
-
-  async function translateWithGoogle(text, sourceLang = "auto", targetLang = "en") {
-    const chunks = splitForTranslation(text);
-    const translatedChunks = [];
-
-    for (const chunk of chunks) {
-      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sourceLang)}&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(chunk)}`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error(`Google Translate HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      if (!Array.isArray(data) || !Array.isArray(data[0])) {
-        throw new Error("Unexpected Google Translate response shape");
-      }
-      const translated = data[0]
-        .map((entry) => Array.isArray(entry) ? entry[0] : "")
-        .join("")
-        .trim();
-      translatedChunks.push(translated || chunk);
-    }
-
-    return translatedChunks.join(" ").trim();
-  }
-
   async function translateText(text, sourceLang = "auto", targetLang = "en") {
     if (!text || !text.trim()) return text;
     const cacheKey = `${sourceLang}:${targetLang}:${text}`;
@@ -921,11 +877,24 @@
     }
 
     try {
-      const translation = await translateWithGoogle(text, sourceLang, targetLang);
+      const token = await getAccessToken();
+      const res = await fetch(`${WORKER_URL}/translate-text`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ text, sourceLang, targetLang }),
+      });
+      if (!res.ok) {
+        throw new Error(`Translation API HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const translation = data?.translation || text;
       translationCache.set(cacheKey, translation);
       return translation;
     } catch (err) {
-      console.error("Translation error (Google):", err);
+      console.error("Translation error:", err);
       return text;
     }
   }
