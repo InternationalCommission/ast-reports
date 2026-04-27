@@ -894,24 +894,22 @@
 
   async function translateReport(r) {
     if (!r) return null;
+
+    // Translate only user-submitted narrative text (not UI labels or location metadata)
     const translateField = async (val) => val ? await translateText(String(val)) : val;
-    const translateTestimonies = async (testimonies) => {
-      if (!Array.isArray(testimonies)) return testimonies;
-      const translated = await Promise.all(testimonies.map(async (t) => ({
-        ...t,
-        text: t.text ? await translateText(t.text) : t.text,
-        author: t.author ? await translateText(t.author) : t.author,
-      })));
-      return translated;
-    };
+
+    const translatedTestimonies = Array.isArray(r.testimonies)
+      ? await Promise.all((r.testimonies || []).map(async (t) => ({
+          ...t,
+          text: await translateField(t.text),
+          // Keep author names as submitted; translating proper names is usually undesirable.
+        })))
+      : r.testimonies;
+
     return {
       ...r,
-      projectTitle: await translateField(r.projectTitle),
-      city: await translateField(r.city),
-      country: await translateField(r.country),
-      area: await translateField(r.area),
       introduction: await translateField(r.introduction),
-      testimonies: await translateTestimonies(r.testimonies),
+      testimonies: translatedTestimonies,
       ralliesDescription: await translateField(r.ralliesDescription),
       additionalNeedDescription: await translateField(r.additionalNeedDescription),
     };
