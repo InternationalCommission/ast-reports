@@ -1274,7 +1274,9 @@ async function handleGetPhotos(request, env, id) {
 // ────────────────────────────────────────────────────────────────────────────
 
 async function handlePhotoProxy(request, env) {
-	// No auth required - uses service account token and validates URL
+	const authError = await validateAzureToken(request, env);
+	if (authError) return corsResponse({ error: authError }, 401, env);
+
 	try {
 		const url = new URL(request.url);
 		const photoUrl = url.searchParams.get("url");
@@ -1283,8 +1285,25 @@ async function handlePhotoProxy(request, env) {
 			return corsResponse({ error: "Missing url parameter" }, 400, env);
 		}
 		
-		// Validate the URL is a SharePoint URL
-		if (!photoUrl.includes("sharepoint.com") || !photoUrl.includes("/sites/ASTReports/")) {
+		let photoUrlObj;
+		try {
+			photoUrlObj = new URL(photoUrl);
+		} catch {
+			return corsResponse({ error: "Invalid URL" }, 400, env);
+		}
+
+		const siteUrl = new URL(env.SHAREPOINT_SITE_URL);
+		const allowedHost = siteUrl.hostname;
+		const sitePath = normalizePath(siteUrl.pathname);
+		const configuredFolder = env.SHAREPOINT_FOLDER_PATH || `${sitePath}/Documents/Report Photos`;
+		const allowedFolderPrefix = configuredFolder.startsWith(sitePath)
+			? normalizePath(configuredFolder)
+			: normalizePath(`${sitePath}/${configuredFolder}`);
+
+		// Validate exact tenant host + site/folder prefix
+		const normalizedPath = normalizePath(photoUrlObj.pathname);
+		const inAllowedFolder = normalizedPath === allowedFolderPrefix || normalizedPath.startsWith(`${allowedFolderPrefix}/`);
+		if (photoUrlObj.protocol !== "https:" || photoUrlObj.hostname !== allowedHost || !inAllowedFolder) {
 			return corsResponse({ error: "Invalid URL" }, 400, env);
 		}
 		
@@ -1295,13 +1314,10 @@ async function handlePhotoProxy(request, env) {
 		console.log(`[PhotoProxy] Token obtained, length: ${sharePointToken.length}`);
 		
 		// Extract server-relative path from the URL
-		const urlObj = new URL(photoUrl);
-		const serverRelativePath = urlObj.pathname; // e.g., /sites/ASTReports/Documents/Report Photos/...
+		const serverRelativePath = photoUrlObj.pathname; // e.g., /sites/ASTReports/Documents/Report Photos/...
 		console.log(`[PhotoProxy] Server-relative path: ${serverRelativePath}`);
 		
 		// Build SharePoint REST API URL to get file content
-		// The decodedurl parameter expects the decoded path; we encode each segment (preserve slashes)
-		const encodedPath = serverRelativePath.split('/').map(segment => encodeURIComponent(segment)).join('/');
 		const apiUrl = `${env.SHAREPOINT_SITE_URL}/_api/web/GetFileByServerRelativeUrl('${serverRelativePath}')/$value`;
 		console.log(`[PhotoProxy] API URL: ${apiUrl}`);
 		
@@ -1325,19 +1341,18 @@ async function handlePhotoProxy(request, env) {
 				console.error(`[PhotoProxy] Failed to fetch ${photoUrl}: ${imageRes.status}, could not read body`);
 				errorBody = 'Could not read error response';
 			}
-			// Return error details as JSON for debugging
-			return new Response(JSON.stringify({
-				error: 'Failed to fetch photo',
-				status: imageRes.status,
-				details: errorBody.substring(0, 1000)
-			}), {
-				status: imageRes.status,
-				headers: {
-					'Content-Type': 'application/json',
-					'Access-Control-Allow-Origin': '*'
-				}
-			});
-		}
+				// Return a sanitized error response (avoid leaking upstream response details)
+				return new Response(JSON.stringify({
+					error: 'Failed to fetch photo',
+					status: imageRes.status
+				}), {
+					status: imageRes.status,
+					headers: {
+						'Content-Type': 'application/json',
+						'Access-Control-Allow-Origin': env?.ALLOWED_ORIGIN || '*'
+					}
+				});
+			}
 		
 		// Read the entire body into a buffer to ensure it's fully downloaded
 		const imageBuffer = await imageRes.arrayBuffer();
@@ -1346,14 +1361,14 @@ async function handlePhotoProxy(request, env) {
 		// Return the image with appropriate headers
 		const contentType = imageRes.headers.get("Content-Type") || "image/jpeg";
 		
-		return new Response(imageBuffer, {
-			headers: {
-				"Content-Type": contentType,
-				"Content-Length": imageBuffer.byteLength.toString(),
-				"Cache-Control": "public, max-age=86400",
-				"Access-Control-Allow-Origin": "*",
-			},
-		});
+			return new Response(imageBuffer, {
+				headers: {
+					"Content-Type": contentType,
+					"Content-Length": imageBuffer.byteLength.toString(),
+					"Cache-Control": "public, max-age=86400",
+					"Access-Control-Allow-Origin": env?.ALLOWED_ORIGIN || "*",
+				},
+			});
 	} catch (err) {
 		console.error("[PhotoProxy] error:", err);
 		return new Response(null, { status: 500 });
@@ -1364,6 +1379,16 @@ async function handlePhotoProxy(request, env) {
 // GET /test-sharepoint — Test SharePoint REST API access with service account
 // ────────────────────────────────────────────────────────────────────────────
 async function handleTestSharePoint(request, env) {
+	if (env.ENABLE_TEST_ENDPOINTS !== 'true') {
+		return corsResponse({ error: "Not found" }, 404, env);
+	}
+
+	const authError = await validateAzureToken(request, env);
+	if (authError) return corsResponse({ error: authError }, 401, env);
+
+	const roleCheck = await requireRole(request, env, ["SuperAdmin"]);
+	if (roleCheck.error) return corsResponse({ error: roleCheck.error }, 403, env);
+
 	try {
 		console.log('[TestSharePoint] Testing SharePoint REST API access');
 		const token = await getUserToken(env, 'sharepoint');
