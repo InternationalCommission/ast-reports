@@ -761,6 +761,7 @@
     document.getElementById("clearSimulateBtn").style.display = "inline-block";
     console.log(`[Simulate] Now viewing as: ${email}`);
     showToast(`Viewing as ${email}`, false);
+    refreshRoleBasedUI();
     loadReports();
   };
 
@@ -773,6 +774,7 @@
     document.getElementById("clearSimulateBtn").style.display = "none";
     console.log("[Simulate] Cleared simulation, viewing as actual user");
     showToast("Simulation cleared", false);
+    refreshRoleBasedUI();
     loadReports();
   };
 

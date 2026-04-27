@@ -328,17 +328,29 @@ async function handleGetReports(request, env, url) {
     // If simulateUser is provided and requester is SuperAdmin, use simulated user's email
     let userEmail = actualUserEmail;
     let isSimulating = false;
+    let simulatedRoles = [];
+    let simulatedVpGroup = false;
+
     if (simulateUser && isActualAdmin) {
       userEmail = simulateUser.toLowerCase();
       isSimulating = true;
       console.log(`[handleGetReports] SuperAdmin simulating user: ${userEmail}`);
+
+      try {
+        const simulatedGroupIds = await getUserGroupIdsByEmail(env, token, userEmail);
+        simulatedRoles = getUserRoles({ groups: simulatedGroupIds }, env);
+        simulatedVpGroup = Boolean(env.VP_GROUP_ID && simulatedGroupIds.includes(env.VP_GROUP_ID));
+        console.log(`[handleGetReports] Simulated user roles: ${simulatedRoles.join(", ")}`);
+      } catch (err) {
+        console.warn(`[handleGetReports] Failed to load simulated user groups for ${userEmail}: ${err.message}`);
+      }
     }
 
-    const isVp = simulateUser && isActualAdmin ? false : await isVpFromGroup(request, env, tokenValidation.payload);
+    const isVp = isSimulating ? simulatedVpGroup : await isVpFromGroup(request, env, tokenValidation.payload);
     const vpArea = isVp && userEmail ? await getVpAreaForEmail(env, userEmail) : (isSimulating ? await getVpAreaForEmail(env, userEmail) : null);
 
     // Check if user has admin role (SuperAdmin, ReadWrite, ReadOnly all have access)
-    const isAdmin = isSimulating ? false : await isUserAdmin(request, env, tokenValidation.payload);
+    const isAdmin = isSimulating ? simulatedRoles.length > 0 : await isUserAdmin(request, env, tokenValidation.payload);
 
     // VP in group but not on VP list = no access
     if (!isSimulating && isVp && !vpArea && !isAdmin) {
@@ -853,23 +865,29 @@ async function handleUpdateReport(request, env, id) {
     return corsResponse({ error: "Edit token secret not configured" }, 500, env);
   }
 
-  const roleCheck = await requireRole(request, env, ["SuperAdmin", "ReadWrite"]);
-  if (roleCheck.error) return corsResponse({ error: roleCheck.error }, 403, env);
-
   try {
     const formData = await request.formData();
     const token = formData.get("editToken");
     const expires = formData.get("editExpires");
     
-    const isValid = await validateEditToken(
-      id,
-      token,
-      expires ? parseInt(expires, 10) : 0,
-      env.EDIT_TOKEN_SECRET
-    );
+    let authorized = false;
+    if (token && expires) {
+      const isValid = await validateEditToken(
+        id,
+        token,
+        expires ? parseInt(expires, 10) : 0,
+        env.EDIT_TOKEN_SECRET
+      );
+      if (isValid) {
+        authorized = true;
+      } else {
+        return corsResponse({ error: "Invalid or expired edit token" }, 401, env);
+      }
+    }
     
-    if (!isValid) {
-      return corsResponse({ error: "Invalid or expired edit token" }, 401, env);
+    if (!authorized) {
+      const roleCheck = await requireRole(request, env, ["SuperAdmin", "ReadWrite"]);
+      if (roleCheck.error) return corsResponse({ error: roleCheck.error }, 403, env);
     }
 
     const fields = extractFields(formData);
@@ -1024,6 +1042,28 @@ function getUserRoles(payload, env) {
   if (groups.includes(env.READWRITE_GROUP_ID)) roles.push("ReadWrite");
   if (groups.includes(env.READONLY_GROUP_ID)) roles.push("ReadOnly");
   return roles;
+}
+
+async function getGraphUserIdByEmail(token, email) {
+  const headers = { Authorization: `Bearer ${token}` };
+  try {
+    const user = await graphFetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(email)}?$select=id`, { headers });
+    return user.id;
+  } catch (err) {
+    const filter = `mail eq '${email}' or userPrincipalName eq '${email}'`;
+    const result = await graphFetch(`https://graph.microsoft.com/v1.0/users?$filter=${encodeURIComponent(filter)}&$select=id`, { headers });
+    return Array.isArray(result.value) && result.value.length > 0 ? result.value[0].id : null;
+  }
+}
+
+async function getUserGroupIdsByEmail(env, token, email) {
+  const userId = await getGraphUserIdByEmail(token, email);
+  if (!userId) return [];
+
+  const headers = { Authorization: `Bearer ${token}` };
+  const groupResponse = await graphFetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userId)}/transitiveMemberOf?$select=id`, { headers });
+  const ids = Array.isArray(groupResponse.value) ? groupResponse.value.map((item) => item.id).filter(Boolean) : [];
+  return ids;
 }
 
 async function requireRole(request, env, requiredRoles) {
