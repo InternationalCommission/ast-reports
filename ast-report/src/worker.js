@@ -480,9 +480,13 @@ async function handleGetReports(request, env, url) {
     // Convert SharePoint's nextLink into a worker-relative cursor URL so the
     // admin never calls SharePoint directly and all requests stay authenticated.
     const spNextLink = res["@odata.nextLink"] || null;
-    const workerNextLink = spNextLink
-      ? `${new URL(request.url).origin}/reports?cursor=${encodeURIComponent(spNextLink)}`
-      : null;
+    let workerNextLink = null;
+    if (spNextLink) {
+      const nextUrl = new URL(`${new URL(request.url).origin}/reports`);
+      nextUrl.searchParams.set("cursor", spNextLink);
+      if (simulateUser) nextUrl.searchParams.set("simulateUser", simulateUser);
+      workerNextLink = nextUrl.toString();
+    }
 
     return corsResponse({ 
       items, 

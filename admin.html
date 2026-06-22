@@ -845,6 +845,8 @@
   let loading        = false;
   let recycleBinReports = [];
   let showingRecycleBin = false;
+  let searchLoadingAll = false;
+  let searchLoadRequest = 0;
 
   // ── Fetch edit token from worker (requires Azure AD auth) ─────────────────────
   async function getEditToken(reportId) {
@@ -1520,13 +1522,39 @@
   }
 
   async function loadMore() {
-    if (!nextLink || loading) return;
+    if (!nextLink || loading || searchLoadingAll) return;
     loading = true;
     document.getElementById("loadMoreBtn").disabled  = true;
     document.getElementById("loadMoreBtn").textContent = "Loading…";
     await fetchPage(nextLink);
     loading = false;
     document.getElementById("loadMoreBtn").textContent = "Load more";
+  }
+
+  async function loadAllReportsForSearch(searchValue) {
+    if (!nextLink || searchLoadingAll || showingRecycleBin) return;
+
+    const requestId = ++searchLoadRequest;
+    searchLoadingAll = true;
+    const loadMoreBtn = document.getElementById("loadMoreBtn");
+    loadMoreBtn.disabled = true;
+    loadMoreBtn.textContent = "Searching all reports…";
+
+    try {
+      while (nextLink && requestId === searchLoadRequest) {
+        const activeInput = getActiveSearchInput();
+        const currentSearch = (activeInput ? activeInput.value : document.getElementById("searchInput").value).trim();
+        if (!currentSearch || currentSearch !== searchValue) break;
+        await fetchPage(nextLink);
+      }
+    } finally {
+      if (requestId === searchLoadRequest) {
+        searchLoadingAll = false;
+        loadMoreBtn.textContent = "Load more";
+        loadMoreBtn.disabled = !nextLink;
+        filterReports();
+      }
+    }
   }
 
   async function fetchPage(url) {
@@ -1560,6 +1588,12 @@
     const activeInput = getActiveSearchInput();
     const raw = (activeInput ? activeInput.value : document.getElementById("searchInput").value).trim();
     
+    if (raw && nextLink && !searchLoadingAll && !showingRecycleBin) {
+      loadAllReportsForSearch(raw);
+    } else if (!raw) {
+      searchLoadRequest++;
+    }
+
     // Parse slash commands
     const commands = parseSlashCommands(raw);
     
@@ -1627,11 +1661,12 @@
   // ── Render sidebar ────────────────────────────────────────────────────────
   function renderSidebar() {
     const list = document.getElementById("reportList");
-    document.getElementById("reportCount").textContent =
-      `${filteredList.length} of ${allReports.length} report${allReports.length !== 1 ? "s" : ""}`;
+    const totalText = `${filteredList.length} of ${allReports.length} report${allReports.length !== 1 ? "s" : ""}`;
+    document.getElementById("reportCount").textContent = searchLoadingAll ? `${totalText} (searching all…)` : totalText;
 
     if (!filteredList.length) {
-      list.innerHTML = `<div style="padding:24px 18px;color:var(--muted);font-size:13px;font-style:italic;">No reports found.</div>`;
+      const emptyMessage = searchLoadingAll ? "Searching all reports…" : "No reports found.";
+      list.innerHTML = `<div style="padding:24px 18px;color:var(--muted);font-size:13px;font-style:italic;">${emptyMessage}</div>`;
       return;
     }
 
