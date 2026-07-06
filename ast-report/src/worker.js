@@ -6,7 +6,7 @@
  * GET  /reports/recycle-bin — Fetch recycled reports (requires SuperAdmin role)
  * GET  /reports/:id   — Fetch single report by SharePoint item ID
  * POST /reports/:id/edit-token — Generate edit token (requires Azure AD JWT)
- * PATCH /reports/:id  — Update report (requires valid edit token + ReadWrite/SuperAdmin role)
+ * PATCH /reports/:id  — Update report (requires valid edit token or SuperAdmin/ReadWrite/area VP role)
  * POST /reports/:id/recycle — Move report to recycle bin (requires ReadWrite/SuperAdmin role)
  * POST /reports/:id/restore — Restore report from recycle bin (requires SuperAdmin role)
  * DELETE /reports/:id/permanent — Permanently delete report (requires SuperAdmin role)
@@ -202,6 +202,37 @@ async function getVpAreaForEmail(env, email) {
   return null;
 }
 
+async function getReportById(env, id) {
+  const token = await getAccessToken(env);
+  const { siteId, listId } = await resolveListIds(env, token);
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+    Prefer: "HonorNonIndexedQueriesWarningMayFailRandomly",
+  };
+  const item = await graphFetch(
+    `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${id}?expand=fields`,
+    { headers }
+  );
+  return normalizeItem(item);
+}
+
+async function getReportAccessForPayload(env, payload, report) {
+  const roles = getUserRoles(payload, env);
+  const isElevatedAdmin = roles.includes("SuperAdmin") || roles.includes("ReadWrite");
+  if (isElevatedAdmin) return { canView: true, canEdit: true, roles, restrictedArea: null };
+
+  const groups = payload.groups || [];
+  const isVp = Boolean(env.VP_GROUP_ID && groups.includes(env.VP_GROUP_ID));
+  if (!isVp) return { canView: roles.includes("ReadOnly"), canEdit: false, roles, restrictedArea: null };
+
+  const userEmail = getEmailFromPayload(payload);
+  const vpArea = await getVpAreaForEmail(env, userEmail);
+  const reportArea = (report?.area || "").trim();
+  const canAccessArea = Boolean(vpArea && reportArea && vpArea.toLowerCase() === reportArea.toLowerCase());
+  return { canView: canAccessArea, canEdit: canAccessArea, roles, restrictedArea: vpArea };
+}
+
 async function isUserAdmin(request, env, verifiedPayload = null) {
   const payload = verifiedPayload || (await parseAndValidateAzureToken(request, env)).payload;
   if (!payload) return false;
@@ -364,9 +395,18 @@ async function handleGetReports(request, env, url) {
       return corsResponse({ items: [], nextLink: null, restricted: true, simulated: userEmail, message: "No reports available for this user." }, 200, env);
     }
 
-    // VPs restricted to their area, admins see all
+    // VPs are restricted to their area unless they also have elevated admin access.
+    const hasElevatedAdminAccess = isSimulating
+      ? simulatedRoles.includes("SuperAdmin") || simulatedRoles.includes("ReadWrite")
+      : getUserRoles(tokenValidation.payload, env).some(role => role === "SuperAdmin" || role === "ReadWrite");
+
+    if (isVp && !vpArea && !hasElevatedAdminAccess) {
+      console.log(`[handleGetReports] VP ${userEmail} not found in VP list - no access`);
+      return corsResponse({ items: [], nextLink: null, restricted: true, message: "No reports available for your account." }, 200, env);
+    }
+
     let area = url.searchParams.get("area") || null;
-    if (!isAdmin && vpArea && !area) {
+    if (isVp && vpArea && !hasElevatedAdminAccess) {
       area = vpArea;
       console.log(`[handleGetReports] VP restriction: user ${userEmail} restricted to area "${area}"`);
     }
@@ -492,7 +532,7 @@ async function handleGetReports(request, env, url) {
       items, 
       nextLink: workerNextLink,
       simulated: isSimulating ? userEmail : null,
-      restrictedArea: isSimulating && vpArea ? vpArea : null,
+      restrictedArea: isVp && vpArea && !hasElevatedAdminAccess ? vpArea : null,
     }, 200, env);
   } catch (err) {
     console.error("GetReports error:", err);
@@ -505,8 +545,8 @@ async function handleGetReports(request, env, url) {
 // ────────────────────────────────────────────────────────────────────────────
 
 async function handleGetReport(request, env, id) {
-  const authError = await validateAzureToken(request, env);
-  if (authError) return corsResponse({ error: authError }, 401, env);
+  const tokenValidation = await parseAndValidateAzureToken(request, env);
+  if (tokenValidation.error) return corsResponse({ error: tokenValidation.error }, 401, env);
 
   try {
     const token = await getAccessToken(env);
@@ -521,8 +561,11 @@ async function handleGetReport(request, env, id) {
       `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${id}?expand=fields`,
       { headers }
     );
+    const report = normalizeItem(item);
+    const access = await getReportAccessForPayload(env, tokenValidation.payload, report);
+    if (!access.canView) return corsResponse({ error: "Access denied for this report" }, 403, env);
 
-    return corsResponse(normalizeItem(item), 200, env);
+    return corsResponse(report, 200, env);
   } catch (err) {
     console.error("GetReport error:", err);
     return corsResponse({ error: err.message }, 500, env);
@@ -534,14 +577,18 @@ async function handleGetReport(request, env, id) {
 // ────────────────────────────────────────────────────────────────────────────
 
 async function handleEditToken(request, env, id) {
-  const authError = await validateAzureToken(request, env);
-  if (authError) return corsResponse({ error: authError }, 401, env);
+  const tokenValidation = await parseAndValidateAzureToken(request, env);
+  if (tokenValidation.error) return corsResponse({ error: tokenValidation.error }, 401, env);
 
   if (!env.EDIT_TOKEN_SECRET) {
     return corsResponse({ error: "Edit token secret not configured" }, 500, env);
   }
 
   try {
+    const report = await getReportById(env, id);
+    const access = await getReportAccessForPayload(env, tokenValidation.payload, report);
+    if (!access.canEdit) return corsResponse({ error: "Access denied for this report" }, 403, env);
+
     const expiryMs = 30 * 60 * 1000; // 30 minutes
     const expires = Date.now() + expiryMs;
     const dataToSign = `${id}:${expires}`;
@@ -890,8 +937,11 @@ async function handleUpdateReport(request, env, id) {
     }
     
     if (!authorized) {
-      const roleCheck = await requireRole(request, env, ["SuperAdmin", "ReadWrite"]);
-      if (roleCheck.error) return corsResponse({ error: roleCheck.error }, 403, env);
+      const tokenValidation = await parseAndValidateAzureToken(request, env);
+      if (tokenValidation.error) return corsResponse({ error: tokenValidation.error }, 401, env);
+      const report = await getReportById(env, id);
+      const access = await getReportAccessForPayload(env, tokenValidation.payload, report);
+      if (!access.canEdit) return corsResponse({ error: "Access denied for this report" }, 403, env);
     }
 
     const fields = extractFields(formData);

@@ -653,6 +653,7 @@
     SuperAdmin: "a21edf30-1be1-4a2c-b13b-411e130d41e2",
     ReadWrite: "2a94d6d7-85d8-482b-92a1-7dda91f3daba",
     ReadOnly: "ba1c0013-5cbb-4b5a-b625-19ae165953e5",
+    VP: "2577bd66-1710-4b98-9b56-89255c743830",
   };
 
   // When using a single app registration, the app implicitly has access to its
@@ -672,6 +673,7 @@
     if (groups.includes(GROUP_IDS.SuperAdmin)) roles.push("SuperAdmin");
     if (groups.includes(GROUP_IDS.ReadWrite)) roles.push("ReadWrite");
     if (groups.includes(GROUP_IDS.ReadOnly)) roles.push("ReadOnly");
+    if (groups.includes(GROUP_IDS.VP)) roles.push("VP");
     return roles;
   }
 
@@ -680,7 +682,7 @@
   }
 
   function canEdit() {
-    return hasRole("SuperAdmin") || hasRole("ReadWrite");
+    return hasRole("SuperAdmin") || hasRole("ReadWrite") || hasRole("VP");
   }
 
   function canRecycle() {
