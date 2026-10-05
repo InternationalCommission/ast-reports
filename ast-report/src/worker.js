@@ -49,6 +49,7 @@ export default {
     if (method === "POST" && path === "/")          return handleSubmit(request, env);
     if (method === "GET"  && path === "/reports")   return handleGetReports(request, env, url);
     if (method === "GET"  && path === "/reports/recycle-bin") return handleGetRecycleBin(request, env);
+    if (method === "GET" && path === "/project-request-areas") return handleGetProjectRequestAreas(request, env);
     if (method === "POST" && path === "/project-requests") return handleProjectRequestSubmit(request, env);
     if (method === "GET" && path === "/project-requests") return handleGetProjectRequests(request, env);
     if (method === "PATCH" && path.match(/^\/project-requests\/[^/]+$/)) {
@@ -200,6 +201,19 @@ async function sendProjectRequestNotification(requestData, vp, env, token) {
     method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(mail)
   });
   if (!response.ok) throw new Error("Project request notification email failed (" + response.status + "): " + await response.text());
+}
+async function handleGetProjectRequestAreas(request, env) {
+  const origin = request.headers.get("Origin") || "";
+  const allowed = (env.ALLOWED_ORIGIN || "").split(",").map(x => x.trim()).filter(Boolean);
+  allowed.push("http://localhost:8080", "http://localhost:5500");
+  if (env.ALLOWED_ORIGIN && !allowed.includes(origin)) return corsResponse({ error: "Forbidden origin" }, 403, env);
+  try {
+    const mapping = await getAreaVpMapping(env, null);
+    return corsResponse({ areas: Object.keys(mapping).sort((a, b) => a.localeCompare(b)) }, 200, env);
+  } catch (err) {
+    console.error("[handleGetProjectRequestAreas]", err.message);
+    return corsResponse({ error: "Could not load project areas." }, 500, env);
+  }
 }
 async function handleProjectRequestSubmit(request, env) {
   const origin = request.headers.get("Origin") || "";
