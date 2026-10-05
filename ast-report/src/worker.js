@@ -49,6 +49,11 @@ export default {
     if (method === "POST" && path === "/")          return handleSubmit(request, env);
     if (method === "GET"  && path === "/reports")   return handleGetReports(request, env, url);
     if (method === "GET"  && path === "/reports/recycle-bin") return handleGetRecycleBin(request, env);
+    if (method === "POST" && path === "/project-requests") return handleProjectRequestSubmit(request, env);
+    if (method === "GET" && path === "/project-requests") return handleGetProjectRequests(request, env);
+    if (method === "PATCH" && path.match(/^\\/project-requests\\/[^/]+$/)) {
+      return handleReviewProjectRequest(request, env, decodeURIComponent(path.split("/").pop()));
+    }
     if (method === "POST" && path.match(/^\/reports\/[^/]+\/edit-token$/)) {
       const id = path.split("/reports/")[1].replace("/edit-token", "");
       return handleEditToken(request, env, id);
@@ -110,6 +115,177 @@ export default {
     return corsResponse({ error: "Not found" }, 404, env);
   },
 };
+
+
+// ────────────────────────────────────────────────────────────────────────────
+// OA / N2N project requests — stored separately from project reports.
+// Configure PROJECT_REQUESTS_LIST_NAME (default: AST Project Requests).
+// ────────────────────────────────────────────────────────────────────────────
+function projectRequestFieldMap(data, vp) {
+  return {
+    Title: String(data.requestTitle || (data.projectType + " — " + data.country + " — " + data.area)).slice(0, 255),
+    ProjectType: data.projectType, Country: data.country, Area: data.area,
+    StartDate: data.startDate || null, EndDate: data.endDate || null, CompletedDate: data.completedDate || null,
+    NationalProjectType: data.nationalProjectType, Theme: data.projectType === "N2N" ? data.theme : null,
+    Churches: toNum(data.churches), Hearers: toNum(data.hearers), Decisions: toNum(data.decisions),
+    Discipled: toNum(data.discipled), Baptisms: toNum(data.baptisms),
+    Leader1Name: data.leader1Name, Leader1Address: data.leader1Address, Leader1Phone: data.leader1Phone, Leader1Email: data.leader1Email,
+    Leader2Name: data.projectType === "N2N" ? data.leader2Name : null,
+    Leader2Address: data.projectType === "N2N" ? data.leader2Address : null,
+    Leader2Phone: data.projectType === "N2N" ? data.leader2Phone : null,
+    Leader2Email: data.projectType === "N2N" ? data.leader2Email : null,
+    FirstTime: data.firstTime, SpiritualNeeds: data.spiritualNeeds, Importance: data.importance,
+    Vision: data.vision, Coordinator: data.coordinator, AstVpArea: vp.area,
+    AstVpName: vp.name || "", AstVpEmail: vp.email || "", Status: "Pending",
+    ReviewNotes: "", ReviewedBy: "", ReviewedAt: null,
+    RequestDataJson: JSON.stringify(data),
+    N2NBudgetJson: data.projectType === "N2N" ? JSON.stringify(data) : "",
+    OABudgetJson: data.projectType === "OA" ? JSON.stringify({
+      oaAndrew: data.oaAndrew || 0, oaLaunch: data.oaLaunch || 0, oaResults: data.oaResults || 0,
+      total: (toNum(data.oaAndrew) || 0) + (toNum(data.oaLaunch) || 0) + (toNum(data.oaResults) || 0)
+    }) : "",
+    SubmittedBy: data.leader1Email || ""
+  };
+}
+async function getProjectRequestListIds(env, token) {
+  const listName = env.PROJECT_REQUESTS_LIST_NAME || "AST Project Requests";
+  const headers = { Authorization: "Bearer " + token, Accept: "application/json" };
+  const siteUrl = new URL(env.SHAREPOINT_SITE_URL);
+  const site = await graphFetch("https://graph.microsoft.com/v1.0/sites/" + siteUrl.hostname + ":" + siteUrl.pathname, { headers });
+  const lists = await graphFetch("https://graph.microsoft.com/v1.0/sites/" + site.id + "/lists?$select=id,displayName", { headers });
+  const list = (lists.value || []).find(x => x.displayName === listName);
+  if (!list) throw new Error('SharePoint list "' + listName + '" not found. Create it as described in README.md.');
+  return { siteId: site.id, listId: list.id };
+}
+function normalizeProjectRequest(item) {
+  const f = item.fields || {};
+  let requestData = {}, n2nBudget = {}, oaBudget = {};
+  try { requestData = f.RequestDataJson ? JSON.parse(f.RequestDataJson) : {}; } catch {}
+  try { n2nBudget = f.N2NBudgetJson ? JSON.parse(f.N2NBudgetJson) : {}; } catch {}
+  try { oaBudget = f.OABudgetJson ? JSON.parse(f.OABudgetJson) : {}; } catch {}
+  return {
+    id: item.id, createdAt: item.createdDateTime, requestTitle: f.Title, projectType: f.ProjectType,
+    country: f.Country, area: f.Area, startDate: f.StartDate, endDate: f.EndDate, completedDate: f.CompletedDate,
+    nationalProjectType: f.NationalProjectType, theme: f.Theme, churches: f.Churches, hearers: f.Hearers,
+    decisions: f.Decisions, discipled: f.Discipled, baptisms: f.Baptisms,
+    leader1Name: f.Leader1Name, leader1Address: f.Leader1Address, leader1Phone: f.Leader1Phone, leader1Email: f.Leader1Email,
+    leader2Name: f.Leader2Name, leader2Address: f.Leader2Address, leader2Phone: f.Leader2Phone, leader2Email: f.Leader2Email,
+    firstTime: f.FirstTime, spiritualNeeds: f.SpiritualNeeds, importance: f.Importance, vision: f.Vision,
+    coordinator: f.Coordinator, astVpArea: f.AstVpArea, astVpName: f.AstVpName, astVpEmail: f.AstVpEmail,
+    status: f.Status || "Pending", reviewNotes: f.ReviewNotes || "", reviewedBy: f.ReviewedBy || "",
+    reviewedAt: f.ReviewedAt || null, submittedBy: f.SubmittedBy || "", requestData, n2nBudget, oaBudget
+  };
+}
+function projectRequestVpForArea(mapping, area) {
+  const normalized = normalizeAreaForAccess(area);
+  const found = Object.entries(mapping).find(([key]) => normalizeAreaForAccess(key) === normalized);
+  return found ? { area: found[0], name: found[1].name, email: found[1].email } : null;
+}
+async function sendProjectRequestNotification(requestData, vp, env, token) {
+  const recipients = parseMultiEmail(vp.email);
+  if (!recipients.length) throw new Error('No AST VP email is configured for area "' + vp.area + '".');
+  const safe = value => String(value || "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+  const origin = (env.ALLOWED_ORIGIN || "https://internationalcommission.org").split(",")[0].trim().replace(/\/$/, "");
+  const body = '<html><body style="font-family:Georgia,serif;color:#1a1a1a"><h2 style="color:#1a3a5c">New ' + safe(requestData.projectType) + ' project request</h2><p>A project request is awaiting review for your mapped area.</p><table><tr><td><b>Project</b></td><td>' + safe(requestData.requestTitle) + '</td></tr><tr><td><b>Country</b></td><td>' + safe(requestData.country) + '</td></tr><tr><td><b>Area</b></td><td>' + safe(requestData.area) + '</td></tr><tr><td><b>Dates</b></td><td>' + safe(requestData.startDate) + ' – ' + safe(requestData.endDate) + '</td></tr><tr><td><b>Main leader</b></td><td>' + safe(requestData.leader1Name) + ' (' + safe(requestData.leader1Email) + ')</td></tr></table><p><a href="' + safe(origin + "/project-requests-admin.html") + '">Open project request approvals</a></p></body></html>';
+  const intended = recipients.join(", ");
+  const actual = env.TEST_MODE === "true" ? parseMultiEmail(env.EMAIL_RECIPIENT) : recipients;
+  if (!env.EMAIL_SENDER) throw new Error("EMAIL_SENDER must be configured to notify AST VPs.");
+  if (!actual.length) throw new Error("No email recipient is configured.");
+  const mail = { message: {
+    subject: "[Project Request] " + requestData.projectType + ": " + requestData.country + " — " + requestData.area,
+    body: { contentType: "HTML", content: env.TEST_MODE === "true" ? "<p><b>TEST MODE — intended recipients: " + safe(intended) + "</b></p>" + body : body },
+    toRecipients: actual.map(address => ({ emailAddress: { address } }))
+  }, saveToSentItems: true };
+  const response = await fetch("https://graph.microsoft.com/v1.0/users/" + encodeURIComponent(env.EMAIL_SENDER) + "/sendMail", {
+    method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(mail)
+  });
+  if (!response.ok) throw new Error("Project request notification email failed (" + response.status + "): " + await response.text());
+}
+async function handleProjectRequestSubmit(request, env) {
+  const origin = request.headers.get("Origin") || "";
+  const allowed = (env.ALLOWED_ORIGIN || "").split(",").map(x => x.trim()).filter(Boolean);
+  allowed.push("http://localhost:8080", "http://localhost:5500");
+  if (env.ALLOWED_ORIGIN && !allowed.includes(origin)) return corsResponse({ error: "Forbidden origin" }, 403, env);
+  try {
+    const data = await request.json();
+    if (!data || !["N2N", "OA"].includes(data.projectType)) return corsResponse({ error: "Choose N2N or OA as the project type." }, 400, env);
+    const required = ["country","startDate","endDate","completedDate","nationalProjectType","area","churches","hearers","decisions","discipled","baptisms","leader1Name","leader1Address","leader1Phone","leader1Email","firstTime","spiritualNeeds","importance","vision","coordinator"];
+    if (data.projectType === "N2N") required.push("theme","leader2Name","leader2Address","leader2Phone","leader2Email");
+    const missing = required.filter(key => data[key] === undefined || data[key] === null || String(data[key]).trim() === "");
+    if (missing.length) return corsResponse({ error: "Please complete required fields: " + missing.join(", ") + "." }, 400, env);
+    if (new Date(data.endDate) < new Date(data.startDate)) return corsResponse({ error: "Finishing date must be on or after starting date." }, 400, env);
+    const token = await getAccessToken(env);
+    const mapping = await getAreaVpMapping(env, null);
+    const vp = projectRequestVpForArea(mapping, data.area);
+    if (!vp || !parseMultiEmail(vp.email).length) return corsResponse({ error: 'No AST Area VP mapping with an email was found for "' + data.area + '". Please check the project area with AST.' }, 400, env);
+    data.submittedAt = new Date().toISOString();
+    data.requestTitle = String(data.requestTitle || (data.projectType + " — " + data.country + " — " + data.area)).slice(0, 255);
+    const ids = await getProjectRequestListIds(env, token);
+    const fields = projectRequestFieldMap(data, vp);
+    const created = await graphFetch("https://graph.microsoft.com/v1.0/sites/" + ids.siteId + "/lists/" + ids.listId + "/items", {
+      method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ fields })
+    });
+    let notificationWarning = null;
+    try { await sendProjectRequestNotification({ ...data, requestTitle: data.requestTitle }, vp, env, token); }
+    catch (mailError) { console.error("[project-requests] notification failed:", mailError.message); notificationWarning = "The request was saved, but the AST VP notification email failed. Please notify AST directly."; }
+    return corsResponse({ success: true, id: created.id, notificationWarning }, 201, env);
+  } catch (err) {
+    console.error("[handleProjectRequestSubmit]", err.message);
+    return corsResponse({ error: err.message || "Could not submit project request." }, 500, env);
+  }
+}
+async function handleGetProjectRequests(request, env) {
+  const auth = await parseAndValidateAzureToken(request, env);
+  if (auth.error) return corsResponse({ error: auth.error }, 401, env);
+  try {
+    const payload = auth.payload, roles = getUserRoles(payload, env);
+    const isAdmin = roles.some(role => ["SuperAdmin", "ReadWrite", "ReadOnly"].includes(role));
+    const email = getEmailFromPayload(payload);
+    const isVp = Boolean(env.VP_GROUP_ID && (payload.groups || []).includes(env.VP_GROUP_ID));
+    const vpArea = isVp ? await getVpAreaForEmail(env, email) : null;
+    if (!isAdmin && (!isVp || !vpArea)) return corsResponse({ error: "You are not authorized to view project requests." }, 403, env);
+    const token = await getAccessToken(env), ids = await getProjectRequestListIds(env, token), all = [];
+    let next = "https://graph.microsoft.com/v1.0/sites/" + ids.siteId + "/lists/" + ids.listId + "/items?$expand=fields&$top=200&$orderby=createdDateTime%20desc";
+    while (next) {
+      const page = await graphFetch(next, { headers: { Authorization: "Bearer " + token, Accept: "application/json" } });
+      all.push(...(page.value || [])); next = page["@odata.nextLink"] || null;
+    }
+    let items = all.map(normalizeProjectRequest);
+    if (!isAdmin) items = items.filter(item => normalizeAreaForAccess(item.astVpArea) === normalizeAreaForAccess(vpArea));
+    return corsResponse({ items, userArea: vpArea, roles, isAdmin }, 200, env);
+  } catch (err) {
+    console.error("[handleGetProjectRequests]", err.message);
+    return corsResponse({ error: err.message || "Could not load project requests." }, 500, env);
+  }
+}
+async function handleReviewProjectRequest(request, env, id) {
+  const auth = await parseAndValidateAzureToken(request, env);
+  if (auth.error) return corsResponse({ error: auth.error }, 401, env);
+  try {
+    const payload = auth.payload, roles = getUserRoles(payload, env), email = getEmailFromPayload(payload);
+    const isAdmin = roles.some(role => ["SuperAdmin", "ReadWrite"].includes(role));
+    const isVp = Boolean(env.VP_GROUP_ID && (payload.groups || []).includes(env.VP_GROUP_ID));
+    const vpArea = isVp ? await getVpAreaForEmail(env, email) : null;
+    if (!isAdmin && (!isVp || !vpArea)) return corsResponse({ error: "You are not authorized to review project requests." }, 403, env);
+    const decision = await request.json();
+    if (!["Approved", "Rejected"].includes(decision.status)) return corsResponse({ error: "Decision must be Approved or Rejected." }, 400, env);
+    const token = await getAccessToken(env), ids = await getProjectRequestListIds(env, token);
+    const item = await graphFetch("https://graph.microsoft.com/v1.0/sites/" + ids.siteId + "/lists/" + ids.listId + "/items/" + encodeURIComponent(id) + "?$expand=fields", {
+      headers: { Authorization: "Bearer " + token, Accept: "application/json" }
+    });
+    const current = normalizeProjectRequest(item);
+    if (!isAdmin && normalizeAreaForAccess(current.astVpArea) !== normalizeAreaForAccess(vpArea)) return corsResponse({ error: "This request is assigned to another AST Area VP." }, 403, env);
+    if (current.status !== "Pending") return corsResponse({ error: "This request has already been reviewed." }, 409, env);
+    const reviewFields = { Status: decision.status, ReviewNotes: String(decision.reviewNotes || "").slice(0, 5000), ReviewedBy: email || "Unknown", ReviewedAt: new Date().toISOString() };
+    await graphFetch("https://graph.microsoft.com/v1.0/sites/" + ids.siteId + "/lists/" + ids.listId + "/items/" + encodeURIComponent(id) + "/fields", {
+      method: "PATCH", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(reviewFields)
+    });
+    return corsResponse({ success: true, id, status: decision.status }, 200, env);
+  } catch (err) {
+    console.error("[handleReviewProjectRequest]", err.message);
+    return corsResponse({ error: err.message || "Could not save review decision." }, 500, env);
+  }
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // POST / — Submit a new report
