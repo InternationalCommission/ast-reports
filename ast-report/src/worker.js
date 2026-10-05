@@ -51,7 +51,7 @@ export default {
     if (method === "GET"  && path === "/reports/recycle-bin") return handleGetRecycleBin(request, env);
     if (method === "POST" && path === "/project-requests") return handleProjectRequestSubmit(request, env);
     if (method === "GET" && path === "/project-requests") return handleGetProjectRequests(request, env);
-    if (method === "PATCH" && path.match(/^\\/project-requests\\/[^/]+$/)) {
+    if (method === "PATCH" && path.match(/^\/project-requests\/[^/]+$/)) {
       return handleReviewProjectRequest(request, env, decodeURIComponent(path.split("/").pop()));
     }
     if (method === "POST" && path.match(/^\/reports\/[^/]+\/edit-token$/)) {
