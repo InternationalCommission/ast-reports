@@ -202,6 +202,30 @@ async function getVpAreaForEmail(env, email) {
   return null;
 }
 
+function normalizeAreaForAccess(area) {
+  return String(area || "")
+    .trim()
+    .replace(/\s+area$/i, "")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function getAreaAccessVariants(area) {
+  const trimmedArea = String(area || "").trim().replace(/\s+/g, " ");
+  if (!trimmedArea) return [];
+
+  const variants = [trimmedArea];
+  if (!/\s+area$/i.test(trimmedArea)) {
+    variants.push(`${trimmedArea} area`);
+  }
+
+  return [...new Set(variants)];
+}
+
+function escapeODataString(value) {
+  return String(value || "").replace(/'/g, "''");
+}
+
 async function getReportById(env, id) {
   const token = await getAccessToken(env);
   const { siteId, listId } = await resolveListIds(env, token);
@@ -228,8 +252,9 @@ async function getReportAccessForPayload(env, payload, report) {
 
   const userEmail = getEmailFromPayload(payload);
   const vpArea = await getVpAreaForEmail(env, userEmail);
-  const reportArea = (report?.area || "").trim();
-  const canAccessArea = Boolean(vpArea && reportArea && vpArea.toLowerCase() === reportArea.toLowerCase());
+  const reportArea = normalizeAreaForAccess(report?.area);
+  const allowedArea = normalizeAreaForAccess(vpArea);
+  const canAccessArea = Boolean(allowedArea && reportArea && allowedArea === reportArea);
   return { canView: canAccessArea, canEdit: canAccessArea, roles, restrictedArea: vpArea };
 }
 
@@ -424,8 +449,10 @@ async function handleGetReports(request, env, url) {
     // No $orderby — SubmittedAt is not indexed; we sort client-side below.
     // Filter to exclude recycled items.
     const recycleFilter = "fields/Is_x0020_Recycled eq false or fields/Is_x0020_Recycled eq null";
-    const areaFilter = area ? `fields/Area eq '${area}'` : null;
-    const combinedFilter = areaFilter ? `(${recycleFilter}) and ${areaFilter}` : recycleFilter;
+    const areaFilter = area
+      ? getAreaAccessVariants(area).map(areaVariant => `fields/Area eq '${escapeODataString(areaVariant)}'`).join(" or ")
+      : null;
+    const combinedFilter = areaFilter ? `(${recycleFilter}) and (${areaFilter})` : recycleFilter;
     
     const endpoint = cursor
       ? decodeURIComponent(cursor)
@@ -449,7 +476,8 @@ async function handleGetReports(request, env, url) {
             + `&$top=${top}`;
       if (area && !cursor) {
         // Add area filter to fallback endpoint if not using cursor (cursor already contains full URL)
-        fallbackEndpoint += `&$filter=fields/Area eq '${area}'`;
+        const fallbackAreaFilter = getAreaAccessVariants(area).map(areaVariant => `fields/Area eq '${escapeODataString(areaVariant)}'`).join(" or ");
+        fallbackEndpoint += `&$filter=${encodeURIComponent(`(${fallbackAreaFilter})`)}`;
       }
       res = await graphFetch(fallbackEndpoint, { headers });
       // Log available fields for debugging
@@ -2956,7 +2984,8 @@ async function sendConfirmationEmail(fields, env, token) {
   // Get VP emails based on area
   const vpMapping = await getAreaVpMapping(env, token);
   const area = fields.area;
-  const vpInfo = vpMapping[area];
+  const normalizedReportArea = normalizeAreaForAccess(area);
+  const vpInfo = Object.entries(vpMapping).find(([vpArea]) => normalizeAreaForAccess(vpArea) === normalizedReportArea)?.[1];
   const vpEmails = vpInfo ? parseMultiEmail(vpInfo.email) : [];
 
   console.log(`[sendConfirmationEmail] Area: ${area}, VP recipients resolved: ${vpEmails.length}`);
