@@ -148,6 +148,7 @@ The Worker stores the shared form values in named columns. The full submitted pa
 ### API routes
 
 - `POST /project-requests` — validate and save a request, derive VP assignment from the SharePoint mapping, and notify that VP.
+- `GET /project-request-areas` — returns area names from the AST VPs mapping for the public submission form.
 - `GET /project-requests` — Azure AD authenticated list; VPs are restricted to their mapped area.
 - `PATCH /project-requests/:id` — approve or reject a pending request. The Worker checks the caller's role and area server-side and records reviewer email, timestamp, and notes.
 
