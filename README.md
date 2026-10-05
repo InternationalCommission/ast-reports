@@ -115,6 +115,46 @@ Column **internal names** must match exactly — set them on first creation.
 
 ---
 
+## OA / N2N Project Requests and VP Approval
+
+The repository includes `project-request.html` (submission form) and `project-requests-admin.html` (approval dashboard). The form switches between N2N and OA fields and submits to the same Cloudflare Worker. The Worker uses the existing `getAreaVpMapping(env, token)` mapping from the SharePoint **AST VPs** list to determine the assigned area VP; the browser cannot choose or override the assigned VP.
+
+### Create the request list
+
+Create a separate SharePoint list named **AST Project Requests** (or set Worker variable `PROJECT_REQUESTS_LIST_NAME` to another list title). Create the following columns with the exact internal names. SharePoint's built-in `Title` column is used as the request title.
+
+| Internal name | Type |
+|---|---|
+| `ProjectType`, `Country`, `Area`, `NationalProjectType`, `Theme` | Single line of text |
+| `StartDate`, `EndDate`, `CompletedDate`, `ReviewedAt` | Date and time |
+| `Churches`, `Hearers`, `Decisions`, `Discipled`, `Baptisms` | Number |
+| `Leader1Name`, `Leader1Address`, `Leader1Phone`, `Leader1Email` | Single line of text |
+| `Leader2Name`, `Leader2Address`, `Leader2Phone`, `Leader2Email` | Single line of text |
+| `FirstTime`, `Coordinator`, `AstVpArea`, `AstVpName`, `AstVpEmail` | Single line of text |
+| `SpiritualNeeds`, `Importance`, `Vision`, `ReviewNotes`, `RequestDataJson`, `N2NBudgetJson`, `OABudgetJson` | Multiple lines of text (plain text) |
+| `Status`, `ReviewedBy`, `SubmittedBy` | Single line of text |
+
+The Worker stores the shared form values in named columns. The full submitted payload and the type-specific budget values are retained in `RequestDataJson`, `N2NBudgetJson`, and `OABudgetJson`; the unused project type's budget payload is blank. Use plain-text multiline columns for the JSON fields so the full budget detail is not truncated. Set `Status` to plain text; new submissions are created as **Pending**.
+
+### Worker and identity configuration
+
+- Set `PROJECT_REQUESTS_LIST_NAME` to the request list title if it differs from `AST Project Requests`.
+- The existing Worker app registration needs Microsoft Graph **Sites.ReadWrite.All** and **Mail.Send** application permissions with admin consent. `EMAIL_SENDER` must be a licensed mailbox the app can send as.
+- Add the hosted origin for both new HTML pages to `ALLOWED_ORIGIN` (same origin as the existing form/admin pages).
+- AST VPs must be members of the Azure AD group configured in `VP_GROUP_ID`, and their email must match an entry in the SharePoint **AST VPs** list. VPs can review only requests assigned to their mapped area. SuperAdmin and ReadWrite users can review all areas; ReadOnly users can view but cannot approve or reject.
+- The admin page uses the same tenant, SPA client ID, and `Reports.Read` API scope as `admin.html`. Add `project-requests-admin.html` as a SPA redirect URI in the app registration if the identity provider requires exact redirect URIs.
+- Notification email is sent to the mapped VP address(es). When `TEST_MODE=true`, the Worker routes notification email to `EMAIL_RECIPIENT` and labels the intended recipients in the message.
+
+### API routes
+
+- `POST /project-requests` — validate and save a request, derive VP assignment from the SharePoint mapping, and notify that VP.
+- `GET /project-requests` — Azure AD authenticated list; VPs are restricted to their mapped area.
+- `PATCH /project-requests/:id` — approve or reject a pending request. The Worker checks the caller's role and area server-side and records reviewer email, timestamp, and notes.
+
+Before production use, deploy the Worker and host both pages, then test one OA and one N2N submission, VP notification, cross-area access denial, and approve/reject flows in a test list.
+
+---
+
 ## Step 3 — Deploy the Worker
 
 ### Install Wrangler CLI
