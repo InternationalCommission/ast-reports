@@ -15,10 +15,10 @@
 <div class="field"><label for="country">Country *</label><input id="country" name="country" required></div>
 <div class="field"><label for="startDate">Starting date *</label><input type="date" id="startDate" name="startDate" required></div>
 <div class="field"><label for="endDate">Finishing date *</label><input type="date" id="endDate" name="endDate" required></div>
-<div class="field"><label for="completedDate">Date form completed *</label><input type="date" id="completedDate" name="completedDate" required></div>
+<div class="field hidden"><label for="completedDate">Date form completed *</label><input type="date" id="completedDate" name="completedDate" required></div>
 <div class="field"><label for="nationalProjectType">Type of national project *</label><select id="nationalProjectType" name="nationalProjectType" required><option value="">Choose one</option><option>The whole church</option><option>Women</option><option>Men</option><option>Youth</option><option>Children</option></select></div>
-<div class="field"><label for="area">Project area (main cities) *</label><select id="area" name="area" required><option value="">Loading areas…</option></select><span class="hint">Choose the area from the AST VP mapping.</span></div>
-<div class="field n2n hidden"><label for="theme">Project theme / motto *</label><input id="theme" name="theme"></div>
+<div class="field"><label for="area">Area of the world *</label><select id="area" name="area" required><option value="">Loading areas…</option></select><span class="hint">Choose the area from the AST VP mapping.</span></div>
+<div class="field"><label for="theme">Location (main cities/villages) *</label><input id="theme" name="theme"></div>
 <div class="field"><label for="churches">Number of participating churches *</label><input type="number" min="0" id="churches" name="churches" required></div>
 <div class="field"><label for="hearers">Expected people who will hear the Gospel *</label><input type="number" min="0" id="hearers" name="hearers" required></div>
 <div class="field"><label for="decisions">Expected decisions for Christ *</label><input type="number" min="0" id="decisions" name="decisions" required></div>
@@ -36,7 +36,7 @@
 <div class="field wide"><label for="importance">What is important about this area? *</label><textarea id="importance" name="importance" required></textarea></div>
 <div class="field wide"><label for="vision">Share goals from your vision and anything else we should know *</label><textarea id="vision" name="vision" required></textarea></div>
 <div class="field"><label for="coordinator">Area coordinator *</label><input id="coordinator" name="coordinator" required></div>
-</div><p class="hint">The AST Area VP is assigned automatically from the SharePoint AST VPs mapping.</p></section>
+</div></section>
 <section class="panel n2n hidden" id="n2nBudget">
 <h2>N2N Budget Proposal</h2>
 <p class="hint">Enter the number of materials and the costs covered by churches and IC. Add custom expense rows for Preparation Retreat, Visitation, and Discipleship. Totals update automatically.</p>
