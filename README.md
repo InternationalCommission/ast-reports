@@ -128,8 +128,8 @@ Create a separate SharePoint list named **AST Project Requests** (or set Worker 
 | `ProjectType`, `Country`, `Area`, `NationalProjectType`, `Theme` | Single line of text |
 | `StartDate`, `EndDate`, `CompletedDate`, `ReviewedAt` | Date and time |
 | `Churches`, `Hearers`, `Decisions`, `Discipled`, `Baptisms` | Number |
-| `Leader1Name`, `Leader1Address`, `Leader1Phone`, `Leader1Email` | Single line of text | `Leader1Address` currently stores the main leader country from the form; the legacy internal name is retained for compatibility. |
-| `Leader2Name`, `Leader2Address`, `Leader2Phone`, `Leader2Email` | Single line of text | Second leader field remains an address. |
+| `Leader1Name`, `Leader1Address`, `Leader1Phone`, `Leader1Email` | Single line of text (`Leader1Address` currently stores the main leader country; the legacy internal name is retained for compatibility.) |
+| `Leader2Name`, `Leader2Address`, `Leader2Phone`, `Leader2Email` | Single line of text (second leader field remains an address) |
 | `FirstTime`, `Coordinator`, `AstVpArea`, `AstVpName`, `AstVpEmail` | Single line of text |
 | `SpiritualNeeds`, `Importance`, `Vision`, `ReviewNotes`, `RequestDataJson`, `N2NBudgetJson`, `OABudgetJson` | Multiple lines of text (plain text) |
 | `Status`, `ReviewedBy`, `SubmittedBy` | Single line of text |
