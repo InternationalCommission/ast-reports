@@ -53,6 +53,7 @@
 <div class="budget-subsection">
 <h3>2. Preparation Retreat</h3>
 <p class="hint">Add one row for each expense category.</p>
+<div class="field" style="max-width:360px;margin:12px 0"><label for="retreatDate">Prayer preparation retreat date</label><input type="date" id="retreatDate" name="retreatDate"></div>
 <div class="budget-table-wrap"><table class="budget-table" aria-label="Preparation retreat budget"><thead><tr><th scope="col">Expense category</th><th scope="col">Churches ($)</th><th scope="col">IC ($)</th><th scope="col">Action</th></tr></thead><tbody id="retreatRows"></tbody><tfoot><tr><td>Total Preparation Retreat</td><td><input id="retreatChurchesTotal" readonly value="0.00"></td><td><input id="retreatICTotal" readonly value="0.00"></td><td></td></tr></tfoot></table></div>
 <div class="budget-actions"><button type="button" class="btn secondary" data-add-row="retreat">+ Add expense row</button></div>
 </div>
@@ -90,7 +91,7 @@
 <tr><td class="funding-label">I. C. will provide</td><td><input id="n2nIcFunding" name="n2nIcFunding" readonly value="0.00" aria-label="IC funding total"></td><td><input class="budget-note" id="n2nIcFundingNotes" name="n2nIcFundingNotes" aria-label="Notes for IC funding"></td></tr></tbody>
 <tfoot><tr><td>Final Total</td><td colspan="2"><input id="n2nFundingTotal" readonly value="0.00" aria-label="Final total budget funding"></td></tr></tfoot>
 </table></div>
-<div class="field"><label for="retreatDate">Prayer preparation retreat date</label><input type="date" id="retreatDate" name="retreatDate"></div>
+
 </div>
 </section>
 <section class="panel oa hidden" id="oaBudget"><h2>OA Budget Proposal</h2><div class="grid"><div class="field"><label for="oaAndrew">Operation Andrew ($)</label><input type="number" min="0" step=".01" id="oaAndrew" name="oaAndrew" value="0"></div><div class="field"><label for="oaLaunch">Meeting to launch OA ($)</label><input type="number" min="0" step=".01" id="oaLaunch" name="oaLaunch" value="0"></div><div class="field"><label for="oaResults">Meeting to collect OA results ($)</label><input type="number" min="0" step=".01" id="oaResults" name="oaResults" value="0"></div><div class="field"><label for="oaTotal">Total requested ($)</label><input id="oaTotal" readonly value="0.00"></div></div></section>
