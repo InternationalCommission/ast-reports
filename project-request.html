@@ -6,7 +6,7 @@
 <link rel="icon" href="https://internationalcommission.org/Files/Blue-globe-square-crop.png.webp">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Source+Serif+4:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
-:root{--navy:#1a3a5c;--gold:#c8a96e;--paper:#f2ede6;--cream:#f9f7f4;--ink:#1a1a1a;--muted:#6b6660;--border:#d8d0c6}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px 'Source Serif 4',Georgia,serif}.top{background:var(--navy);color:white;padding:24px max(20px,calc((100% - 900px)/2))}.top h1{font:700 28px 'Playfair Display',serif;margin:0}.top p{margin:8px 0 0;color:#e4d5b7}main{max-width:900px;margin:28px auto;padding:0 18px 50px}.panel{background:var(--cream);padding:26px;border:1px solid var(--border);border-radius:6px;margin-bottom:18px}.panel h2{font:700 21px 'Playfair Display',serif;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:9px;margin:0 0 18px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}.field{display:flex;flex-direction:column;gap:5px}.wide{grid-column:1/-1}label{font-weight:600}input,select,textarea{font:inherit;padding:10px;border:1px solid var(--border);border-radius:4px;background:white;width:100%}textarea{min-height:90px;resize:vertical}.hint{color:var(--muted);font-size:14px}.hidden{display:none!important}.btn{background:var(--navy);color:white;border:0;border-radius:4px;padding:12px 22px;font:600 16px inherit;cursor:pointer}.btn:disabled{opacity:.55;cursor:wait}.actions{display:flex;align-items:center;gap:15px}.status{margin-top:15px;padding:12px;border-radius:4px;display:none}.status.ok{display:block;background:#e7f3e8;color:#20552b}.status.err{display:block;background:#f8e8e8;color:#8a1f2b}.money{display:grid;grid-template-columns:2fr repeat(3,minmax(0,1fr));gap:10px;margin:8px 0}@media(max-width:650px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.panel{padding:18px}.money{grid-template-columns:1fr}}
+:root{--navy:#1a3a5c;--gold:#c8a96e;--paper:#f2ede6;--cream:#f9f7f4;--ink:#1a1a1a;--muted:#6b6660;--border:#d8d0c6}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px 'Source Serif 4',Georgia,serif}.top{background:var(--navy);color:white;padding:24px max(20px,calc((100% - 900px)/2))}.top h1{font:700 28px 'Playfair Display',serif;margin:0}.top p{margin:8px 0 0;color:#e4d5b7}main{max-width:900px;margin:28px auto;padding:0 18px 50px}.panel{background:var(--cream);padding:26px;border:1px solid var(--border);border-radius:6px;margin-bottom:18px}.panel h2{font:700 21px 'Playfair Display',serif;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:9px;margin:0 0 18px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}.field{display:flex;flex-direction:column;gap:5px}.wide{grid-column:1/-1}label{font-weight:600}input,select,textarea{font:inherit;padding:10px;border:1px solid var(--border);border-radius:4px;background:white;width:100%}textarea{min-height:90px;resize:vertical}.hint{color:var(--muted);font-size:14px}.hidden{display:none!important}.btn{background:var(--navy);color:white;border:0;border-radius:4px;padding:12px 22px;font:600 16px inherit;cursor:pointer}.btn:disabled{opacity:.55;cursor:wait}.actions{display:flex;align-items:center;gap:15px}.status{margin-top:15px;padding:12px;border-radius:4px;display:none}.status.ok{display:block;background:#e7f3e8;color:#20552b}.status.err{display:block;background:#f8e8e8;color:#8a1f2b}.budget-table-wrap{width:100%;overflow-x:auto;margin:12px 0 8px}.budget-table{width:100%;border-collapse:collapse;min-width:560px}.budget-table th,.budget-table td{padding:9px 8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}.budget-table th{background:#eee7dd;color:var(--navy);font-size:14px}.budget-table td:first-child{width:48%}.budget-table input{min-width:90px}.budget-table tfoot td{font-weight:700;background:#f1ece5}.budget-subsection{margin-top:22px;padding-top:16px;border-top:1px solid var(--border)}.budget-subsection h3{font:700 18px 'Playfair Display',serif;color:var(--navy);margin:0 0 8px}.budget-total{font-weight:700;color:var(--navy);margin:10px 0 0}.budget-actions{margin-top:10px}.btn.secondary{background:#e8e0d5;color:var(--navy);border:1px solid var(--border);padding:8px 12px;font-size:14px}.remove-row{background:transparent;border:0;color:#8a1f2b;cursor:pointer;font:inherit;padding:6px}.funding-label{font-weight:600;min-width:240px}.budget-note{min-width:160px}@media(max-width:650px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.panel{padding:18px}.budget-table{min-width:520px}}
 </style></head>
 <body><header class="top"><h1>Project Request</h1><p>International Commission · AST</p></header>
 <main><form id="requestForm">
@@ -37,25 +37,150 @@
 <div class="field wide"><label for="vision">Share goals from your vision and anything else we should know *</label><textarea id="vision" name="vision" required></textarea></div>
 <div class="field"><label for="coordinator">Area coordinator *</label><input id="coordinator" name="coordinator" required></div>
 </div><p class="hint">The AST Area VP is assigned automatically from the SharePoint AST VPs mapping.</p></section>
-<section class="panel n2n hidden" id="n2nBudget"><h2>N2N Budget Proposal</h2><p class="hint">Enter requested amounts for churches and IC. Leave costs at zero where they do not apply.</p><div id="n2nLines"></div><div class="grid"><div class="field"><label>Total cost of materials ($)</label><input id="materialsTotal" readonly value="0.00"></div><div class="field"><label>Total cost of retreat — churches ($)</label><input id="retreatChurchesTotal" readonly value="0.00"></div><div class="field"><label>Total cost of retreat — IC ($)</label><input id="retreatICTotal" readonly value="0.00"></div><div class="field"><label>Total cost of execution — churches ($)</label><input id="visitationChurchesTotal" readonly value="0.00"></div><div class="field"><label>Total cost of execution — IC ($)</label><input id="visitationICTotal" readonly value="0.00"></div><div class="field"><label>Total cost of follow-up — churches ($)</label><input id="discipleshipChurchesTotal" readonly value="0.00"></div><div class="field"><label>Total cost of follow-up — IC ($)</label><input id="discipleshipICTotal" readonly value="0.00"></div><div class="field"><label>Total budget — churches ($)</label><input id="n2nChurchesTotal" readonly value="0.00"></div><div class="field"><label>Total budget — IC ($)</label><input id="n2nICTotal" readonly value="0.00"></div><div class="field"><label for="retreatDate">Prayer preparation retreat date</label><input type="date" id="retreatDate" name="retreatDate"></div><div class="field wide"><label for="n2nChurchFundingNotes">Local churches / host committee will provide</label><input id="n2nChurchFundingNotes" name="n2nChurchFundingNotes"></div><div class="field wide"><label for="n2nIcFundingNotes">IC will provide</label><input id="n2nIcFundingNotes" name="n2nIcFundingNotes"></div><div class="field"><label for="n2nChurchFunding">Local churches / host committee contribution ($)</label><input type="number" min="0" step=".01" id="n2nChurchFunding" name="n2nChurchFunding" value="0"></div><div class="field"><label for="n2nIcFunding">IC contribution requested ($)</label><input type="number" min="0" step=".01" id="n2nIcFunding" name="n2nIcFunding" value="0"></div></div></section>
+<section class="panel n2n hidden" id="n2nBudget">
+<h2>N2N Budget Proposal</h2>
+<p class="hint">Enter the number of materials and the costs covered by churches and IC. Add custom expense rows for Preparation Retreat, Visitation, and Discipleship. Totals update automatically.</p>
+
+<div class="budget-subsection">
+<h3>1. Materials</h3>
+<div class="budget-table-wrap"><table class="budget-table" aria-label="Materials budget">
+<thead><tr><th scope="col">Materials category</th><th scope="col">Amount (quantity)</th><th scope="col">Churches ($)</th><th scope="col">IC ($)</th></tr></thead>
+<tbody id="materialsRows"></tbody>
+<tfoot><tr><td>Total Cost of Material</td><td><input id="materialsQuantityTotal" readonly value="0" aria-label="Total number of materials"></td><td><input id="materialsChurchesTotal" readonly value="0.00" aria-label="Total materials cost paid by churches"></td><td><input id="materialsICTotal" readonly value="0.00" aria-label="Total materials cost paid by IC"></td></tr></tfoot>
+</table></div>
+</div>
+
+<div class="budget-subsection">
+<h3>2. Preparation Retreat</h3>
+<p class="hint">Add one row for each expense category.</p>
+<div class="budget-table-wrap"><table class="budget-table" aria-label="Preparation retreat budget"><thead><tr><th scope="col">Expense category</th><th scope="col">Churches ($)</th><th scope="col">IC ($)</th><th scope="col">Action</th></tr></thead><tbody id="retreatRows"></tbody><tfoot><tr><td>Total Preparation Retreat</td><td><input id="retreatChurchesTotal" readonly value="0.00"></td><td><input id="retreatICTotal" readonly value="0.00"></td><td></td></tr></tfoot></table></div>
+<div class="budget-actions"><button type="button" class="btn secondary" data-add-row="retreat">+ Add expense row</button></div>
+</div>
+
+<div class="budget-subsection">
+<h3>3. Visitation</h3>
+<p class="hint">Add one row for each expense category.</p>
+<div class="budget-table-wrap"><table class="budget-table" aria-label="Visitation budget"><thead><tr><th scope="col">Expense category</th><th scope="col">Churches ($)</th><th scope="col">IC ($)</th><th scope="col">Action</th></tr></thead><tbody id="visitationRows"></tbody><tfoot><tr><td>Total Visitation</td><td><input id="visitationChurchesTotal" readonly value="0.00"></td><td><input id="visitationICTotal" readonly value="0.00"></td><td></td></tr></tfoot></table></div>
+<div class="budget-actions"><button type="button" class="btn secondary" data-add-row="visitation">+ Add expense row</button></div>
+</div>
+
+<div class="budget-subsection">
+<h3>4. Discipleship</h3>
+<p class="hint">Add one row for each expense category.</p>
+<div class="budget-table-wrap"><table class="budget-table" aria-label="Discipleship budget"><thead><tr><th scope="col">Expense category</th><th scope="col">Churches ($)</th><th scope="col">IC ($)</th><th scope="col">Action</th></tr></thead><tbody id="discipleshipRows"></tbody><tfoot><tr><td>Total Discipleship</td><td><input id="discipleshipChurchesTotal" readonly value="0.00"></td><td><input id="discipleshipICTotal" readonly value="0.00"></td><td></td></tr></tfoot></table></div>
+<div class="budget-actions"><button type="button" class="btn secondary" data-add-row="discipleship">+ Add expense row</button></div>
+</div>
+
+<div class="budget-subsection">
+<h3>5. Total Budget</h3>
+<div class="budget-table-wrap"><table class="budget-table" aria-label="Total budget summary"><thead><tr><th scope="col">Budget category</th><th scope="col">Churches ($)</th><th scope="col">IC ($)</th></tr></thead>
+<tbody><tr><td>Materials</td><td><input id="summaryMaterialsChurches" readonly value="0.00"></td><td><input id="summaryMaterialsIC" readonly value="0.00"></td></tr>
+<tr><td>Preparation Retreat</td><td><input id="summaryRetreatChurches" readonly value="0.00"></td><td><input id="summaryRetreatIC" readonly value="0.00"></td></tr>
+<tr><td>Visitation</td><td><input id="summaryVisitationChurches" readonly value="0.00"></td><td><input id="summaryVisitationIC" readonly value="0.00"></td></tr>
+<tr><td>Discipleship</td><td><input id="summaryDiscipleshipChurches" readonly value="0.00"></td><td><input id="summaryDiscipleshipIC" readonly value="0.00"></td></tr></tbody>
+<tfoot><tr><td>Total Budget</td><td><input id="n2nChurchesTotal" readonly value="0.00"></td><td><input id="n2nICTotal" readonly value="0.00"></td></tr></tfoot>
+</table></div>
+</div>
+
+<div class="budget-subsection">
+<h3>6. Budget Funding</h3>
+<p class="hint">Funding amounts are copied from the Total Budget above. Add an optional note describing what each group will provide.</p>
+<div class="budget-table-wrap"><table class="budget-table" aria-label="Budget funding"><thead><tr><th scope="col">Funding source</th><th scope="col">Calculated amount ($)</th><th scope="col">Notes (optional)</th></tr></thead>
+<tbody><tr><td class="funding-label">Local Churches &amp; Host Committee will provide</td><td><input id="n2nChurchFunding" name="n2nChurchFunding" readonly value="0.00" aria-label="Local churches and host committee funding total"></td><td><input class="budget-note" id="n2nChurchFundingNotes" name="n2nChurchFundingNotes" aria-label="Notes for local churches and host committee"></td></tr>
+<tr><td class="funding-label">I. C. will provide</td><td><input id="n2nIcFunding" name="n2nIcFunding" readonly value="0.00" aria-label="IC funding total"></td><td><input class="budget-note" id="n2nIcFundingNotes" name="n2nIcFundingNotes" aria-label="Notes for IC funding"></td></tr></tbody>
+<tfoot><tr><td>Final Total</td><td colspan="2"><input id="n2nFundingTotal" readonly value="0.00" aria-label="Final total budget funding"></td></tr></tfoot>
+</table></div>
+<div class="field"><label for="retreatDate">Prayer preparation retreat date</label><input type="date" id="retreatDate" name="retreatDate"></div>
+</div>
+</section>
 <section class="panel oa hidden" id="oaBudget"><h2>OA Budget Proposal</h2><div class="grid"><div class="field"><label for="oaAndrew">Operation Andrew ($)</label><input type="number" min="0" step=".01" id="oaAndrew" name="oaAndrew" value="0"></div><div class="field"><label for="oaLaunch">Meeting to launch OA ($)</label><input type="number" min="0" step=".01" id="oaLaunch" name="oaLaunch" value="0"></div><div class="field"><label for="oaResults">Meeting to collect OA results ($)</label><input type="number" min="0" step=".01" id="oaResults" name="oaResults" value="0"></div><div class="field"><label for="oaTotal">Total requested ($)</label><input id="oaTotal" readonly value="0.00"></div></div></section>
 <div class="actions"><button class="btn" type="submit" id="submitBtn">Submit project request</button><span class="hint">Required fields are marked with an asterisk.</span></div><div id="status" class="status" role="status" aria-live="polite"></div>
 </form></main>
 <script>
 const WORKER_URL="https://ast-report.alex-wascomb.workers.dev";
 const form=document.getElementById("requestForm"),type=document.getElementById("projectType");
-const n2nLines=[
-["materialsOperationAndrew","Preparation materials — Operation Andrew"],["materialsInvitations","Invitations / envelopes — Service of the Ten"],["materialsTestimonies","General testimonies"],["materialsDecisionCards","Decision cards"],["materialsNewBelieverLesson","Lesson for the new believer"],["materialsFollowupPoster","Follow-up poster"],["materialsOther","Other materials"],
-["retreatCoordinator","Prayer retreat — coordinator"],["retreatLine2","Prayer retreat — other expense 2"],["retreatLine3","Prayer retreat — other expense 3"],["retreatLine4","Prayer retreat — other expense 4"],["retreatLine5","Prayer retreat — other expense 5"],["retreatLine6","Prayer retreat — other expense 6"],
-["visitationCoordinatorTrip","Evangelistic visitation — coordinator trip"],["visitationLine2","Evangelistic visitation — other expense 2"],["visitationLine3","Evangelistic visitation — other expense 3"],["visitationLine4","Evangelistic visitation — other expense 4"],
-["discipleshipCoordinatorVisit","Ongoing discipleship — coordinator visit"],["discipleshipLine2","Ongoing discipleship — other expense 2"],["discipleshipLine3","Ongoing discipleship — other expense 3"],["discipleshipLine4","Ongoing discipleship — other expense 4"]
+const materialCategories=[
+["operationAndrew","Operation Andrew"],
+["invitations","Invitations/envelopes — Service of the Ten"],
+["testimonies","General Testimonies"],
+["decisionCards","Decision Cards"],
+["newBelieverLesson","Lesson for the New Believer"],
+["followupPoster","Follow-up poster"],
+["otherMaterials","Other materials"]
 ];
-const lines=document.getElementById("n2nLines");
-n2nLines.forEach(([key,label])=>{const row=document.createElement("div");row.className="money";const material=key.startsWith("materials");row.innerHTML='<label for="'+key+(material?'Amount':'Churches')+'">'+label+'</label>'+(material?'<input type="number" min="0" step=".01" name="'+key+'Amount" id="'+key+'Amount" aria-label="'+label+' total amount" value="0">':'')+'<input type="number" min="0" step=".01" name="'+key+'Churches" id="'+key+'Churches" aria-label="'+label+' churches amount" value="0"><input type="number" min="0" step=".01" name="'+key+'IC" id="'+key+'IC" aria-label="'+label+' IC amount" value="0">';lines.appendChild(row);row.querySelectorAll("input").forEach(input=>input.addEventListener("input",updateN2NTotals))});
-function sumFields(keys){return keys.reduce((sum,key)=>sum+(Number(document.getElementById(key)?.value)||0),0)}
-function setMoney(id,value){document.getElementById(id).value=value.toFixed(2)}
-function updateN2NTotals(){const groups={materials:n2nLines.filter(x=>x[0].startsWith("materials")).map(x=>x[0]),retreat:n2nLines.filter(x=>x[0].startsWith("retreat")).map(x=>x[0]),visitation:n2nLines.filter(x=>x[0].startsWith("visitation")).map(x=>x[0]),discipleship:n2nLines.filter(x=>x[0].startsWith("discipleship")).map(x=>x[0])};setMoney("materialsTotal",sumFields(groups.materials.map(k=>k+"Amount")));for(const [group,prefix] of [["retreat","retreat"],["visitation","visitation"],["discipleship","discipleship"]]){setMoney(prefix+"ChurchesTotal",sumFields(groups[group].map(k=>k+"Churches")));setMoney(prefix+"ICTotal",sumFields(groups[group].map(k=>k+"IC")))}setMoney("n2nChurchesTotal",sumFields(n2nLines.map(x=>x[0]+"Churches")));setMoney("n2nICTotal",sumFields(n2nLines.map(x=>x[0]+"IC")))}
-function showType(){const t=type.value;document.querySelectorAll(".n2n").forEach(e=>e.classList.toggle("hidden",t!=="N2N"));document.querySelectorAll(".oa").forEach(e=>e.classList.toggle("hidden",t!=="OA"));document.getElementById("n2nBudget").classList.toggle("hidden",t!=="N2N");document.getElementById("oaBudget").classList.toggle("hidden",t!=="OA");["theme","leader2Name","leader2Address","leader2Phone","leader2Email"].forEach(id=>document.getElementById(id).required=t==="N2N");n2nLines.forEach(([key])=>[key+"Amount",key+"Churches",key+"IC"].forEach(id=>{const input=document.getElementById(id);if(input)input.disabled=t!=="N2N"}));["oaAndrew","oaLaunch","oaResults"].forEach(id=>document.getElementById(id).disabled=t!=="OA")}
+const budgetGroups=["retreat","visitation","discipleship"];
+const rowCounts={retreat:0,visitation:0,discipleship:0};
+const money=(id)=>Number(document.getElementById(id)?.value)||0;
+const fmt=(n)=>n.toFixed(2);
+function createMaterialRows(){
+ const body=document.getElementById("materialsRows");
+ body.innerHTML="";
+ materialCategories.forEach(([key,label])=>{
+  const tr=document.createElement("tr");
+  tr.innerHTML='<td>'+label+'</td><td><input type="number" min="0" step="1" id="materials_'+key+'_amount" name="materials_'+key+'_amount" value="0" aria-label="'+label+' quantity"></td><td><input type="number" min="0" step=".01" id="materials_'+key+'_churches" name="materials_'+key+'_churches" value="0" aria-label="'+label+' cost paid by churches"></td><td><input type="number" min="0" step=".01" id="materials_'+key+'_ic" name="materials_'+key+'_ic" value="0" aria-label="'+label+' cost paid by IC"></td>';
+  body.appendChild(tr);
+  tr.querySelectorAll("input").forEach(input=>input.addEventListener("input",updateN2NTotals));
+ });
+}
+function addBudgetRow(group, category="", churches=0, ic=0){
+ const index=rowCounts[group]++;
+ const body=document.getElementById(group+"Rows");
+ const tr=document.createElement("tr");
+ tr.dataset.group=group;
+ tr.innerHTML='<td><input type="text" name="'+group+'Row'+index+'Category" aria-label="'+group+' expense category" placeholder="Enter expense category" value=""></td><td><input type="number" min="0" step=".01" name="'+group+'Row'+index+'Churches" aria-label="'+group+' expense paid by churches" value="0"></td><td><input type="number" min="0" step=".01" name="'+group+'Row'+index+'IC" aria-label="'+group+' expense paid by IC" value="0"></td><td><button type="button" class="remove-row" aria-label="Remove expense row">Remove</button></td>';
+ const inputs=tr.querySelectorAll("input");
+ inputs[0].value=category;
+ inputs[1].value=churches;
+ inputs[2].value=ic;
+ inputs.forEach(input=>input.addEventListener("input",updateN2NTotals));
+ tr.querySelector(".remove-row").addEventListener("click",()=>{tr.remove();updateN2NTotals()});
+ body.appendChild(tr);
+ updateN2NTotals();
+}
+function sumMaterial(field){
+ return materialCategories.reduce((total,[key])=>total+money("materials_"+key+"_"+field),0);
+}
+function sumGroup(group,field){
+ return Array.from(document.querySelectorAll("#"+group+"Rows tr")).reduce((total,tr)=>{
+  const input=tr.querySelectorAll("input")[field==="Churches"?1:2];
+  return total+(Number(input?.value)||0);
+ },0);
+}
+function setMoney(id,value){document.getElementById(id).value=fmt(value)}
+function updateN2NTotals(){
+ const materialsChurches=sumMaterial("churches"),materialsIC=sumMaterial("ic");
+ document.getElementById("materialsQuantityTotal").value=String(materialCategories.reduce((total,[key])=>total+money("materials_"+key+"_amount"),0));
+ setMoney("materialsChurchesTotal",materialsChurches);
+ setMoney("materialsICTotal",materialsIC);
+ const totals={materials:{churches:materialsChurches,ic:materialsIC}};
+ for(const group of budgetGroups){
+  const churches=sumGroup(group,"Churches"),ic=sumGroup(group,"IC");
+  setMoney(group+"ChurchesTotal",churches);setMoney(group+"ICTotal",ic);
+  totals[group]={churches,ic};
+ }
+ for(const group of ["materials",...budgetGroups]){
+  setMoney("summary"+group.charAt(0).toUpperCase()+group.slice(1)+"Churches",totals[group].churches);
+  setMoney("summary"+group.charAt(0).toUpperCase()+group.slice(1)+"IC",totals[group].ic);
+ }
+ const churches=Object.values(totals).reduce((s,t)=>s+t.churches,0);
+ const ic=Object.values(totals).reduce((s,t)=>s+t.ic,0);
+ setMoney("n2nChurchesTotal",churches);setMoney("n2nICTotal",ic);
+ setMoney("n2nChurchFunding",churches);setMoney("n2nIcFunding",ic);
+ setMoney("n2nFundingTotal",churches+ic);
+}
+function showType(){
+ const t=type.value;
+ document.querySelectorAll(".n2n").forEach(e=>e.classList.toggle("hidden",t!=="N2N"));
+ document.querySelectorAll(".oa").forEach(e=>e.classList.toggle("hidden",t!=="OA"));
+ document.getElementById("n2nBudget").classList.toggle("hidden",t!=="N2N");
+ document.getElementById("oaBudget").classList.toggle("hidden",t!=="OA");
+ ["theme","leader2Name","leader2Address","leader2Phone","leader2Email"].forEach(id=>document.getElementById(id).required=t==="N2N");
+ document.querySelectorAll("#n2nBudget input, #n2nBudget button").forEach(el=>{if(!el.matches("#n2nChurchFundingNotes,#n2nIcFundingNotes")&&!el.hasAttribute("data-add-row")&&!el.classList.contains("remove-row"))el.disabled=t!=="N2N"});
+ ["oaAndrew","oaLaunch","oaResults"].forEach(id=>document.getElementById(id).disabled=t!=="OA");
+}
+document.querySelectorAll("[data-add-row]").forEach(button=>button.addEventListener("click",()=>addBudgetRow(button.dataset.addRow)));
+createMaterialRows();
+addBudgetRow("retreat","");addBudgetRow("visitation","");addBudgetRow("discipleship","");
 type.addEventListener("change",showType);
 ["oaAndrew","oaLaunch","oaResults"].forEach(id=>document.getElementById(id).addEventListener("input",()=>document.getElementById("oaTotal").value=["oaAndrew","oaLaunch","oaResults"].reduce((s,k)=>s+(Number(document.getElementById(k).value)||0),0).toFixed(2)));
 document.getElementById("completedDate").value=new Date().toISOString().slice(0,10);
