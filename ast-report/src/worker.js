@@ -142,6 +142,7 @@ function projectRequestFieldMap(data, vp) {
     RequestDataJson: JSON.stringify(data),
     N2NBudgetJson: data.projectType === "N2N" ? JSON.stringify(data) : "",
     OABudgetJson: data.projectType === "OA" ? JSON.stringify({
+      oaAndrewAmount: data.oaAndrewAmount || 0,
       oaAndrew: data.oaAndrew || 0, oaLaunch: data.oaLaunch || 0, oaResults: data.oaResults || 0,
       total: (toNum(data.oaAndrew) || 0) + (toNum(data.oaLaunch) || 0) + (toNum(data.oaResults) || 0)
     }) : "",
