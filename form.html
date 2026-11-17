@@ -135,6 +135,319 @@
 
     /* Stats highlight row */
     .stat-highlight { background: rgba(200,169,110,.12); border-radius: 3px; }
+
+    /* Draft toolbar */
+    .draft-toolbar {
+      background: var(--cream);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 12px 20px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.04);
+    }
+    @media (max-width: 680px) {
+      .draft-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .draft-toolbar-right {
+        justify-content: flex-end;
+      }
+    }
+    .draft-toolbar-left {
+      font-size: 13.5px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      flex-wrap: wrap;
+    }
+    .draft-toolbar-left strong {
+      color: var(--navy);
+    }
+    .draft-active-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(42, 107, 60, 0.12);
+      color: var(--green);
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid rgba(42, 107, 60, 0.25);
+    }
+    .draft-toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .btn-draft {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #fff;
+      color: var(--navy);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 8px 16px;
+      font-family: 'Source Serif 4', serif;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s ease;
+      white-space: nowrap;
+    }
+    .btn-draft:hover {
+      background: #f4efe9;
+      border-color: var(--navy);
+      color: var(--navy);
+    }
+    .btn-draft-primary {
+      background: var(--navy);
+      color: #fff;
+      border-color: var(--navy);
+    }
+    .btn-draft-primary:hover {
+      background: #254e7a;
+      border-color: #254e7a;
+      color: #fff;
+    }
+    .btn-draft-unlink {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 12px;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 2px 4px;
+      font-family: inherit;
+    }
+    .btn-draft-unlink:hover {
+      color: var(--red);
+    }
+
+    /* Submit wrap actions */
+    .submit-actions-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .submit-actions-group .btn-draft {
+      padding: 13px 22px;
+      font-size: 15px;
+    }
+
+    /* Modals */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 30, 48, 0.65);
+      backdrop-filter: blur(2px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-dialog {
+      background: var(--cream);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 12px 36px rgba(0,0,0,.28);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      animation: modalSlideUp 0.18s ease-out;
+    }
+    .modal-dialog-lg {
+      max-width: 680px;
+      max-height: 85vh;
+    }
+    @keyframes modalSlideUp {
+      from { transform: translateY(16px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .modal-header {
+      background: var(--navy);
+      color: #fff;
+      padding: 15px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-header h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 18px;
+      font-weight: 500;
+      color: #fff;
+      margin: 0;
+      letter-spacing: .3px;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      color: #a8c4e0;
+      font-size: 24px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0 4px;
+      transition: color .15s;
+    }
+    .modal-close:hover {
+      color: #fff;
+    }
+    .modal-body {
+      padding: 22px;
+      overflow-y: auto;
+    }
+    .modal-footer {
+      padding: 14px 22px;
+      background: rgba(26,58,92,.04);
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .btn-modal-primary {
+      background: var(--navy);
+      color: #fff;
+      border: none;
+      border-radius: 3px;
+      padding: 9px 22px;
+      font-family: 'Source Serif 4', serif;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-modal-primary:hover {
+      background: #254e7a;
+    }
+    .btn-modal-secondary {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 9px 18px;
+      font-family: 'Source Serif 4', serif;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-modal-secondary:hover {
+      background: #f0ebe4;
+    }
+
+    /* Draft Cards inside Load Modal */
+    .draft-cards-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 420px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .draft-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .draft-card:hover {
+      border-color: var(--gold);
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    }
+    .draft-card-main {
+      flex: 1;
+      min-width: 0;
+    }
+    .draft-card-title {
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--navy);
+      margin-bottom: 4px;
+      word-break: break-word;
+    }
+    .draft-card-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .draft-card-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .draft-chip {
+      display: inline-block;
+      background: rgba(26,58,92,.06);
+      color: var(--navy);
+      border-radius: 3px;
+      padding: 2px 8px;
+      font-size: 11.5px;
+    }
+    .draft-card-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .btn-card-load {
+      background: var(--navy);
+      color: #fff;
+      border: none;
+      border-radius: 3px;
+      padding: 7px 16px;
+      font-size: 13.5px;
+      font-family: 'Source Serif 4', serif;
+      cursor: pointer;
+      transition: background .15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .btn-card-load:hover {
+      background: #254e7a;
+    }
+    .btn-card-delete {
+      background: none;
+      border: 1px solid transparent;
+      color: var(--muted);
+      border-radius: 3px;
+      padding: 6px 10px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn-card-delete:hover {
+      color: var(--red);
+      background: rgba(155,35,53,.08);
+      border-color: rgba(155,35,53,.2);
+    }
+    .drafts-empty-state {
+      text-align: center;
+      padding: 36px 16px;
+      color: var(--muted);
+    }
+    .drafts-empty-icon {
+      font-size: 38px;
+      margin-bottom: 12px;
+    }
   </style>
 </head>
 <body>
@@ -151,6 +464,22 @@
 </header>
 
 <main class="form-shell">
+  <!-- Draft Persistence Toolbar -->
+  <div class="draft-toolbar" id="draftToolbar">
+    <div class="draft-toolbar-left" id="draftStatusInfo">
+      <span class="draft-icon">💾</span>
+      <span id="draftStatusText">In-progress forms can be saved to your device and loaded anytime.</span>
+    </div>
+    <div class="draft-toolbar-right">
+      <button type="button" class="btn-draft" id="loadDraftBtnTop" title="Load a saved draft from this computer">
+        <span>📂</span> Load
+      </button>
+      <button type="button" class="btn-draft btn-draft-primary" id="saveDraftBtnTop" title="Save current progress to this computer">
+        <span>💾</span> Save For Later
+      </button>
+    </div>
+  </div>
+
   <form id="reportForm" novalidate>
 
     <!-- Coordinator Info -->
@@ -406,20 +735,74 @@
     </div>
 
     <div class="submit-wrap">
-      <button type="submit" class="btn-submit" id="submitBtn">
-        <div class="spinner"></div>
-        <span class="btn-text">Submit Report</span>
-      </button>
+      <div class="submit-actions-group">
+        <button type="button" class="btn-draft" id="loadDraftBtnBottom" title="Load a saved draft from this computer">
+          <span>📂</span> Load
+        </button>
+        <button type="button" class="btn-draft btn-draft-primary" id="saveDraftBtnBottom" title="Save current progress to this computer">
+          <span>💾</span> Save For Later
+        </button>
+        <button type="submit" class="btn-submit" id="submitBtn">
+          <div class="spinner"></div>
+          <span class="btn-text">Submit Report</span>
+        </button>
+      </div>
     </div>
 
   </form>
 </main>
+
+<!-- Save Draft Modal -->
+<div class="modal-overlay" id="saveDraftModal" style="display:none;" aria-hidden="true">
+  <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="saveModalTitle">
+    <div class="modal-header">
+      <h3 id="saveModalTitle">Save Form For Later</h3>
+      <button type="button" class="modal-close" id="closeSaveModalBtn" title="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:16px;color:var(--muted);font-size:14.5px;line-height:1.5;">
+        Save your in-progress report to this browser. You can return and load it anytime before final submission.
+      </p>
+      <div class="field" style="margin-bottom:6px;">
+        <label for="saveDraftNameInput">Name for this saved form <span class="req">*</span></label>
+        <input type="text" id="saveDraftNameInput" placeholder="e.g. Kenya Outreach - Summer 2026" maxlength="80" autocomplete="off" />
+      </div>
+      <div id="saveDraftError" style="color:var(--red);font-size:13px;display:none;margin-top:6px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-modal-secondary" id="cancelSaveModalBtn">Cancel</button>
+      <button type="button" class="btn-modal-primary" id="confirmSaveDraftBtn">Save Draft</button>
+    </div>
+  </div>
+</div>
+
+<!-- Load Saved Forms Modal -->
+<div class="modal-overlay" id="loadDraftModal" style="display:none;" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-lg" role="dialog" aria-modal="true" aria-labelledby="loadModalTitle">
+    <div class="modal-header">
+      <h3 id="loadModalTitle">Saved Form Submissions</h3>
+      <button type="button" class="modal-close" id="closeLoadModalBtn" title="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:16px;color:var(--muted);font-size:14.5px;">
+        Select a saved form from this computer to continue editing.
+      </p>
+      <div id="savedDraftsList" class="draft-cards-list">
+        <!-- Draft cards rendered by JS -->
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-modal-secondary" id="cancelLoadModalBtn">Close</button>
+    </div>
+  </div>
+</div>
 
 <div id="toast"></div>
 
 <script>
   // ── Configuration ────────────────────────────────────────────────────────
   const WORKER_URL = "https://ast-report.alex-wascomb.workers.dev";
+  let pendingAreaValue = null;
 
   // ── Load areas from AST VPs list ─────────────────────────────────────────
   async function loadAreas() {
@@ -427,7 +810,7 @@
       const res = await fetch(WORKER_URL + "/areas");
       const data = await res.json();
       const select = document.getElementById("area");
-      const currentValue = select.value || (urlParams.has("area") ? urlParams.get("area") : "");
+      const currentValue = select.value || pendingAreaValue || (urlParams.has("area") ? urlParams.get("area") : "");
       if (data.areas && data.areas.length > 0) {
         select.innerHTML = '<option value="">Select area</option>';
         data.areas.forEach(area => {
@@ -650,6 +1033,436 @@
     applyEditMode();
   }
 
+  // ── IndexedDB Draft Persistence ──────────────────────────────────────────
+  let currentActiveDraftId = null;
+  let currentActiveDraftName = null;
+
+  const DRAFTS_DB_NAME = "ICReportDraftsDB";
+  const DRAFTS_STORE_NAME = "drafts";
+  const DRAFTS_DB_VERSION = 1;
+
+  function openDraftsDB() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) {
+        return reject(new Error("IndexedDB is not supported in this browser."));
+      }
+      const req = window.indexedDB.open(DRAFTS_DB_NAME, DRAFTS_DB_VERSION);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(DRAFTS_STORE_NAME)) {
+          const store = db.createObjectStore(DRAFTS_STORE_NAME, { keyPath: "id" });
+          store.createIndex("updatedAt", "updatedAt", { unique: false });
+        }
+      };
+      req.onsuccess = (e) => resolve(e.target.result);
+      req.onerror = (e) => reject(e.target.error || new Error("Failed to open IndexedDB"));
+    });
+  }
+
+  async function getAllDraftsFromDB() {
+    const db = await openDraftsDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(DRAFTS_STORE_NAME, "readonly");
+      const store = tx.objectStore(DRAFTS_STORE_NAME);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const list = req.result || [];
+        list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        resolve(list);
+      };
+      req.onerror = (e) => reject(e.target.error || new Error("Failed to load drafts"));
+    });
+  }
+
+  async function saveDraftToDB(draft) {
+    const db = await openDraftsDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(DRAFTS_STORE_NAME, "readwrite");
+      const store = tx.objectStore(DRAFTS_STORE_NAME);
+      const req = store.put(draft);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = (e) => reject(e.target.error || new Error("Failed to save draft"));
+    });
+  }
+
+  async function deleteDraftFromDB(id) {
+    if (!id) return;
+    const db = await openDraftsDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(DRAFTS_STORE_NAME, "readwrite");
+      const store = tx.objectStore(DRAFTS_STORE_NAME);
+      const req = store.delete(id);
+      req.onsuccess = () => resolve();
+      req.onerror = (e) => reject(e.target.error || new Error("Failed to delete draft"));
+    });
+  }
+
+  function collectFormData() {
+    const fieldIds = [
+      "coordinatorName", "coordinatorEmail", "projectTitle", "city", "country",
+      "area", "projectDateFrom", "projectDateTo", "introduction",
+      "churchesParticipated", "nationalParticipants", "usaParticipants",
+      "otherCountriesParticipants", "peopleHeardGospel", "professionsOfFaith",
+      "rededications", "baptisms", "newChurchesPlanted", "totalFundsSent",
+      "spentOnMaterials", "ticketsCost", "accommodationCost", "fuelCost",
+      "foodCost", "financialHelpParticipants", "numParticipantsHelp",
+      "ralliesExpenses", "ralliesDescription", "additionalExpenses",
+      "additionalNeedDescription"
+    ];
+    const data = {};
+    fieldIds.forEach(id => {
+      const el = document.getElementById(id);
+      data[id] = el ? el.value : "";
+    });
+    data.testimonies = testimonies.map(t => ({
+      author: t.author || "",
+      text: t.text || ""
+    }));
+    return data;
+  }
+
+  async function serializeFiles(files) {
+    if (!Array.isArray(files)) return [];
+    const list = [];
+    for (const file of files) {
+      try {
+        const buffer = await file.arrayBuffer();
+        const blob = new Blob([buffer], { type: file.type || "application/octet-stream" });
+        list.push({
+          name: file.name,
+          type: file.type || "application/octet-stream",
+          size: file.size,
+          lastModified: file.lastModified || Date.now(),
+          blob: blob
+        });
+      } catch (e) {
+        list.push({
+          name: file.name,
+          type: file.type || "application/octet-stream",
+          size: file.size,
+          lastModified: file.lastModified || Date.now(),
+          blob: file
+        });
+      }
+    }
+    return list;
+  }
+
+  function deserializeFiles(savedFiles) {
+    if (!Array.isArray(savedFiles)) return [];
+    return savedFiles.map(item => {
+      try {
+        if (item instanceof File) return item;
+        const blob = item.blob || item.data || item;
+        return new File([blob], item.name || "attachment", {
+          type: item.type || "application/octet-stream",
+          lastModified: item.lastModified || Date.now()
+        });
+      } catch (e) {
+        return item.blob || item.data || item;
+      }
+    }).filter(Boolean);
+  }
+
+  function populateFormWithData(draft) {
+    if (!draft || !draft.data) return;
+    const data = draft.data;
+    const fieldIds = [
+      "coordinatorName", "coordinatorEmail", "projectTitle", "city", "country",
+      "area", "projectDateFrom", "projectDateTo", "introduction",
+      "churchesParticipated", "nationalParticipants", "usaParticipants",
+      "otherCountriesParticipants", "peopleHeardGospel", "professionsOfFaith",
+      "rededications", "baptisms", "newChurchesPlanted", "totalFundsSent",
+      "spentOnMaterials", "ticketsCost", "accommodationCost", "fuelCost",
+      "foodCost", "financialHelpParticipants", "numParticipantsHelp",
+      "ralliesExpenses", "ralliesDescription", "additionalExpenses",
+      "additionalNeedDescription"
+    ];
+    fieldIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && data[id] !== undefined) {
+        el.value = data[id];
+      }
+    });
+
+    if (data.area) {
+      pendingAreaValue = data.area;
+      const areaSelect = document.getElementById("area");
+      if (areaSelect) {
+        areaSelect.value = data.area;
+      }
+    }
+
+    testimonies = [];
+    testimonyCounter = 0;
+    if (Array.isArray(data.testimonies) && data.testimonies.length > 0) {
+      data.testimonies.forEach(t => addTestimony(t.author || "", t.text || ""));
+    } else {
+      addTestimony();
+    }
+    renderTestimonies();
+
+    selectedFiles = deserializeFiles(draft.files || []);
+    renderFileList();
+
+    currentActiveDraftId = draft.id;
+    currentActiveDraftName = draft.name;
+    updateDraftStatusUI();
+  }
+
+  function updateDraftStatusUI() {
+    const statusEl = document.getElementById("draftStatusInfo");
+    if (!statusEl) return;
+    if (currentActiveDraftId && currentActiveDraftName) {
+      statusEl.innerHTML = `
+        <span class="draft-active-badge">✓ Loaded Draft</span>
+        <span>Active: <strong>${escHtml(currentActiveDraftName)}</strong></span>
+        <button type="button" class="btn-draft-unlink" onclick="unlinkCurrentDraft()" title="Clear form to start fresh without deleting stored draft">Start Fresh</button>
+      `;
+    } else {
+      statusEl.innerHTML = `
+        <span class="draft-icon">💾</span>
+        <span id="draftStatusText">In-progress forms can be saved to your device and loaded anytime.</span>
+      `;
+    }
+  }
+
+  window.unlinkCurrentDraft = function() {
+    if (confirm("Clear the form and start a new blank report? (Your saved draft will remain stored on your device)")) {
+      currentActiveDraftId = null;
+      currentActiveDraftName = null;
+      document.getElementById("reportForm").reset();
+      selectedFiles = [];
+      renderFileList();
+      testimonies = [];
+      testimonyCounter = 0;
+      addTestimony();
+      updateDraftStatusUI();
+      showToast("Form cleared for a new report.", false);
+    }
+  };
+
+  function openSaveModal() {
+    const modal = document.getElementById("saveDraftModal");
+    const input = document.getElementById("saveDraftNameInput");
+    const errorEl = document.getElementById("saveDraftError");
+    errorEl.style.display = "none";
+    errorEl.textContent = "";
+
+    if (currentActiveDraftName) {
+      input.value = currentActiveDraftName;
+    } else {
+      const project = (document.getElementById("projectTitle")?.value || "").trim();
+      const country = (document.getElementById("country")?.value || "").trim();
+      if (project && country) {
+        input.value = `${project} - ${country}`;
+      } else if (project) {
+        input.value = project;
+      } else if (country) {
+        input.value = `Outreach - ${country}`;
+      } else {
+        const today = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        input.value = `Draft - ${today}`;
+      }
+    }
+
+    modal.style.display = "flex";
+    modal.setAttribute("aria-hidden", "false");
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 50);
+  }
+
+  function closeSaveModal() {
+    const modal = document.getElementById("saveDraftModal");
+    modal.style.display = "none";
+    modal.setAttribute("aria-hidden", "true");
+  }
+
+  async function handleSaveDraft() {
+    const input = document.getElementById("saveDraftNameInput");
+    const errorEl = document.getElementById("saveDraftError");
+    const name = input.value.trim();
+    if (!name) {
+      errorEl.textContent = "Please enter a name for this saved form.";
+      errorEl.style.display = "block";
+      input.focus();
+      return;
+    }
+
+    const draftId = currentActiveDraftId || ("draft_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7));
+    const formData = collectFormData();
+    const serializedFiles = await serializeFiles(selectedFiles);
+
+    const draft = {
+      id: draftId,
+      name: name,
+      updatedAt: Date.now(),
+      data: formData,
+      files: serializedFiles
+    };
+
+    try {
+      await saveDraftToDB(draft);
+      currentActiveDraftId = draft.id;
+      currentActiveDraftName = draft.name;
+      updateDraftStatusUI();
+      closeSaveModal();
+      showToast(`✓ Form saved as "${name}" for later.`);
+    } catch (err) {
+      console.error("Failed to save draft:", err);
+      errorEl.textContent = "Failed to save draft: " + err.message;
+      errorEl.style.display = "block";
+    }
+  }
+
+  async function openLoadModal() {
+    const modal = document.getElementById("loadDraftModal");
+    const listContainer = document.getElementById("savedDraftsList");
+    listContainer.innerHTML = '<div style="padding:28px 16px;text-align:center;color:var(--muted);">Loading saved forms…</div>';
+    modal.style.display = "flex";
+    modal.setAttribute("aria-hidden", "false");
+
+    try {
+      const drafts = await getAllDraftsFromDB();
+      renderDraftsList(drafts);
+    } catch (err) {
+      console.error("Failed to load drafts from DB:", err);
+      listContainer.innerHTML = `<div class="drafts-empty-state"><div class="drafts-empty-icon">⚠️</div><p>Error loading saved forms: ${escHtml(err.message)}</p></div>`;
+    }
+  }
+
+  function closeLoadModal() {
+    const modal = document.getElementById("loadDraftModal");
+    modal.style.display = "none";
+    modal.setAttribute("aria-hidden", "true");
+  }
+
+  function renderDraftsList(drafts) {
+    const container = document.getElementById("savedDraftsList");
+    if (!drafts || drafts.length === 0) {
+      container.innerHTML = `
+        <div class="drafts-empty-state">
+          <div class="drafts-empty-icon">📂</div>
+          <p style="font-size:16px;color:var(--navy);font-weight:600;margin-bottom:6px;">No saved forms found</p>
+          <p style="font-size:13.5px;color:var(--muted);max-width:380px;margin:0 auto;line-height:1.45;">
+            Click <strong>"Save For Later"</strong> at any time to save your progress on this device and return to it later.
+          </p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = drafts.map(d => {
+      const dateStr = new Date(d.updatedAt || Date.now()).toLocaleString(undefined, {
+        month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit"
+      });
+      const dData = d.data || {};
+      const proj = dData.projectTitle || "";
+      const locationParts = [dData.city, dData.country].filter(Boolean);
+      const loc = locationParts.length > 0 ? locationParts.join(", ") : (dData.area || "");
+      const numTestimonies = Array.isArray(dData.testimonies) ? dData.testimonies.filter(t => t.text).length : 0;
+      const numFiles = Array.isArray(d.files) ? d.files.length : 0;
+      const isCurrent = (currentActiveDraftId === d.id);
+
+      return `
+        <div class="draft-card" data-id="${escHtml(d.id)}">
+          <div class="draft-card-main">
+            <div class="draft-card-title">
+              ${escHtml(d.name)}
+              ${isCurrent ? ' <span class="draft-active-badge" style="font-size:11px;">Current</span>' : ''}
+            </div>
+            <div class="draft-card-meta">Saved: ${dateStr}</div>
+            <div class="draft-card-chips">
+              ${proj ? `<span class="draft-chip">📁 ${escHtml(proj)}</span>` : ""}
+              ${loc ? `<span class="draft-chip">📍 ${escHtml(loc)}</span>` : ""}
+              ${numTestimonies > 0 ? `<span class="draft-chip">💬 ${numTestimonies} testimon${numTestimonies === 1 ? 'y' : 'ies'}</span>` : ""}
+              ${numFiles > 0 ? `<span class="draft-chip">📎 ${numFiles} file${numFiles === 1 ? '' : 's'}</span>` : ""}
+            </div>
+          </div>
+          <div class="draft-card-actions">
+            <button type="button" class="btn-card-load" onclick="selectDraftToLoad('${escHtml(d.id)}')">
+              Load
+            </button>
+            <button type="button" class="btn-card-delete" onclick="handleDeleteDraft('${escHtml(d.id)}', '${escHtml(d.name).replace(/'/g, "\\'")}')" title="Delete this saved form">
+              🗑️
+            </button>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  window.selectDraftToLoad = async function(draftId) {
+    try {
+      const drafts = await getAllDraftsFromDB();
+      const draft = drafts.find(d => d.id === draftId);
+      if (!draft) {
+        showToast("Draft not found.", true);
+        return;
+      }
+      populateFormWithData(draft);
+      closeLoadModal();
+      showToast(`✓ Loaded draft "${draft.name}".`);
+    } catch (err) {
+      console.error("Failed to load draft:", err);
+      showToast("Error loading draft: " + err.message, true);
+    }
+  };
+
+  window.handleDeleteDraft = async function(draftId, draftName) {
+    if (!confirm(`Are you sure you want to delete the saved draft "${draftName}"?`)) {
+      return;
+    }
+    try {
+      await deleteDraftFromDB(draftId);
+      if (currentActiveDraftId === draftId) {
+        currentActiveDraftId = null;
+        currentActiveDraftName = null;
+        updateDraftStatusUI();
+      }
+      const drafts = await getAllDraftsFromDB();
+      renderDraftsList(drafts);
+      showToast(`Deleted draft "${draftName}".`);
+    } catch (err) {
+      console.error("Failed to delete draft:", err);
+      showToast("Error deleting draft: " + err.message, true);
+    }
+  };
+
+  // Wire draft UI event listeners
+  document.getElementById("saveDraftBtnTop")?.addEventListener("click", openSaveModal);
+  document.getElementById("saveDraftBtnBottom")?.addEventListener("click", openSaveModal);
+  document.getElementById("loadDraftBtnTop")?.addEventListener("click", openLoadModal);
+  document.getElementById("loadDraftBtnBottom")?.addEventListener("click", openLoadModal);
+  document.getElementById("confirmSaveDraftBtn")?.addEventListener("click", handleSaveDraft);
+  document.getElementById("cancelSaveModalBtn")?.addEventListener("click", closeSaveModal);
+  document.getElementById("closeSaveModalBtn")?.addEventListener("click", closeSaveModal);
+  document.getElementById("cancelLoadModalBtn")?.addEventListener("click", closeLoadModal);
+  document.getElementById("closeLoadModalBtn")?.addEventListener("click", closeLoadModal);
+
+  document.getElementById("saveDraftNameInput")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSaveDraft();
+    }
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeSaveModal();
+      closeLoadModal();
+    }
+  });
+
+  document.getElementById("saveDraftModal")?.addEventListener("click", (e) => {
+    if (e.target.id === "saveDraftModal") closeSaveModal();
+  });
+  document.getElementById("loadDraftModal")?.addEventListener("click", (e) => {
+    if (e.target.id === "loadDraftModal") closeLoadModal();
+  });
+
   // ── Form submission ───────────────────────────────────────────────────────
   const form      = document.getElementById("reportForm");
   const submitBtn = document.getElementById("submitBtn");
@@ -695,6 +1508,18 @@
       }
 
       if (data.success || res.ok) {
+        // Delete this saved draft instance from IndexedDB upon successful submission
+        if (currentActiveDraftId) {
+          try {
+            await deleteDraftFromDB(currentActiveDraftId);
+          } catch (delErr) {
+            console.error("Failed to delete draft from IndexedDB on submission:", delErr);
+          }
+          currentActiveDraftId = null;
+          currentActiveDraftName = null;
+          updateDraftStatusUI();
+        }
+
         sessionStorage.setItem("lastEditedReportId", EDIT_MODE_REPORT_ID || data.listItemId || "");
         
         // If return URL is provided, redirect after success
