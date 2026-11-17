@@ -427,7 +427,7 @@
       const res = await fetch(WORKER_URL + "/areas");
       const data = await res.json();
       const select = document.getElementById("area");
-      const currentValue = select.value;
+      const currentValue = select.value || (urlParams.has("area") ? urlParams.get("area") : "");
       if (data.areas && data.areas.length > 0) {
         select.innerHTML = '<option value="">Select area</option>';
         data.areas.forEach(area => {
@@ -643,9 +643,11 @@
     testimonies = [];
     testimonyCounter = 0;
     EDIT_MODE_TESTIMONIES.forEach(t => addTestimony(t.author || "", t.text || ""));
-    applyEditMode();
   } else {
     addTestimony();
+  }
+  if (isEditMode) {
+    applyEditMode();
   }
 
   // ── Form submission ───────────────────────────────────────────────────────

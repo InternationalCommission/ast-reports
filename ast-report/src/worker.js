@@ -256,9 +256,10 @@ async function handleGetProjectRequests(request, env) {
     const payload = auth.payload, roles = getUserRoles(payload, env);
     const isAdmin = roles.some(role => ["SuperAdmin", "ReadWrite", "ReadOnly"].includes(role));
     const email = getEmailFromPayload(payload);
-    const isVp = Boolean(env.VP_GROUP_ID && (payload.groups || []).includes(env.VP_GROUP_ID));
-    const vpArea = isVp ? await getVpAreaForEmail(env, email) : null;
-    if (!isAdmin && (!isVp || !vpArea)) return corsResponse({ error: "You are not authorized to view project requests." }, 403, env);
+    const vpGroupId = getVpGroupId(env);
+    const isVp = Boolean(vpGroupId && (payload.groups || []).includes(vpGroupId));
+    const vpAreas = isVp ? await getVpAreasForEmail(env, email) : [];
+    if (!isAdmin && (!isVp || vpAreas.length === 0)) return corsResponse({ error: "You are not authorized to view project requests." }, 403, env);
     const token = await getAccessToken(env), ids = await getProjectRequestListIds(env, token), all = [];
     let next = "https://graph.microsoft.com/v1.0/sites/" + ids.siteId + "/lists/" + ids.listId + "/items?$expand=fields&$top=200&$orderby=createdDateTime%20desc";
     while (next) {
@@ -266,8 +267,11 @@ async function handleGetProjectRequests(request, env) {
       all.push(...(page.value || [])); next = page["@odata.nextLink"] || null;
     }
     let items = all.map(normalizeProjectRequest);
-    if (!isAdmin) items = items.filter(item => normalizeAreaForAccess(item.astVpArea) === normalizeAreaForAccess(vpArea));
-    return corsResponse({ items, userArea: vpArea, roles, isAdmin }, 200, env);
+    if (!isAdmin) {
+      const normalizedAllowed = vpAreas.map(normalizeAreaForAccess);
+      items = items.filter(item => normalizedAllowed.includes(normalizeAreaForAccess(item.astVpArea)));
+    }
+    return corsResponse({ items, userArea: vpAreas.join(", "), userAreas: vpAreas, roles, isAdmin }, 200, env);
   } catch (err) {
     console.error("[handleGetProjectRequests]", err.message);
     return corsResponse({ error: err.message || "Could not load project requests." }, 500, env);
@@ -279,9 +283,10 @@ async function handleReviewProjectRequest(request, env, id) {
   try {
     const payload = auth.payload, roles = getUserRoles(payload, env), email = getEmailFromPayload(payload);
     const isAdmin = roles.some(role => ["SuperAdmin", "ReadWrite"].includes(role));
-    const isVp = Boolean(env.VP_GROUP_ID && (payload.groups || []).includes(env.VP_GROUP_ID));
-    const vpArea = isVp ? await getVpAreaForEmail(env, email) : null;
-    if (!isAdmin && (!isVp || !vpArea)) return corsResponse({ error: "You are not authorized to review project requests." }, 403, env);
+    const vpGroupId = getVpGroupId(env);
+    const isVp = Boolean(vpGroupId && (payload.groups || []).includes(vpGroupId));
+    const vpAreas = isVp ? await getVpAreasForEmail(env, email) : [];
+    if (!isAdmin && (!isVp || vpAreas.length === 0)) return corsResponse({ error: "You are not authorized to review project requests." }, 403, env);
     const decision = await request.json();
     if (!["Approved", "Rejected"].includes(decision.status)) return corsResponse({ error: "Decision must be Approved or Rejected." }, 400, env);
     const token = await getAccessToken(env), ids = await getProjectRequestListIds(env, token);
@@ -289,7 +294,8 @@ async function handleReviewProjectRequest(request, env, id) {
       headers: { Authorization: "Bearer " + token, Accept: "application/json" }
     });
     const current = normalizeProjectRequest(item);
-    if (!isAdmin && normalizeAreaForAccess(current.astVpArea) !== normalizeAreaForAccess(vpArea)) return corsResponse({ error: "This request is assigned to another AST Area VP." }, 403, env);
+    const normalizedAllowed = vpAreas.map(normalizeAreaForAccess);
+    if (!isAdmin && !normalizedAllowed.includes(normalizeAreaForAccess(current.astVpArea))) return corsResponse({ error: "This request is assigned to another AST Area VP." }, 403, env);
     if (current.status !== "Pending") return corsResponse({ error: "This request has already been reviewed." }, 409, env);
     const reviewFields = { Status: decision.status, ReviewNotes: String(decision.reviewNotes || "").slice(0, 5000), ReviewedBy: email || "Unknown", ReviewedAt: new Date().toISOString() };
     await graphFetch("https://graph.microsoft.com/v1.0/sites/" + ids.siteId + "/lists/" + ids.listId + "/items/" + encodeURIComponent(id) + "/fields", {
@@ -305,6 +311,12 @@ async function handleReviewProjectRequest(request, env, id) {
 // ────────────────────────────────────────────────────────────────────────────
 // POST / — Submit a new report
 // ────────────────────────────────────────────────────────────────────────────
+
+const DEFAULT_VP_GROUP_ID = "2577bd66-1710-4b98-9b56-89255c743830";
+
+function getVpGroupId(env) {
+  return env?.VP_GROUP_ID || DEFAULT_VP_GROUP_ID;
+}
 
 // Cache for AST VPs list data
 let _cachedVpList = null;
@@ -350,7 +362,17 @@ async function getAreaVpMapping(env, token) {
       const email = item.Email || "";
 
       if (area) {
-        mapping[area] = { name, email };
+        if (mapping[area]) {
+          const existingEmails = parseMultiEmail(mapping[area].email);
+          const newEmails = parseMultiEmail(email);
+          const combinedEmails = [...new Set([...existingEmails, ...newEmails])];
+          mapping[area] = {
+            name: mapping[area].name ? `${mapping[area].name}, ${name}` : name,
+            email: combinedEmails.join(", "),
+          };
+        } else {
+          mapping[area] = { name, email };
+        }
       }
     }
 
@@ -375,22 +397,29 @@ function getEmailFromPayload(payload) {
   return payload.email || payload.preferred_username || payload.upn || null;
 }
 
-async function getVpAreaForEmail(env, email) {
-  if (!email) return null;
+async function getVpAreasForEmail(env, email) {
+  if (!email) return [];
   
   const mapping = await getAreaVpMapping(env, null);
-  const normalizedEmail = email.toLowerCase();
+  const normalizedEmail = email.toLowerCase().trim();
+  const matchedAreas = [];
   
-  // Find area where email matches (handling multi-email VP entries)
+  // Find areas where email matches (handling multi-email VP entries and multi-area VPs)
   for (const [area, vpInfo] of Object.entries(mapping)) {
     const emails = parseMultiEmail(vpInfo.email);
     if (emails.some(e => e.toLowerCase() === normalizedEmail)) {
-      console.log(`[getVpAreaForEmail] Matched VP area "${area}"`);
-      return area;
+      matchedAreas.push(area);
     }
   }
   
-  return null;
+  const uniqueAreas = [...new Set(matchedAreas)];
+  console.log(`[getVpAreasForEmail] User ${normalizedEmail} matched areas: ${JSON.stringify(uniqueAreas)}`);
+  return uniqueAreas;
+}
+
+async function getVpAreaForEmail(env, email) {
+  const areas = await getVpAreasForEmail(env, email);
+  return areas.length > 0 ? areas[0] : null;
 }
 
 function normalizeAreaForAccess(area) {
@@ -435,18 +464,20 @@ async function getReportById(env, id) {
 async function getReportAccessForPayload(env, payload, report) {
   const roles = getUserRoles(payload, env);
   const isElevatedAdmin = roles.includes("SuperAdmin") || roles.includes("ReadWrite");
-  if (isElevatedAdmin) return { canView: true, canEdit: true, roles, restrictedArea: null };
+  if (isElevatedAdmin) return { canView: true, canEdit: true, roles, restrictedArea: null, restrictedAreas: [] };
 
   const groups = payload.groups || [];
-  const isVp = Boolean(env.VP_GROUP_ID && groups.includes(env.VP_GROUP_ID));
-  if (!isVp) return { canView: roles.includes("ReadOnly"), canEdit: false, roles, restrictedArea: null };
+  const vpGroupId = getVpGroupId(env);
+  const isVp = Boolean(vpGroupId && groups.includes(vpGroupId));
+  if (!isVp) return { canView: roles.includes("ReadOnly"), canEdit: false, roles, restrictedArea: null, restrictedAreas: [] };
 
   const userEmail = getEmailFromPayload(payload);
-  const vpArea = await getVpAreaForEmail(env, userEmail);
+  const vpAreas = await getVpAreasForEmail(env, userEmail);
   const reportArea = normalizeAreaForAccess(report?.area);
-  const allowedArea = normalizeAreaForAccess(vpArea);
-  const canAccessArea = Boolean(allowedArea && reportArea && allowedArea === reportArea);
-  return { canView: canAccessArea, canEdit: canAccessArea, roles, restrictedArea: vpArea };
+  const normalizedAllowedAreas = vpAreas.map(normalizeAreaForAccess);
+  const canAccessArea = Boolean(reportArea && normalizedAllowedAreas.includes(reportArea));
+  const primaryArea = vpAreas.length > 0 ? vpAreas[0] : null;
+  return { canView: canAccessArea, canEdit: canAccessArea, roles, restrictedArea: primaryArea, restrictedAreas: vpAreas };
 }
 
 async function isUserAdmin(request, env, verifiedPayload = null) {
@@ -457,12 +488,13 @@ async function isUserAdmin(request, env, verifiedPayload = null) {
 }
 
 async function isVpFromGroup(request, env, verifiedPayload = null) {
-  if (!env.VP_GROUP_ID) return false;
+  const vpGroupId = getVpGroupId(env);
+  if (!vpGroupId) return false;
 
   const payload = verifiedPayload || (await parseAndValidateAzureToken(request, env)).payload;
   if (!payload) return false;
   const groups = payload.groups || [];
-  return groups.includes(env.VP_GROUP_ID);
+  return groups.includes(vpGroupId);
 }
 
 async function handleSubmit(request, env) {
@@ -586,7 +618,7 @@ async function handleGetReports(request, env, url) {
       try {
         const simulatedGroupIds = await getUserGroupIdsByEmail(env, token, userEmail);
         simulatedRoles = getUserRoles({ groups: simulatedGroupIds }, env);
-        simulatedVpGroup = Boolean(env.VP_GROUP_ID && simulatedGroupIds.includes(env.VP_GROUP_ID));
+        simulatedVpGroup = Boolean(getVpGroupId(env) && simulatedGroupIds.includes(getVpGroupId(env)));
         console.log(`[handleGetReports] Simulated user roles: ${simulatedRoles.join(", ")}`);
       } catch (err) {
         console.warn(`[handleGetReports] Failed to load simulated user groups for ${userEmail}: ${err.message}`);
@@ -594,19 +626,20 @@ async function handleGetReports(request, env, url) {
     }
 
     const isVp = isSimulating ? simulatedVpGroup : await isVpFromGroup(request, env, tokenValidation.payload);
-    const vpArea = isVp && userEmail ? await getVpAreaForEmail(env, userEmail) : (isSimulating ? await getVpAreaForEmail(env, userEmail) : null);
+    const vpAreas = isVp && userEmail ? await getVpAreasForEmail(env, userEmail) : (isSimulating ? await getVpAreasForEmail(env, userEmail) : []);
+    const vpArea = vpAreas.length > 0 ? vpAreas[0] : null;
 
     // Check if user has admin role (SuperAdmin, ReadWrite, ReadOnly all have access)
     const isAdmin = isSimulating ? simulatedRoles.length > 0 : await isUserAdmin(request, env, tokenValidation.payload);
 
     // VP in group but not on VP list = no access
-    if (!isSimulating && isVp && !vpArea && !isAdmin) {
+    if (!isSimulating && isVp && vpAreas.length === 0 && !isAdmin) {
       console.log(`[handleGetReports] VP ${userEmail} not found in VP list - no access`);
       return corsResponse({ items: [], nextLink: null, restricted: true, message: "No reports available for your account." }, 200, env);
     }
 
     // If simulating a non-VP user, return no access
-    if (isSimulating && !vpArea && !isAdmin) {
+    if (isSimulating && vpAreas.length === 0 && !isAdmin) {
       console.log(`[handleGetReports] Simulated user ${userEmail} not in VP list - no access`);
       return corsResponse({ items: [], nextLink: null, restricted: true, simulated: userEmail, message: "No reports available for this user." }, 200, env);
     }
@@ -616,15 +649,29 @@ async function handleGetReports(request, env, url) {
       ? simulatedRoles.includes("SuperAdmin") || simulatedRoles.includes("ReadWrite")
       : getUserRoles(tokenValidation.payload, env).some(role => role === "SuperAdmin" || role === "ReadWrite");
 
-    if (isVp && !vpArea && !hasElevatedAdminAccess) {
+    if (isVp && vpAreas.length === 0 && !hasElevatedAdminAccess) {
       console.log(`[handleGetReports] VP ${userEmail} not found in VP list - no access`);
       return corsResponse({ items: [], nextLink: null, restricted: true, message: "No reports available for your account." }, 200, env);
     }
 
     let area = url.searchParams.get("area") || null;
-    if (isVp && vpArea && !hasElevatedAdminAccess) {
-      area = vpArea;
-      console.log(`[handleGetReports] VP restriction: user ${userEmail} restricted to area "${area}"`);
+    let allowedFilterAreas = [];
+    if (isVp && !hasElevatedAdminAccess) {
+      if (area) {
+        const normalizedReqArea = normalizeAreaForAccess(area);
+        const matchingArea = vpAreas.find(a => normalizeAreaForAccess(a) === normalizedReqArea);
+        if (matchingArea) {
+          allowedFilterAreas = [matchingArea];
+        } else {
+          console.log(`[handleGetReports] VP ${userEmail} requested area "${area}" outside assigned areas: ${vpAreas.join(", ")}`);
+          return corsResponse({ items: [], nextLink: null, restricted: true, message: "No reports available for this area." }, 200, env);
+        }
+      } else {
+        allowedFilterAreas = vpAreas;
+      }
+      console.log(`[handleGetReports] VP restriction: user ${userEmail} restricted to area(s): "${allowedFilterAreas.join(", ")}"`);
+    } else if (area) {
+      allowedFilterAreas = [area];
     }
 
     // Prefer header: lets Graph query non-indexed columns without erroring.
@@ -640,8 +687,10 @@ async function handleGetReports(request, env, url) {
     // No $orderby — SubmittedAt is not indexed; we sort client-side below.
     // Filter to exclude recycled items.
     const recycleFilter = "fields/Is_x0020_Recycled eq false or fields/Is_x0020_Recycled eq null";
-    const areaFilter = area
-      ? getAreaAccessVariants(area).map(areaVariant => `fields/Area eq '${escapeODataString(areaVariant)}'`).join(" or ")
+    const areaVariants = allowedFilterAreas.flatMap(a => getAreaAccessVariants(a));
+    const uniqueAreaVariants = [...new Set(areaVariants)];
+    const areaFilter = uniqueAreaVariants.length > 0
+      ? uniqueAreaVariants.map(areaVariant => `fields/Area eq '${escapeODataString(areaVariant)}'`).join(" or ")
       : null;
     const combinedFilter = areaFilter ? `(${recycleFilter}) and (${areaFilter})` : recycleFilter;
     
@@ -665,10 +714,9 @@ async function handleGetReports(request, env, url) {
         : `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`
             + `?expand=fields`
             + `&$top=${top}`;
-      if (area && !cursor) {
+      if (areaFilter && !cursor) {
         // Add area filter to fallback endpoint if not using cursor (cursor already contains full URL)
-        const fallbackAreaFilter = getAreaAccessVariants(area).map(areaVariant => `fields/Area eq '${escapeODataString(areaVariant)}'`).join(" or ");
-        fallbackEndpoint += `&$filter=${encodeURIComponent(`(${fallbackAreaFilter})`)}`;
+        fallbackEndpoint += `&$filter=${encodeURIComponent(`(${areaFilter})`)}`;
       }
       res = await graphFetch(fallbackEndpoint, { headers });
       // Log available fields for debugging
@@ -683,6 +731,11 @@ async function handleGetReports(request, env, url) {
     // Sort descending by SubmittedAt client-side since the column isn't indexed
     let items = (res.value || [])
       .map(item => normalizeItem(item));
+
+    if (allowedFilterAreas.length > 0) {
+      const normalizedAllowed = allowedFilterAreas.map(normalizeAreaForAccess);
+      items = items.filter(item => normalizedAllowed.includes(normalizeAreaForAccess(item.area)));
+    }
 
     // If Graph filter failed, try to get Is Recycled values via SharePoint REST API
     if (graphFilterFailed && items.length > 0) {
@@ -751,7 +804,8 @@ async function handleGetReports(request, env, url) {
       items, 
       nextLink: workerNextLink,
       simulated: isSimulating ? userEmail : null,
-      restrictedArea: isVp && vpArea && !hasElevatedAdminAccess ? vpArea : null,
+      restrictedArea: isVp && vpAreas.length > 0 && !hasElevatedAdminAccess ? vpAreas.join(", ") : null,
+      restrictedAreas: isVp && vpAreas.length > 0 && !hasElevatedAdminAccess ? vpAreas : null,
     }, 200, env);
   } catch (err) {
     console.error("GetReports error:", err);
