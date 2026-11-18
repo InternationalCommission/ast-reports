@@ -249,6 +249,107 @@ async function handleProjectRequestSubmit(request, env) {
     return corsResponse({ error: err.message || "Could not submit project request." }, 500, env);
   }
 }
+const DEFAULT_FINAL_APPROVAL_GROUP_ID = "d4776ceb-4ac7-4822-a4f8-e455d96b4328";
+
+function getFinalApprovalGroupId(env) {
+  return env?.FINAL_APPROVAL_GROUP_ID || DEFAULT_FINAL_APPROVAL_GROUP_ID;
+}
+
+async function sendProjectRequestEmail(recipients, subject, htmlContent, env, token) {
+  const parsed = Array.isArray(recipients) ? recipients : parseMultiEmail(recipients);
+  const safe = value => String(value || "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+  const actual = env.TEST_MODE === "true" ? parseMultiEmail(env.EMAIL_RECIPIENT) : parsed;
+  if (!env.EMAIL_SENDER || !actual.length) return;
+  const intended = parsed.join(", ");
+  const mail = {
+    message: {
+      subject,
+      body: {
+        contentType: "HTML",
+        content: env.TEST_MODE === "true" ? `<p><b>TEST MODE — intended recipients: ${safe(intended)}</b></p>` + htmlContent : htmlContent
+      },
+      toRecipients: actual.map(address => ({ emailAddress: { address } }))
+    },
+    saveToSentItems: true
+  };
+  const res = await fetch("https://graph.microsoft.com/v1.0/users/" + encodeURIComponent(env.EMAIL_SENDER) + "/sendMail", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify(mail)
+  });
+  if (!res.ok) {
+    console.error("[sendProjectRequestEmail] sendMail failed (" + res.status + "):", await res.text());
+  }
+}
+
+async function getGroupMemberEmails(groupId, env, token) {
+  try {
+    const res = await graphFetch("https://graph.microsoft.com/v1.0/groups/" + groupId + "/transitiveMembers?$select=mail,userPrincipalName", {
+      headers: { Authorization: "Bearer " + token, Accept: "application/json" }
+    });
+    const emails = (res.value || []).map(m => m.mail || m.userPrincipalName).filter(Boolean);
+    if (emails.length) return emails;
+  } catch (err) {
+    console.error("[getGroupMemberEmails] Error fetching group members:", err.message);
+  }
+  if (env.FINAL_APPROVAL_EMAILS) return parseMultiEmail(env.FINAL_APPROVAL_EMAILS);
+  return [];
+}
+
+async function sendWorkflowNotifications(current, newStatus, reviewNotes, reviewerEmail, env, token) {
+  const safe = value => String(value || "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+  const origin = (env.ALLOWED_ORIGIN || "https://internationalcommission.org").split(",")[0].trim().replace(/\/$/, "");
+  const dashboardLink = safe(origin + "/admin.html?view=requests&request=" + encodeURIComponent(current.id));
+  const notesHtml = reviewNotes ? `<p><b>Notes from reviewer:</b></p><blockquote style="border-left:3px solid #c8a96e;margin:8px 0;padding:8px 12px;background:#f9f8f5;">${safe(reviewNotes)}</blockquote>` : "";
+
+  // 1. AST VP approves -> Pending Final Approval
+  if (current.status === "Pending" && newStatus === "Pending Final Approval") {
+    const finalGroupId = getFinalApprovalGroupId(env);
+    const recipients = await getGroupMemberEmails(finalGroupId, env, token);
+    if (recipients.length) {
+      const subject = `[Project Request: Final Approval Required] ${current.projectType}: ${current.country} — ${current.area}`;
+      const body = `<html><body style="font-family:Georgia,serif;color:#1a1a1a"><h2 style="color:#1a3a5c">Project Request Ready for Final Approval</h2><p>AST Area VP <b>${safe(current.astVpName)}</b> has reviewed and approved the following project request. It is now awaiting final approval.</p><table><tr><td><b>Project:</b></td><td>${safe(current.requestTitle)}</td></tr><tr><td><b>Country / Area:</b></td><td>${safe(current.country)} (${safe(current.area)})</td></tr><tr><td><b>Dates:</b></td><td>${safe(current.startDate)} – ${safe(current.endDate)}</td></tr><tr><td><b>Main Leader:</b></td><td>${safe(current.leader1Name)} (${safe(current.leader1Email)})</td></tr></table>${notesHtml}<p><a href="${dashboardLink}" style="background:#1a3a5c;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block;margin-top:10px;">Review in Dashboard</a></p></body></html>`;
+      await sendProjectRequestEmail(recipients, subject, body, env, token);
+    }
+  }
+  // 2. AST VP denies pending changes -> notify submitter
+  else if (current.status === "Pending" && newStatus === "Denied Pending Changes") {
+    const recipient = current.submittedBy || current.leader1Email;
+    if (recipient) {
+      const subject = `[Action Required: Changes Requested] Project Request: ${current.requestTitle}`;
+      const body = `<html><body style="font-family:Georgia,serif;color:#1a1a1a"><h2 style="color:#1a3a5c">Project Request: Changes Requested</h2><p>Your project request for <b>${safe(current.country)}</b> has been reviewed by the AST Area VP. Revisions are required before it can be approved.</p>${notesHtml}<p>Please make the required changes and resubmit your request.</p></body></html>`;
+      await sendProjectRequestEmail([recipient], subject, body, env, token);
+    }
+  }
+  // 3. Final Approval denies -> Notify AST VP
+  else if (current.status === "Pending Final Approval" && newStatus === "Denied") {
+    const recipients = parseMultiEmail(current.astVpEmail);
+    if (recipients.length) {
+      const subject = `[Project Request Denied] ${current.requestTitle}`;
+      const body = `<html><body style="font-family:Georgia,serif;color:#1a1a1a"><h2 style="color:#cf1322">Project Request Denied at Final Approval</h2><p>The project request for <b>${safe(current.country)} — ${safe(current.area)}</b> has been denied by the Final Approval committee.</p>${notesHtml}<p><a href="${dashboardLink}">View Request in Dashboard</a></p></body></html>`;
+      await sendProjectRequestEmail(recipients, subject, body, env, token);
+    }
+  }
+  // 4. Final Approval denies pending changes -> Notify AST VP
+  else if (current.status === "Pending Final Approval" && newStatus === "Denied Pending Changes") {
+    const recipients = parseMultiEmail(current.astVpEmail);
+    if (recipients.length) {
+      const subject = `[Final Approval: Changes Requested] ${current.requestTitle}`;
+      const body = `<html><body style="font-family:Georgia,serif;color:#1a1a1a"><h2 style="color:#1a3a5c">Final Approval: Changes Requested</h2><p>The Final Approval committee has requested revisions on the project request for <b>${safe(current.country)} — ${safe(current.area)}</b>.</p>${notesHtml}<p><a href="${dashboardLink}">View Request in Dashboard</a></p></body></html>`;
+      await sendProjectRequestEmail(recipients, subject, body, env, token);
+    }
+  }
+  // 5. Final Approval approves -> Notify AST VP & Submitter
+  else if (current.status === "Pending Final Approval" && newStatus === "Approved") {
+    const recipients = Array.from(new Set([...parseMultiEmail(current.astVpEmail), current.submittedBy, current.leader1Email].filter(Boolean)));
+    if (recipients.length) {
+      const subject = `[Project Request Approved!] ${current.requestTitle}`;
+      const body = `<html><body style="font-family:Georgia,serif;color:#1a1a1a"><h2 style="color:#277c1d">Project Request Approved!</h2><p>Great news! The project request for <b>${safe(current.country)} — ${safe(current.area)}</b> has received final approval.</p>${notesHtml}<p><a href="${dashboardLink}">View Request in Dashboard</a></p></body></html>`;
+      await sendProjectRequestEmail(recipients, subject, body, env, token);
+    }
+  }
+}
+
 async function handleGetProjectRequests(request, env) {
   const auth = await parseAndValidateAzureToken(request, env);
   if (auth.error) return corsResponse({ error: auth.error }, 401, env);
@@ -257,9 +358,15 @@ async function handleGetProjectRequests(request, env) {
     const isAdmin = roles.some(role => ["SuperAdmin", "ReadWrite", "ReadOnly"].includes(role));
     const email = getEmailFromPayload(payload);
     const vpGroupId = getVpGroupId(env);
-    const isVp = Boolean(vpGroupId && (payload.groups || []).includes(vpGroupId));
+    const finalApprovalGroupId = getFinalApprovalGroupId(env);
+    const userGroups = payload.groups || [];
+    const isVp = Boolean(vpGroupId && userGroups.includes(vpGroupId));
+    const isFinalApprover = userGroups.includes(finalApprovalGroupId);
     const vpAreas = isVp ? await getVpAreasForEmail(env, email) : [];
-    if (!isAdmin && (!isVp || vpAreas.length === 0)) return corsResponse({ error: "You are not authorized to view project requests." }, 403, env);
+
+    if (!isAdmin && !isFinalApprover && (!isVp || vpAreas.length === 0)) {
+      return corsResponse({ error: "You are not authorized to view project requests." }, 403, env);
+    }
     const token = await getAccessToken(env), ids = await getProjectRequestListIds(env, token), all = [];
     let next = "https://graph.microsoft.com/v1.0/sites/" + ids.siteId + "/lists/" + ids.listId + "/items?$expand=fields&$top=200&$orderby=createdDateTime%20desc";
     while (next) {
@@ -269,14 +376,19 @@ async function handleGetProjectRequests(request, env) {
     let items = all.map(normalizeProjectRequest);
     if (!isAdmin) {
       const normalizedAllowed = vpAreas.map(normalizeAreaForAccess);
-      items = items.filter(item => normalizedAllowed.includes(normalizeAreaForAccess(item.astVpArea)));
+      items = items.filter(item => {
+        const areaMatches = isVp && normalizedAllowed.includes(normalizeAreaForAccess(item.astVpArea));
+        const finalApprovalMatches = isFinalApprover && ["Pending Final Approval", "Approved", "Denied", "Denied Pending Changes"].includes(item.status);
+        return areaMatches || finalApprovalMatches;
+      });
     }
-    return corsResponse({ items, userArea: vpAreas.join(", "), userAreas: vpAreas, roles, isAdmin }, 200, env);
+    return corsResponse({ items, userArea: vpAreas.join(", "), userAreas: vpAreas, roles, isAdmin, isFinalApprover, isVp }, 200, env);
   } catch (err) {
     console.error("[handleGetProjectRequests]", err.message);
     return corsResponse({ error: err.message || "Could not load project requests." }, 500, env);
   }
 }
+
 async function handleReviewProjectRequest(request, env, id) {
   const auth = await parseAndValidateAzureToken(request, env);
   if (auth.error) return corsResponse({ error: auth.error }, 401, env);
@@ -284,24 +396,97 @@ async function handleReviewProjectRequest(request, env, id) {
     const payload = auth.payload, roles = getUserRoles(payload, env), email = getEmailFromPayload(payload);
     const isAdmin = roles.some(role => ["SuperAdmin", "ReadWrite"].includes(role));
     const vpGroupId = getVpGroupId(env);
-    const isVp = Boolean(vpGroupId && (payload.groups || []).includes(vpGroupId));
+    const finalApprovalGroupId = getFinalApprovalGroupId(env);
+    const userGroups = payload.groups || [];
+    const isVp = Boolean(vpGroupId && userGroups.includes(vpGroupId));
+    const isFinalApprover = userGroups.includes(finalApprovalGroupId);
     const vpAreas = isVp ? await getVpAreasForEmail(env, email) : [];
-    if (!isAdmin && (!isVp || vpAreas.length === 0)) return corsResponse({ error: "You are not authorized to review project requests." }, 403, env);
-    const decision = await request.json();
-    if (!["Approved", "Rejected"].includes(decision.status)) return corsResponse({ error: "Decision must be Approved or Rejected." }, 400, env);
+
+    if (!isAdmin && !isFinalApprover && (!isVp || vpAreas.length === 0)) {
+      return corsResponse({ error: "You are not authorized to review or edit project requests." }, 403, env);
+    }
     const token = await getAccessToken(env), ids = await getProjectRequestListIds(env, token);
     const item = await graphFetch("https://graph.microsoft.com/v1.0/sites/" + ids.siteId + "/lists/" + ids.listId + "/items/" + encodeURIComponent(id) + "?$expand=fields", {
       headers: { Authorization: "Bearer " + token, Accept: "application/json" }
     });
     const current = normalizeProjectRequest(item);
     const normalizedAllowed = vpAreas.map(normalizeAreaForAccess);
-    if (!isAdmin && !normalizedAllowed.includes(normalizeAreaForAccess(current.astVpArea))) return corsResponse({ error: "This request is assigned to another AST Area VP." }, 403, env);
-    if (current.status !== "Pending") return corsResponse({ error: "This request has already been reviewed." }, 409, env);
-    const reviewFields = { Status: decision.status, ReviewNotes: String(decision.reviewNotes || "").slice(0, 5000), ReviewedBy: email || "Unknown", ReviewedAt: new Date().toISOString() };
+    const isAssignedVp = normalizedAllowed.includes(normalizeAreaForAccess(current.astVpArea));
+
+    // Permission checks per workflow step
+    if (!isAdmin) {
+      if (current.status === "Pending" && !isAssignedVp) {
+        return corsResponse({ error: "This request is assigned to another AST Area VP." }, 403, env);
+      }
+      if (current.status === "Pending Final Approval" && !isFinalApprover) {
+        return corsResponse({ error: "Only members of the Final Approval group can review requests in Pending Final Approval." }, 403, env);
+      }
+    }
+
+    const body = await request.json();
+    const updateFields = {};
+
+    // 1. General & budget edits
+    if (body.requestTitle !== undefined) updateFields.Title = String(body.requestTitle).slice(0, 255);
+    if (body.country !== undefined) updateFields.Country = body.country;
+    if (body.area !== undefined) updateFields.Area = body.area;
+    if (body.startDate !== undefined) updateFields.StartDate = body.startDate || null;
+    if (body.endDate !== undefined) updateFields.EndDate = body.endDate || null;
+    if (body.nationalProjectType !== undefined) updateFields.NationalProjectType = body.nationalProjectType;
+    if (body.theme !== undefined) updateFields.Theme = body.theme;
+    if (body.churches !== undefined) updateFields.Churches = toNum(body.churches);
+    if (body.hearers !== undefined) updateFields.Hearers = toNum(body.hearers);
+    if (body.decisions !== undefined) updateFields.Decisions = toNum(body.decisions);
+    if (body.discipled !== undefined) updateFields.Discipled = toNum(body.discipled);
+    if (body.baptisms !== undefined) updateFields.Baptisms = toNum(body.baptisms);
+    if (body.leader1Name !== undefined) updateFields.Leader1Name = body.leader1Name;
+    if (body.leader1Address !== undefined) updateFields.Leader1Address = body.leader1Address;
+    if (body.leader1Phone !== undefined) updateFields.Leader1Phone = body.leader1Phone;
+    if (body.leader1Email !== undefined) updateFields.Leader1Email = body.leader1Email;
+    if (body.leader2Name !== undefined) updateFields.Leader2Name = body.leader2Name;
+    if (body.leader2Address !== undefined) updateFields.Leader2Address = body.leader2Address;
+    if (body.leader2Phone !== undefined) updateFields.Leader2Phone = body.leader2Phone;
+    if (body.leader2Email !== undefined) updateFields.Leader2Email = body.leader2Email;
+    if (body.vision !== undefined) updateFields.Vision = body.vision;
+    if (body.spiritualNeeds !== undefined) updateFields.SpiritualNeeds = body.spiritualNeeds;
+    if (body.importance !== undefined) updateFields.Importance = body.importance;
+    if (body.OABudgetJson !== undefined) updateFields.OABudgetJson = typeof body.OABudgetJson === "string" ? body.OABudgetJson : JSON.stringify(body.OABudgetJson);
+    if (body.N2NBudgetJson !== undefined) updateFields.N2NBudgetJson = typeof body.N2NBudgetJson === "string" ? body.N2NBudgetJson : JSON.stringify(body.N2NBudgetJson);
+
+    // 2. Status change / workflow review decision
+    let statusChanged = false;
+    let newStatus = body.status;
+    if (newStatus === "Rejected") newStatus = "Denied";
+
+    if (newStatus && newStatus !== current.status) {
+      const validStatuses = ["Pending Final Approval", "Approved", "Denied", "Denied Pending Changes", "Pending"];
+      if (!validStatuses.includes(newStatus)) return corsResponse({ error: "Invalid status: " + newStatus }, 400, env);
+      updateFields.Status = newStatus;
+      updateFields.ReviewNotes = String(body.reviewNotes || "").slice(0, 5000);
+      updateFields.ReviewedBy = email || "Unknown";
+      updateFields.ReviewedAt = new Date().toISOString();
+      statusChanged = true;
+    }
+
+    if (Object.keys(updateFields).length === 0) {
+      return corsResponse({ success: true, message: "No changes to save" }, 200, env);
+    }
+
+    // PATCH to SharePoint
     await graphFetch("https://graph.microsoft.com/v1.0/sites/" + ids.siteId + "/lists/" + ids.listId + "/items/" + encodeURIComponent(id) + "/fields", {
-      method: "PATCH", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(reviewFields)
+      method: "PATCH", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(updateFields)
     });
-    return corsResponse({ success: true, id, status: decision.status }, 200, env);
+
+    // Send notifications if status changed
+    if (statusChanged) {
+      try {
+        await sendWorkflowNotifications(current, newStatus, body.reviewNotes, email, env, token);
+      } catch (mailErr) {
+        console.error("[sendWorkflowNotifications] Notification failed:", mailErr.message);
+      }
+    }
+
+    return corsResponse({ success: true, id, status: newStatus || current.status }, 200, env);
   } catch (err) {
     console.error("[handleReviewProjectRequest]", err.message);
     return corsResponse({ error: err.message || "Could not save review decision." }, 500, env);

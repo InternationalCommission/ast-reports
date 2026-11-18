@@ -479,6 +479,313 @@
       margin-bottom: 12px;
     }
     .mobile-back-btn:hover { background: rgba(255,255,255,.25); }
+
+    /* ── View Toggle Button in Topbar ── */
+    .btn-view-toggle {
+      background: rgba(200,169,110,.25);
+      border: 1.5px solid var(--gold);
+      color: #fff;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      transition: all .2s ease;
+      font-family: inherit;
+    }
+    .btn-view-toggle:hover {
+      background: rgba(200,169,110,.45);
+      transform: translateY(-1px);
+    }
+    .btn-view-toggle.active {
+      background: var(--gold);
+      color: var(--navy);
+      border-color: var(--gold);
+      font-weight: 700;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    }
+
+    /* ── Requests Filter Bar ── */
+    .req-filter-bar {
+      padding: 10px 14px;
+      background: rgba(26,58,92,.03);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .req-filter-bar::-webkit-scrollbar { display: none; }
+    .req-filter-chip {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 4px 10px;
+      font-size: 11.5px;
+      color: var(--navy);
+      cursor: pointer;
+      white-space: nowrap;
+      font-family: inherit;
+      font-weight: 600;
+      transition: all .15s;
+    }
+    .req-filter-chip:hover {
+      background: #f5efe6;
+      border-color: var(--navy);
+    }
+    .req-filter-chip.active {
+      background: var(--navy);
+      color: #fff;
+      border-color: var(--navy);
+    }
+
+    /* ── Request Status Badges ── */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 12px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    .status-pending-ast {
+      background: #fff7e6;
+      color: #b55a00;
+      border: 1px solid #ffd591;
+    }
+    .status-pending-final {
+      background: #f0f5ff;
+      color: #1636a0;
+      border: 1px solid #adc6ff;
+    }
+    .status-approved {
+      background: #f6ffed;
+      color: #1e6916;
+      border: 1px solid #b7eb8f;
+    }
+    .status-changes {
+      background: #fffbe6;
+      color: #9e6403;
+      border: 1px solid #ffe58f;
+    }
+    .status-denied {
+      background: #fff1f0;
+      color: #ba0f1d;
+      border: 1px solid #ffa39e;
+    }
+
+    /* ── Action Toolbar in Request Detail (Header Actions) ── */
+    .btn-action-approve {
+      background: #2a6b3c;
+      color: #fff;
+      border: 1px solid #3d8a54;
+      padding: 6px 14px;
+      border-radius: 3px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background .15s;
+      font-family: inherit;
+    }
+    .btn-action-approve:hover {
+      background: #235e34;
+    }
+    .btn-action-deny {
+      background: #9b2335;
+      color: #fff;
+      border: 1px solid #bd3549;
+      padding: 6px 14px;
+      border-radius: 3px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background .15s;
+      font-family: inherit;
+    }
+    .btn-action-deny:hover {
+      background: #831d2c;
+    }
+    .btn-action-changes {
+      background: #b57404;
+      color: #fff;
+      border: 1px solid #d48806;
+      padding: 6px 14px;
+      border-radius: 3px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background .15s;
+      font-family: inherit;
+    }
+    .btn-action-changes:hover {
+      background: #9e6403;
+    }
+    .btn-action-edit {
+      background: rgba(255,255,255,.18);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,.35);
+      padding: 6px 14px;
+      border-radius: 3px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all .15s;
+      font-family: inherit;
+    }
+    .btn-action-edit:hover {
+      background: rgba(255,255,255,.28);
+      border-color: #fff;
+    }
+
+    /* ── Request Detail Sections ── */
+    .req-grid-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .req-info-card {
+      background: var(--cream);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 18px 20px;
+    }
+    .req-info-card h4 {
+      font-family: 'Playfair Display', serif;
+      font-size: 15px;
+      color: var(--navy);
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+    }
+    .req-meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 5px 0;
+      font-size: 13.5px;
+      border-bottom: 1px dotted rgba(216,208,198,.6);
+    }
+    .req-meta-row:last-child { border-bottom: none; }
+    .req-meta-label { color: var(--muted); font-weight: 600; }
+    .req-meta-val { color: var(--ink); text-align: right; max-width: 60%; }
+
+    /* ── Action Modals for Workflow ── */
+    .wf-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 30, 48, 0.65);
+      backdrop-filter: blur(2px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .wf-modal-overlay.active { display: flex; }
+    .wf-modal {
+      background: var(--cream);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      width: min(560px, 95vw);
+      box-shadow: 0 16px 40px rgba(0,0,0,.3);
+      overflow: hidden;
+      animation: modalSlideUp 0.18s ease-out;
+    }
+    .wf-modal-header {
+      background: var(--navy);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #fff;
+    }
+    .wf-modal-header h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 18px;
+      margin: 0;
+      color: #fff;
+    }
+    .wf-modal-close {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,.7);
+      font-size: 24px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0;
+    }
+    .wf-modal-close:hover { color: #fff; }
+    .wf-modal-body {
+      padding: 24px;
+      max-height: 75vh;
+      overflow-y: auto;
+    }
+    .wf-modal-footer {
+      padding: 14px 24px;
+      background: rgba(26,58,92,.04);
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .notice-box {
+      background: #fff8e7;
+      border: 1px solid var(--gold);
+      border-left: 4px solid var(--gold);
+      border-radius: 4px;
+      padding: 12px 16px;
+      font-size: 13.5px;
+      line-height: 1.5;
+      margin-bottom: 16px;
+      color: var(--navy);
+    }
+    .wf-field { margin-bottom: 16px; }
+    .wf-field label { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--navy); margin-bottom: 6px; }
+    .wf-field input, .wf-field textarea, .wf-field select {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 3px; font-family: inherit; font-size: 14px; background: #fff;
+    }
+    .wf-field textarea { min-height: 90px; resize: vertical; }
+    .wf-field input:focus, .wf-field textarea:focus { outline: none; border-color: var(--navy); }
+
+    /* ── Itemized Budget Tables & Controls ── */
+    .budget-table { width: 100%; border-collapse: collapse; font-size: 13.5px; background: #fff; }
+    .budget-table th { background: rgba(26,58,92,.06); color: var(--navy); font-weight: 600; padding: 8px 10px; border-bottom: 2px solid var(--border); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .budget-table td { padding: 8px 10px; border-bottom: 1px solid #f0ece6; vertical-align: middle; }
+    .budget-table tr:last-child td { border-bottom: none; }
+    .budget-table .bt-total { background: rgba(200,169,110,.14); font-weight: 700; }
+    .budget-table .bt-total td { font-weight: 700; color: var(--navy); }
+    .budget-num { text-align: right; }
+    .budget-table input[type="text"], .budget-table input[type="number"], .budget-table input[type="date"] {
+      width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 3px; font-size: 13px; font-family: inherit; background: #fff;
+    }
+    .budget-table input[type="number"] { text-align: right; }
+    .budget-table input:focus { outline: none; border-color: var(--navy); }
+    .btn-budget-add {
+      background: #fff; border: 1px solid var(--navy); color: var(--navy); font-weight: 600; font-size: 12px; padding: 6px 12px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all .15s;
+    }
+    .btn-budget-add:hover { background: rgba(26,58,92,.08); }
+    .btn-budget-del {
+      background: #fff1f0; border: 1px solid #ffa39e; color: #cf1322; border-radius: 3px; padding: 4px 8px; cursor: pointer; font-size: 12px; font-weight: 600; line-height: 1; transition: background .15s;
+    }
+    .btn-budget-del:hover { background: #ffccc7; }
   </style>
 </head>
 <body>
@@ -511,6 +818,9 @@
     <span class="report-count" id="reportCount"></span>
   </div>
   <div class="topbar-actions">
+    <button class="btn-view-toggle" id="viewToggleBtn" onclick="toggleDashboardView()">
+      <span id="viewToggleIcon">📋</span> <span id="viewToggleText">Project Requests</span>
+    </button>
     <button class="btn-refresh" id="refreshBtn">↻ Refresh</button>
     <button class="btn-simulate" id="simulateBtn" style="display:none;">👤 Simulate</button>
     <button class="btn-simulate" id="clearSimulateBtn" style="display:none;" onclick="clearSimulation()">👤 Clear</button>
@@ -545,8 +855,8 @@
   </div>
 </div>
 
-<!-- ── App body ── -->
-<div class="app-body">
+<!-- ── App body (Reports View) ── -->
+<div class="app-body" id="reportsView">
   <div class="sidebar">
     <div class="sidebar-search">
       <div class="search-wrap">
@@ -585,6 +895,43 @@
     <div class="empty-state">
       <img src="https://internationalcommission.org/Files/Blue-globe-square-crop.png.webp" alt="International Commission" style="width:64px;height:64px;object-fit:contain;opacity:.35;border-radius:6px;" />
       <p>Select a report to view details</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── App body (Project Requests View) ── -->
+<div class="app-body" id="requestsView" style="display:none;">
+  <div class="sidebar">
+    <div class="sidebar-search">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="requestSearchInput" placeholder="Search requests by title, country, area, leader…" autocomplete="off" oninput="filterProjectRequests()" />
+      </div>
+    </div>
+    
+    <!-- Filter status pills -->
+    <div class="req-filter-bar" id="reqFilterBar">
+      <button class="req-filter-chip active" data-filter="all" onclick="filterRequestsByStatus('all')">All (<span id="countAll">0</span>)</button>
+      <button class="req-filter-chip" data-filter="pending_ast" onclick="filterRequestsByStatus('pending_ast')">AST Review (<span id="countPendingAst">0</span>)</button>
+      <button class="req-filter-chip" data-filter="pending_final" onclick="filterRequestsByStatus('pending_final')">Final Approval (<span id="countPendingFinal">0</span>)</button>
+      <button class="req-filter-chip" data-filter="approved" onclick="filterRequestsByStatus('approved')">Approved (<span id="countApproved">0</span>)</button>
+      <button class="req-filter-chip" data-filter="changes" onclick="filterRequestsByStatus('changes')">Changes (<span id="countChanges">0</span>)</button>
+      <button class="req-filter-chip" data-filter="denied" onclick="filterRequestsByStatus('denied')">Denied (<span id="countDenied">0</span>)</button>
+    </div>
+
+    <div class="sidebar-header" style="display:flex;justify-content:space-between;align-items:center;">
+      <span id="requestSidebarTitle">Project Requests</span>
+      <span id="requestTotalBadge" style="font-size:11px;color:var(--muted);font-weight:600;"></span>
+    </div>
+    <div class="report-list" id="projectRequestsList">
+      <!-- Request cards rendered dynamically -->
+    </div>
+  </div>
+
+  <div class="detail-pane" id="requestDetailPane">
+    <div class="empty-state">
+      <img src="https://internationalcommission.org/Files/Blue-globe-square-crop.png.webp" alt="International Commission" style="width:64px;height:64px;object-fit:contain;opacity:.35;border-radius:6px;" />
+      <p>Select a project request to view details and workflow actions</p>
     </div>
   </div>
 </div>
@@ -654,6 +1001,7 @@
     ReadWrite: "2a94d6d7-85d8-482b-92a1-7dda91f3daba",
     ReadOnly: "ba1c0013-5cbb-4b5a-b625-19ae165953e5",
     VP: "2577bd66-1710-4b98-9b56-89255c743830",
+    FinalApproval: "d4776ceb-4ac7-4822-a4f8-e455d96b4328",
   };
 
   // When using a single app registration, the app implicitly has access to its
@@ -2253,6 +2601,1555 @@
     }
   });
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── PROJECT REQUESTS DASHBOARD ──────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+
+  let allProjectRequests = [];
+  let filteredRequests   = [];
+  let activeRequestId    = null;
+  let currentRequestView = "reports"; // "reports" | "requests"
+  let pendingWfAction    = null; // { type, requestId }
+
+  // ── Status helpers ─────────────────────────────────────────────────────
+  function statusToPill(status) {
+    const map = {
+      "Pending":                 { cls: "status-pending-ast",   label: "Pending AST Review" },
+      "Pending Final Approval":  { cls: "status-pending-final", label: "Pending Final Approval" },
+      "Approved":                { cls: "status-approved",      label: "Approved" },
+      "Denied Pending Changes":  { cls: "status-changes",       label: "Changes Requested" },
+      "Denied":                  { cls: "status-denied",        label: "Denied" },
+    };
+    const s = map[status] || { cls: "status-pending-ast", label: status || "Unknown" };
+    return `<span class="status-pill ${s.cls}">${s.label}</span>`;
+  }
+
+  function statusToFilter(status) {
+    const map = {
+      "Pending": "pending_ast",
+      "Pending Final Approval": "pending_final",
+      "Approved": "approved",
+      "Denied Pending Changes": "changes",
+      "Denied": "denied",
+    };
+    return map[status] || "pending_ast";
+  }
+
+  // ── View toggle ────────────────────────────────────────────────────────
+  window.toggleDashboardView = function(targetView) {
+    const target = targetView || (currentRequestView === "reports" ? "requests" : "reports");
+    const reportsEl  = document.getElementById("reportsView");
+    const requestsEl = document.getElementById("requestsView");
+    const toggleBtn  = document.getElementById("viewToggleBtn");
+    const toggleIcon = document.getElementById("viewToggleIcon");
+    const toggleText = document.getElementById("viewToggleText");
+    const topbarH1   = document.querySelector(".topbar-top h1");
+    const countEl    = document.getElementById("reportCount");
+
+    if (target === "requests") {
+      reportsEl.style.display  = "none";
+      requestsEl.style.display = "flex";
+      toggleIcon.textContent = "📊";
+      toggleText.textContent = "Project Reports";
+      toggleBtn.classList.add("active");
+      if (topbarH1) topbarH1.textContent = "IC Project Requests";
+      if (countEl) countEl.textContent = "";
+      document.title = "IC Project Requests";
+      currentRequestView = "requests";
+
+      // Update URL
+      const url = new URL(window.location);
+      url.searchParams.set("view", "requests");
+      history.replaceState(null, "", url);
+
+      // Load data
+      loadProjectRequests();
+    } else {
+      reportsEl.style.display  = "flex";
+      requestsEl.style.display = "none";
+      toggleIcon.textContent = "📋";
+      toggleText.textContent = "Project Requests";
+      toggleBtn.classList.remove("active");
+      if (topbarH1) topbarH1.textContent = "IC Project Reports";
+      document.title = "IC Project Reports";
+      currentRequestView = "reports";
+
+      const url = new URL(window.location);
+      url.searchParams.delete("view");
+      url.searchParams.delete("request");
+      history.replaceState(null, "", url);
+    }
+  };
+
+  // ── Load project requests ──────────────────────────────────────────────
+  async function loadProjectRequests() {
+    const listEl = document.getElementById("projectRequestsList");
+    listEl.innerHTML = `<div class="loading-state"><div class="spinner-lg"></div><span>Loading requests…</span></div>`;
+
+    // Real API call
+    if (!currentAccount) {
+      listEl.innerHTML = `<div style="padding:24px 18px;color:var(--muted);font-size:13px;">Sign in to view project requests.</div>`;
+      return;
+    }
+
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(`${WORKER_URL}/project-requests`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      allProjectRequests = data.items || [];
+      filteredRequests = [...allProjectRequests];
+      renderProjectRequestsList();
+      updateRequestCounts();
+    } catch (err) {
+      listEl.innerHTML = `<div style="padding:20px;color:var(--red);font-size:13px;">Error: ${escHtml(err.message)}</div>`;
+    }
+  }
+
+  // ── Update filter counts ───────────────────────────────────────────────
+  function updateRequestCounts() {
+    const counts = { all: allProjectRequests.length, pending_ast: 0, pending_final: 0, approved: 0, changes: 0, denied: 0 };
+    for (const r of allProjectRequests) {
+      const f = statusToFilter(r.status);
+      if (counts[f] !== undefined) counts[f]++;
+    }
+    document.getElementById("countAll").textContent         = counts.all;
+    document.getElementById("countPendingAst").textContent  = counts.pending_ast;
+    document.getElementById("countPendingFinal").textContent = counts.pending_final;
+    document.getElementById("countApproved").textContent    = counts.approved;
+    document.getElementById("countChanges").textContent     = counts.changes;
+    document.getElementById("countDenied").textContent      = counts.denied;
+    document.getElementById("requestTotalBadge").textContent = `${filteredRequests.length} request${filteredRequests.length !== 1 ? "s" : ""}`;
+  }
+
+  // ── Render request sidebar cards ───────────────────────────────────────
+  function renderProjectRequestsList() {
+    const listEl = document.getElementById("projectRequestsList");
+
+    if (!filteredRequests.length) {
+      listEl.innerHTML = `<div style="padding:24px 18px;color:var(--muted);font-size:13px;text-align:center;">No requests match the current filter.</div>`;
+      return;
+    }
+
+    listEl.innerHTML = filteredRequests.map(r => {
+      const date = r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+      const borderColor = {
+        "Pending": "#d46b08", "Pending Final Approval": "#1d39c4",
+        "Approved": "#277c1d", "Denied Pending Changes": "#d48806", "Denied": "#cf1322"
+      }[r.status] || "#999";
+
+      return `<div class="report-card${r.id === activeRequestId ? " active" : ""}" onclick="showProjectRequest('${r.id}')" style="border-left:3px solid ${borderColor};">
+        <div class="rc-title">${escHtml(r.requestTitle || "Untitled Request")}</div>
+        <div class="rc-loc">${escHtml([r.country, r.area].filter(Boolean).join(" · "))}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;">
+          ${statusToPill(r.status)}
+          <span style="font-size:10.5px;color:var(--muted);">${date}</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px;">
+          <span style="text-transform:uppercase;font-weight:600;font-size:10px;background:rgba(26,58,92,.08);padding:1px 5px;border-radius:3px;">${escHtml(r.projectType || "")}</span>
+          ${r.leader1Name ? ` · ${escHtml(r.leader1Name)}` : ""}
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  // ── Filter by search text ──────────────────────────────────────────────
+  window.filterProjectRequests = function() {
+    const q = (document.getElementById("requestSearchInput").value || "").toLowerCase().trim();
+    const activeChip = document.querySelector(".req-filter-chip.active");
+    const statusFilter = activeChip ? activeChip.dataset.filter : "all";
+
+    filteredRequests = allProjectRequests.filter(r => {
+      // Status filter
+      if (statusFilter !== "all" && statusToFilter(r.status) !== statusFilter) return false;
+      // Text search
+      if (!q) return true;
+      const haystack = [r.requestTitle, r.country, r.area, r.projectType, r.leader1Name, r.leader1Email, r.coordinator, r.astVpName].filter(Boolean).join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
+
+    renderProjectRequestsList();
+    document.getElementById("requestTotalBadge").textContent = `${filteredRequests.length} request${filteredRequests.length !== 1 ? "s" : ""}`;
+  };
+
+  // ── Filter by status chip ─────────────────────────────────────────────
+  window.filterRequestsByStatus = function(filter) {
+    document.querySelectorAll(".req-filter-chip").forEach(c => c.classList.remove("active"));
+    document.querySelector(`.req-filter-chip[data-filter="${filter}"]`).classList.add("active");
+    filterProjectRequests();
+  };
+
+  window.mobileBackToRequestsList = function() {
+    activeRequestId = null;
+    renderProjectRequestsList();
+    document.getElementById("requestDetailPane").innerHTML = `
+      <div class="empty-state">
+        <img src="https://internationalcommission.org/Files/Blue-globe-square-crop.png.webp" alt="International Commission" style="width:64px;height:64px;object-fit:contain;opacity:.35;border-radius:6px;" />
+        <p>Select a project request to view details and workflow actions</p>
+      </div>`;
+  };
+
+  // ── Itemized Budget Helpers ───────────────────────────────────────────
+  const N2N_MATERIAL_CATS = [
+    { key: "operationAndrew", label: "Operation Andrew" },
+    { key: "invitations", label: "Invitations/envelopes — Service of the Ten" },
+    { key: "testimonies", label: "General Testimonies" },
+    { key: "decisionCards", label: "Decision Cards" },
+    { key: "newBelieverLesson", label: "Lesson for the New Believer" },
+    { key: "followupPoster", label: "Follow-up poster" },
+    { key: "otherMaterials", label: "Other materials" },
+  ];
+
+  function calculateN2NTotals(data) {
+    let matChurches = 0, matIc = 0;
+    (data.materials || []).forEach(m => {
+      matChurches += Number(m.churches || 0);
+      matIc += Number(m.ic || 0);
+    });
+    const matTotal = matChurches + matIc;
+
+    let retChurches = 0, retIc = 0;
+    (data.retreatRows || []).forEach(r => {
+      retChurches += Number(r.churches || 0);
+      retIc += Number(r.ic || 0);
+    });
+    const retTotal = retChurches + retIc;
+
+    let visChurches = 0, visIc = 0;
+    (data.visitationRows || []).forEach(r => {
+      visChurches += Number(r.churches || 0);
+      visIc += Number(r.ic || 0);
+    });
+    const visTotal = visChurches + visIc;
+
+    let discChurches = 0, discIc = 0;
+    (data.discipleshipRows || []).forEach(r => {
+      discChurches += Number(r.churches || 0);
+      discIc += Number(r.ic || 0);
+    });
+    const discTotal = discChurches + discIc;
+
+    const totalChurches = matChurches + retChurches + visChurches + discChurches;
+    const totalIc = matIc + retIc + visIc + discIc;
+    const grandTotal = totalChurches + totalIc;
+
+    return {
+      matChurches, matIc, matTotal,
+      retChurches, retIc, retTotal,
+      visChurches, visIc, visTotal,
+      discChurches, discIc, discTotal,
+      totalChurches, totalIc, grandTotal
+    };
+  }
+
+  function parseN2NBudget(b) {
+    if (!b) return null;
+    if (typeof b === "string") {
+      try { b = JSON.parse(b); } catch (_) { return null; }
+    }
+    const materials = N2N_MATERIAL_CATS.map(cat => {
+      const existing = (b.materials || []).find(m => m.key === cat.key) || {};
+      return {
+        key: cat.key,
+        label: cat.label,
+        amount: Number(existing.amount || 0),
+        churches: Number(existing.churches || 0),
+        ic: Number(existing.ic || 0)
+      };
+    });
+    const retreatDate = b.retreatDate || "";
+    const retreatRows = Array.isArray(b.retreatRows) ? b.retreatRows.map(r => ({
+      category: r.category || "",
+      churches: Number(r.churches || 0),
+      ic: Number(r.ic || 0)
+    })) : [];
+    const visitationRows = Array.isArray(b.visitationRows) ? b.visitationRows.map(r => ({
+      category: r.category || "",
+      churches: Number(r.churches || 0),
+      ic: Number(r.ic || 0)
+    })) : [];
+    const discipleshipRows = Array.isArray(b.discipleshipRows) ? b.discipleshipRows.map(r => ({
+      category: r.category || "",
+      churches: Number(r.churches || 0),
+      ic: Number(r.ic || 0)
+    })) : [];
+    const n2nChurchFundingNotes = b.n2nChurchFundingNotes || "";
+    const n2nIcFundingNotes = b.n2nIcFundingNotes || "";
+
+    // Legacy fallback if custom rows are empty
+    if (!retreatRows.length && !visitationRows.length && !discipleshipRows.length && (b.n2nTravel || b.n2nMaterials || b.n2nVenue || b.n2nFood)) {
+      if (b.n2nMaterials) materials[0].ic = Number(b.n2nMaterials);
+      if (b.n2nVenue) retreatRows.push({ category: "Venue", churches: 0, ic: Number(b.n2nVenue) });
+      if (b.n2nFood) retreatRows.push({ category: "Food & Hospitality", churches: 0, ic: Number(b.n2nFood) });
+      if (b.n2nTravel) visitationRows.push({ category: "Travel", churches: 0, ic: Number(b.n2nTravel) });
+    }
+
+    const totals = calculateN2NTotals({ materials, retreatRows, visitationRows, discipleshipRows });
+    return {
+      retreatDate,
+      materials,
+      retreatRows,
+      visitationRows,
+      discipleshipRows,
+      n2nChurchFundingNotes,
+      n2nIcFundingNotes,
+      totals,
+      total: totals.grandTotal
+    };
+  }
+
+  // ── Build workflow actions & notices ─────────────────────────────────
+  function buildWorkflowActions(r) {
+    const role = getEffectiveRole();
+    const canAct = role === "superadmin" || role === "ast_vp" || role === "final_approver";
+    if (!canAct) {
+      return {
+        actionsHtml: "",
+        noticeHtml: `<div class="testimony" style="margin-bottom:28px;border-left:3px solid var(--gold);background:rgba(200,169,110,.08);color:var(--navy);font-size:13.5px;padding:14px 18px;line-height:1.5;"><strong>Status Notice:</strong> You have read-only access to this request.</div>`
+      };
+    }
+
+    let actions = [];
+    let noticeHtml = "";
+
+    if (r.status === "Pending") {
+      if (role === "superadmin" || role === "ast_vp") {
+        actions = [
+          { type: "approve", label: "✅ Approve", cls: "btn-action-approve" },
+          { type: "deny", label: "❌ Deny", cls: "btn-action-deny" },
+          { type: "changes", label: "📝 Request Changes", cls: "btn-action-changes" },
+          { type: "edit", label: "✏️ Edit Request", cls: "btn-action-edit" },
+          { type: "budget", label: "💰 Edit Budget", cls: "btn-action-edit" },
+        ];
+      } else {
+        noticeHtml = `<div class="testimony" style="margin-bottom:28px;border-left:3px solid var(--gold);background:rgba(200,169,110,.08);color:var(--navy);font-size:13.5px;padding:14px 18px;line-height:1.5;"><strong>Status Notice:</strong> This request is currently awaiting AST Area VP review. Members of the Final Approval group can review once approved by the AST VP.</div>`;
+      }
+    } else if (r.status === "Pending Final Approval") {
+      if (role === "superadmin" || role === "final_approver") {
+        actions = [
+          { type: "approve", label: "✅ Approve", cls: "btn-action-approve" },
+          { type: "deny", label: "❌ Deny", cls: "btn-action-deny" },
+          { type: "changes", label: "📝 Request Changes", cls: "btn-action-changes" },
+          { type: "edit", label: "✏️ Edit Request", cls: "btn-action-edit" },
+          { type: "budget", label: "💰 Edit Budget", cls: "btn-action-edit" },
+        ];
+      } else if (role === "ast_vp") {
+        noticeHtml = `<div class="testimony" style="margin-bottom:28px;border-left:3px solid #1d39c4;background:rgba(29,57,196,.06);color:var(--navy);font-size:13.5px;padding:14px 18px;line-height:1.5;"><strong>Status Notice:</strong> You approved this request. It is now awaiting Final Approval.</div>`;
+      }
+    } else if (r.status === "Approved") {
+      noticeHtml = `<div class="testimony" style="margin-bottom:28px;border-left:3px solid #277c1d;background:rgba(42,107,60,.08);color:var(--navy);font-size:13.5px;padding:14px 18px;line-height:1.5;"><strong>Status Notice:</strong> This request has been fully approved. No further actions needed.</div>`;
+    } else if (r.status === "Denied") {
+      noticeHtml = `<div class="testimony" style="margin-bottom:28px;border-left:3px solid #cf1322;background:rgba(155,35,53,.08);color:var(--navy);font-size:13.5px;padding:14px 18px;line-height:1.5;"><strong>Status Notice:</strong> This request has been denied.</div>`;
+    } else if (r.status === "Denied Pending Changes") {
+      if (role === "superadmin") {
+        actions = [
+          { type: "edit", label: "✏️ Edit & Resubmit", cls: "btn-action-edit" },
+          { type: "budget", label: "💰 Edit Budget", cls: "btn-action-edit" },
+        ];
+      } else {
+        noticeHtml = `<div class="testimony" style="margin-bottom:28px;border-left:3px solid #b57404;background:rgba(200,169,110,.08);color:var(--navy);font-size:13.5px;padding:14px 18px;line-height:1.5;"><strong>Status Notice:</strong> Changes have been requested. The submitter must resubmit this request with revisions.</div>`;
+      }
+    }
+
+    const actionsHtml = actions.map(a =>
+      `<button type="button" class="${a.cls}" onclick="${a.type === 'edit' ? `openWfEditModal('${r.id}')` : (a.type === 'budget' ? `openWfBudgetModal('${r.id}')` : `openWfActionModal('${a.type}', '${r.id}')`)}">${a.label}</button>`
+    ).join("");
+
+    return { actionsHtml, noticeHtml };
+  }
+
+  // ── Show request detail ────────────────────────────────────────────────
+  window.showProjectRequest = function(id) {
+    const r = allProjectRequests.find(x => x.id === id);
+    if (!r) return;
+    activeRequestId = id;
+    renderProjectRequestsList(); // highlight active card
+
+    // Update URL
+    const url = new URL(window.location);
+    url.searchParams.set("request", id);
+    history.replaceState(null, "", url);
+
+    const pane = document.getElementById("requestDetailPane");
+    pane.scrollTop = 0;
+
+    // Build detail HTML
+    const dateRange = r.startDate ? `${fmt(r.startDate)}${r.endDate ? " – " + fmt(r.endDate) : ""}` : "—";
+
+    // Itemized Budget tables (formatted exactly like Project Reports finance table)
+    let budgetHtml = "";
+    if (r.projectType === "OA") {
+      const b = r.oaBudget || {};
+      const oaAndrewAmount = Number(b.oaAndrewAmount || 0);
+      const oaAndrew = Number(b.oaAndrew || 0);
+      const oaLaunch = Number(b.oaLaunch || 0);
+      const oaResults = Number(b.oaResults || 0);
+      const oaTotal = oaAndrew + oaLaunch + oaResults;
+
+      budgetHtml = `
+        <div class="section-title">5 — Financial Budget (OA)</div>
+        <div class="finance-wrap" style="margin-bottom:12px;">
+          <table class="finance-table">
+            <thead>
+              <tr class="ft-group"><td style="font-weight:600;color:var(--navy);">Budget Item</td><td style="font-weight:600;color:var(--navy);text-align:right;">Amount</td></tr>
+            </thead>
+            <tbody>
+              ${fRow("Operation Andrew Quantity / Offering", oaAndrewAmount)}
+              ${fRow("Operation Andrew Printing", oaAndrew)}
+              ${fRow("Meeting to Launch OA", oaLaunch)}
+              ${fRow("Meeting to Collect OA Results", oaResults)}
+              ${fRow("Total Requested", oaTotal, "ft-total")}
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-bottom:20px;">
+          <button type="button" class="btn-action-edit" onclick="openWfBudgetModal('${r.id}')">💰 Edit Budget</button>
+        </div>`;
+    } else if (r.projectType === "N2N") {
+      const b = parseN2NBudget(r.n2nBudget);
+      if (b) {
+        const matRows = b.materials.map(m => `
+          <tr>
+            <td>${escHtml(m.label)}</td>
+            <td class="budget-num">${(m.amount || 0).toLocaleString()}</td>
+            <td class="budget-num">${money(m.churches) || "$0.00"}</td>
+            <td class="budget-num">${money(m.ic) || "$0.00"}</td>
+            <td class="budget-num" style="font-weight:600;">${money((m.churches || 0) + (m.ic || 0)) || "$0.00"}</td>
+          </tr>
+        `).join("");
+
+        const retRows = b.retreatRows.length ? b.retreatRows.map(row => `
+          <tr>
+            <td>${escHtml(row.category || "—")}</td>
+            <td class="budget-num">${money(row.churches) || "$0.00"}</td>
+            <td class="budget-num">${money(row.ic) || "$0.00"}</td>
+            <td class="budget-num" style="font-weight:600;">${money((row.churches || 0) + (row.ic || 0)) || "$0.00"}</td>
+          </tr>
+        `).join("") : `<tr><td colspan="4" style="color:var(--muted);font-style:italic;">No preparation retreat expenses specified.</td></tr>`;
+
+        const visRows = b.visitationRows.length ? b.visitationRows.map(row => `
+          <tr>
+            <td>${escHtml(row.category || "—")}</td>
+            <td class="budget-num">${money(row.churches) || "$0.00"}</td>
+            <td class="budget-num">${money(row.ic) || "$0.00"}</td>
+            <td class="budget-num" style="font-weight:600;">${money((row.churches || 0) + (row.ic || 0)) || "$0.00"}</td>
+          </tr>
+        `).join("") : `<tr><td colspan="4" style="color:var(--muted);font-style:italic;">No visitation expenses specified.</td></tr>`;
+
+        const discRows = b.discipleshipRows.length ? b.discipleshipRows.map(row => `
+          <tr>
+            <td>${escHtml(row.category || "—")}</td>
+            <td class="budget-num">${money(row.churches) || "$0.00"}</td>
+            <td class="budget-num">${money(row.ic) || "$0.00"}</td>
+            <td class="budget-num" style="font-weight:600;">${money((row.churches || 0) + (row.ic || 0)) || "$0.00"}</td>
+          </tr>
+        `).join("") : `<tr><td colspan="4" style="color:var(--muted);font-style:italic;">No discipleship expenses specified.</td></tr>`;
+
+        budgetHtml = `
+          <div class="section-title">5 — Financial Budget (N2N)</div>
+          
+          <!-- 1. Materials -->
+          <div style="font-weight:600;font-size:14px;color:var(--navy);margin-bottom:8px;">1. Materials</div>
+          <div class="finance-wrap" style="margin-bottom:20px;">
+            <table class="budget-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th class="budget-num">Quantity</th>
+                  <th class="budget-num">Churches ($)</th>
+                  <th class="budget-num">IC ($)</th>
+                  <th class="budget-num">Total ($)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${matRows}
+              </tbody>
+              <tfoot>
+                <tr class="bt-total">
+                  <td colspan="2">Total Materials</td>
+                  <td class="budget-num">${money(b.totals.matChurches) || "$0.00"}</td>
+                  <td class="budget-num">${money(b.totals.matIc) || "$0.00"}</td>
+                  <td class="budget-num">${money(b.totals.matTotal) || "$0.00"}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- 2. Preparation Retreat -->
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+            <div style="font-weight:600;font-size:14px;color:var(--navy);">2. Preparation Retreat</div>
+            ${b.retreatDate ? `<div style="font-size:13px;color:var(--navy);background:rgba(200,169,110,.12);padding:3px 10px;border-radius:4px;border:1px solid var(--gold);"><strong>Retreat Date:</strong> ${fmt(b.retreatDate)}</div>` : ""}
+          </div>
+          <div class="finance-wrap" style="margin-bottom:20px;">
+            <table class="budget-table">
+              <thead>
+                <tr>
+                  <th>Expense Category</th>
+                  <th class="budget-num">Churches ($)</th>
+                  <th class="budget-num">IC ($)</th>
+                  <th class="budget-num">Total ($)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${retRows}
+              </tbody>
+              <tfoot>
+                <tr class="bt-total">
+                  <td>Total Preparation Retreat</td>
+                  <td class="budget-num">${money(b.totals.retChurches) || "$0.00"}</td>
+                  <td class="budget-num">${money(b.totals.retIc) || "$0.00"}</td>
+                  <td class="budget-num">${money(b.totals.retTotal) || "$0.00"}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- 3. Visitation -->
+          <div style="font-weight:600;font-size:14px;color:var(--navy);margin-bottom:8px;">3. Visitation</div>
+          <div class="finance-wrap" style="margin-bottom:20px;">
+            <table class="budget-table">
+              <thead>
+                <tr>
+                  <th>Expense Category</th>
+                  <th class="budget-num">Churches ($)</th>
+                  <th class="budget-num">IC ($)</th>
+                  <th class="budget-num">Total ($)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${visRows}
+              </tbody>
+              <tfoot>
+                <tr class="bt-total">
+                  <td>Total Visitation</td>
+                  <td class="budget-num">${money(b.totals.visChurches) || "$0.00"}</td>
+                  <td class="budget-num">${money(b.totals.visIc) || "$0.00"}</td>
+                  <td class="budget-num">${money(b.totals.visTotal) || "$0.00"}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- 4. Discipleship -->
+          <div style="font-weight:600;font-size:14px;color:var(--navy);margin-bottom:8px;">4. Discipleship</div>
+          <div class="finance-wrap" style="margin-bottom:20px;">
+            <table class="budget-table">
+              <thead>
+                <tr>
+                  <th>Expense Category</th>
+                  <th class="budget-num">Churches ($)</th>
+                  <th class="budget-num">IC ($)</th>
+                  <th class="budget-num">Total ($)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${discRows}
+              </tbody>
+              <tfoot>
+                <tr class="bt-total">
+                  <td>Total Discipleship</td>
+                  <td class="budget-num">${money(b.totals.discChurches) || "$0.00"}</td>
+                  <td class="budget-num">${money(b.totals.discIc) || "$0.00"}</td>
+                  <td class="budget-num">${money(b.totals.discTotal) || "$0.00"}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- 5. Total Budget & Funding -->
+          <div style="font-weight:600;font-size:14px;color:var(--navy);margin-bottom:8px;">5. Total Budget & Funding</div>
+          <div class="finance-wrap" style="margin-bottom:16px;">
+            <table class="budget-table">
+              <thead>
+                <tr>
+                  <th>Budget Category</th>
+                  <th class="budget-num">Churches ($)</th>
+                  <th class="budget-num">IC ($)</th>
+                  <th class="budget-num">Combined ($)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Materials</td>
+                  <td class="budget-num">${money(b.totals.matChurches) || "$0.00"}</td>
+                  <td class="budget-num">${money(b.totals.matIc) || "$0.00"}</td>
+                  <td class="budget-num" style="font-weight:600;">${money(b.totals.matTotal) || "$0.00"}</td>
+                </tr>
+                <tr>
+                  <td>Preparation Retreat</td>
+                  <td class="budget-num">${money(b.totals.retChurches) || "$0.00"}</td>
+                  <td class="budget-num">${money(b.totals.retIc) || "$0.00"}</td>
+                  <td class="budget-num" style="font-weight:600;">${money(b.totals.retTotal) || "$0.00"}</td>
+                </tr>
+                <tr>
+                  <td>Visitation</td>
+                  <td class="budget-num">${money(b.totals.visChurches) || "$0.00"}</td>
+                  <td class="budget-num">${money(b.totals.visIc) || "$0.00"}</td>
+                  <td class="budget-num" style="font-weight:600;">${money(b.totals.visTotal) || "$0.00"}</td>
+                </tr>
+                <tr>
+                  <td>Discipleship</td>
+                  <td class="budget-num">${money(b.totals.discChurches) || "$0.00"}</td>
+                  <td class="budget-num">${money(b.totals.discIc) || "$0.00"}</td>
+                  <td class="budget-num" style="font-weight:600;">${money(b.totals.discTotal) || "$0.00"}</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr class="bt-total" style="font-size:15px;">
+                  <td>Final Total Budget</td>
+                  <td class="budget-num">${money(b.totals.totalChurches) || "$0.00"}</td>
+                  <td class="budget-num">${money(b.totals.totalIc) || "$0.00"}</td>
+                  <td class="budget-num" style="font-size:16px;color:var(--navy);">${money(b.totals.grandTotal) || "$0.00"}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- Funding Notes -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:16px;">
+            <div class="testimony" style="margin-bottom:0;border-left:3px solid var(--navy);">
+              <div style="font-weight:600;font-size:13.5px;color:var(--navy);margin-bottom:4px;">Local Churches & Host Committee Funding</div>
+              <div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:6px;">${money(b.totals.totalChurches) || "$0.00"}</div>
+              <div style="font-size:13px;color:var(--ink);">${escHtml(b.n2nChurchFundingNotes || "No funding notes provided.")}</div>
+            </div>
+            <div class="testimony" style="margin-bottom:0;border-left:3px solid var(--gold);">
+              <div style="font-weight:600;font-size:13.5px;color:var(--navy);margin-bottom:4px;">International Commission (I.C.) Funding</div>
+              <div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:6px;">${money(b.totals.totalIc) || "$0.00"}</div>
+              <div style="font-size:13px;color:var(--ink);">${escHtml(b.n2nIcFundingNotes || "No funding notes provided.")}</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:20px;">
+            <button type="button" class="btn-action-edit" onclick="openWfBudgetModal('${r.id}')">💰 Edit Budget</button>
+          </div>
+        `;
+      }
+    }
+
+    // Review history
+    let reviewHtml = "";
+    if (r.reviewedBy) {
+      const secNum = budgetHtml ? "6" : "5";
+      reviewHtml = `
+        <div class="section-title">${secNum} — Review History</div>
+        <div class="testimony" style="background:rgba(26,58,92,.03);border-left:3px solid var(--navy);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+            <div style="font-weight:600;font-size:14px;color:var(--navy);">Reviewed by: ${escHtml(r.reviewedBy)}</div>
+            <div style="font-size:12px;color:var(--muted);">${r.reviewedAt ? fmt(r.reviewedAt) : ""}</div>
+          </div>
+          ${r.reviewNotes ? `<p style="font-size:14px;line-height:1.7;color:var(--ink);margin:0;white-space:pre-wrap;">${escHtml(r.reviewNotes)}</p>` : `<p style="font-size:13px;color:var(--muted);margin:0;font-style:italic;">No notes provided.</p>`}
+        </div>`;
+    }
+
+    // Actions & notices
+    const { actionsHtml, noticeHtml } = buildWorkflowActions(r);
+
+    pane.innerHTML = `
+      <div class="report-header">
+        <button type="button" class="mobile-back-btn" onclick="mobileBackToRequestsList()">
+          ← Back to Requests
+        </button>
+        <div class="rh-actions" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+          ${actionsHtml}
+          <button type="button" onclick="window.print()" class="print-btn" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:3px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;">
+            🖨 Print
+          </button>
+        </div>
+        <div class="print-header-content">
+          <div style="font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#a8c4e0;font-weight:600;margin-bottom:6px;">
+            ${escHtml(r.projectType)} Project Request
+          </div>
+          <div class="rh-title">${escHtml(r.requestTitle || "Untitled Request")}</div>
+          <div class="rh-meta">
+            ${escHtml(r.country)} &nbsp;·&nbsp; ${escHtml(r.area)} &nbsp;·&nbsp; ${dateRange}
+            ${r.createdAt ? ` &nbsp;·&nbsp; Submitted ${fmt(r.createdAt)}` : ""}
+          </div>
+          <div class="rh-coordinator print-hide" style="margin-top:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>Leader: ${escHtml(r.leader1Name || "—")}</span>
+            <span>AST VP: ${escHtml(r.astVpName || "—")} (${escHtml(r.astVpArea || "—")})</span>
+            <span style="background:#fff;color:var(--navy);font-weight:700;border:1px solid var(--border);">Status: ${escHtml(r.status)}</span>
+          </div>
+        </div>
+        <img src="https://internationalcommission.org/Files/IC-Primary-Logo.png.webp" alt="International Commission" class="print-logo" style="height:50px;width:auto;object-fit:contain;background:#fff;padding:4px;border-radius:4px;" />
+      </div>
+
+      <div class="report-body">
+        ${noticeHtml}
+
+        <div class="section-title">1 — Project Overview</div>
+        <div class="stats-grid" style="margin-bottom:20px;">
+          <div class="stat-cell"><span class="sc-label">Project Type</span><span class="sc-value">${escHtml(r.projectType)}</span></div>
+          <div class="stat-cell"><span class="sc-label">National Project Type</span><span class="sc-value">${escHtml(r.nationalProjectType || "—")}</span></div>
+          <div class="stat-cell"><span class="sc-label">Country</span><span class="sc-value">${escHtml(r.country)}</span></div>
+          <div class="stat-cell"><span class="sc-label">Area</span><span class="sc-value">${escHtml(r.area)}</span></div>
+          <div class="stat-cell"><span class="sc-label">Start Date</span><span class="sc-value">${r.startDate ? fmt(r.startDate) : "—"}</span></div>
+          <div class="stat-cell"><span class="sc-label">End Date</span><span class="sc-value">${r.endDate ? fmt(r.endDate) : "—"}</span></div>
+          <div class="stat-cell"><span class="sc-label">First Time Project</span><span class="sc-value">${escHtml(r.firstTime || "—")}</span></div>
+          <div class="stat-cell"><span class="sc-label">Submitted By</span><span class="sc-value" style="font-size:13.5px;word-break:break-all;">${escHtml(r.submittedBy || "—")}</span></div>
+          ${r.theme ? `<div class="stat-cell" style="grid-column:1/-1;"><span class="sc-label">Theme</span><span class="sc-value">${escHtml(r.theme)}</span></div>` : ""}
+        </div>
+
+        <div class="section-title">2 — Evangelism Projections</div>
+        <div class="stats-grid" style="margin-bottom:20px;">
+          <div class="stat-cell"><span class="sc-label">Participating Churches</span><span class="sc-value">${(r.churches || 0).toLocaleString()}</span></div>
+          <div class="stat-cell"><span class="sc-label">Projected Hearers</span><span class="sc-value">${(r.hearers || 0).toLocaleString()}</span></div>
+          <div class="stat-cell"><span class="sc-label">Projected Decisions</span><span class="sc-value">${(r.decisions || 0).toLocaleString()}</span></div>
+          <div class="stat-cell"><span class="sc-label">Projected Discipled</span><span class="sc-value">${(r.discipled || 0).toLocaleString()}</span></div>
+          <div class="stat-cell"><span class="sc-label">Projected Baptisms</span><span class="sc-value">${(r.baptisms || 0).toLocaleString()}</span></div>
+          <div class="stat-cell"><span class="sc-label">Current Status</span><span class="sc-value" style="font-size:13.5px;">${escHtml(r.status)}</span></div>
+        </div>
+
+        <div class="section-title">3 — Leadership</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:16px;">
+          <div class="testimony" style="margin-bottom:0;">
+            <div class="testimony-author">Primary Leader: ${escHtml(r.leader1Name || "—")}</div>
+            <div style="font-size:13.5px;color:var(--ink);line-height:1.7;">
+              ${r.leader1Email ? `<div><strong>Email:</strong> ${escHtml(r.leader1Email)}</div>` : ""}
+              ${r.leader1Phone ? `<div><strong>Phone:</strong> ${escHtml(r.leader1Phone)}</div>` : ""}
+              ${r.leader1Address ? `<div><strong>Address:</strong> ${escHtml(r.leader1Address)}</div>` : ""}
+            </div>
+          </div>
+          ${r.leader2Name ? `
+          <div class="testimony" style="margin-bottom:0;">
+            <div class="testimony-author">Secondary Leader: ${escHtml(r.leader2Name)}</div>
+            <div style="font-size:13.5px;color:var(--ink);line-height:1.7;">
+              ${r.leader2Email ? `<div><strong>Email:</strong> ${escHtml(r.leader2Email)}</div>` : ""}
+              ${r.leader2Phone ? `<div><strong>Phone:</strong> ${escHtml(r.leader2Phone)}</div>` : ""}
+              ${r.leader2Address ? `<div><strong>Address:</strong> ${escHtml(r.leader2Address)}</div>` : ""}
+            </div>
+          </div>` : ""}
+        </div>
+        <div style="font-size:13.5px;color:var(--ink);line-height:1.8;padding:4px 0;">
+          ${r.coordinator ? `<div><strong>Coordinator:</strong> ${escHtml(r.coordinator)}</div>` : ""}
+          <div><strong>AST Area VP:</strong> ${escHtml(r.astVpName || "—")} (${escHtml(r.astVpArea || "—")}) ${r.astVpEmail ? `&nbsp;·&nbsp; ${escHtml(r.astVpEmail)}` : ""}</div>
+        </div>
+
+        ${(r.vision || r.spiritualNeeds || r.importance) ? `
+        <div class="section-title">4 — Vision & Needs</div>
+        ${r.vision ? `
+          <div style="margin-bottom:20px;">
+            <div style="font-weight:600;font-size:14px;color:var(--navy);margin-bottom:6px;">Vision</div>
+            <p class="intro-text">${escHtml(r.vision)}</p>
+          </div>` : ""}
+        ${r.spiritualNeeds ? `
+          <div style="margin-bottom:20px;">
+            <div style="font-weight:600;font-size:14px;color:var(--navy);margin-bottom:6px;">Spiritual Needs</div>
+            <p class="intro-text">${escHtml(r.spiritualNeeds)}</p>
+          </div>` : ""}
+        ${r.importance ? `
+          <div style="margin-bottom:20px;">
+            <div style="font-weight:600;font-size:14px;color:var(--navy);margin-bottom:6px;">Strategic Importance</div>
+            <p class="intro-text">${escHtml(r.importance)}</p>
+          </div>` : ""}
+        ` : ""}
+
+        ${budgetHtml}
+
+        ${reviewHtml}
+      </div>
+    `;
+  };
+
+  // ── Get effective role for live mode ───────────────────────────────────
+  function getEffectiveRole() {
+    if (!currentAccount) return "readonly";
+    const idToken = currentAccount.idTokenClaims || {};
+    const groups = idToken.groups || [];
+    if (groups.includes(GROUP_IDS.SuperAdmin)) return "superadmin";
+    if (groups.includes(GROUP_IDS.FinalApproval)) return "final_approver";
+    if (groups.includes(GROUP_IDS.VP)) return "ast_vp";
+    if (groups.includes(GROUP_IDS.ReadWrite)) return "ast_vp"; // ReadWrite can review
+    return "readonly";
+  }
+
+  // ── Workflow Action Modal ──────────────────────────────────────────────
+  window.openWfActionModal = function(actionType, requestId) {
+    pendingWfAction = { type: actionType, requestId };
+    const r = allProjectRequests.find(x => x.id === requestId);
+    if (!r) return;
+
+    const modal = document.getElementById("wfActionModal");
+    const title = document.getElementById("wfModalTitle");
+    const notice = document.getElementById("wfModalNotice");
+    const notesLabel = document.getElementById("wfNotesLabel");
+    const notesInput = document.getElementById("wfNotesInput");
+    const confirmBtn = document.getElementById("wfConfirmBtn");
+
+    notesInput.value = "";
+
+    if (actionType === "approve") {
+      title.textContent = "Approve Project Request";
+      confirmBtn.className = "btn-action-approve";
+      confirmBtn.textContent = "✅ Confirm Approval";
+
+      if (r.status === "Pending") {
+        notice.innerHTML = `<strong>Notification:</strong> This will advance the request to <b>Pending Final Approval</b>. Members of the Final Approval group will be notified by email.`;
+        notice.style.display = "block";
+        notice.style.background = "#f0f5ff";
+        notice.style.borderColor = "#adc6ff";
+        notice.style.color = "var(--navy)";
+      } else if (r.status === "Pending Final Approval") {
+        notice.innerHTML = `<strong>Notification:</strong> This will <b>fully approve</b> the request. Status will change to <b>Approved</b>.`;
+        notice.style.display = "block";
+        notice.style.background = "#f6ffed";
+        notice.style.borderColor = "#b7eb8f";
+        notice.style.color = "var(--navy)";
+      }
+      notesLabel.textContent = "Approval Notes (optional)";
+    } else if (actionType === "deny") {
+      title.textContent = "Deny Project Request";
+      confirmBtn.className = "btn-action-deny";
+      confirmBtn.textContent = "❌ Confirm Denial";
+
+      if (r.status === "Pending") {
+        notice.innerHTML = `<strong>Notification:</strong> The submitter (${escHtml(r.submittedBy || r.leader1Email || "—")}) will <b>not</b> be automatically notified of a denial at this stage.`;
+      } else {
+        notice.innerHTML = `<strong>Notification:</strong> The AST VP (${escHtml(r.astVpName || "—")} · ${escHtml(r.astVpEmail || "—")}) will be notified by email that this request has been <b>denied</b>.`;
+      }
+      notice.style.display = "block";
+      notice.style.background = "#fff1f0";
+      notice.style.borderColor = "#ffa39e";
+      notice.style.color = "var(--navy)";
+      notesLabel.textContent = "Reason for Denial (optional)";
+    } else if (actionType === "changes") {
+      title.textContent = "Request Changes";
+      confirmBtn.className = "btn-action-changes";
+      confirmBtn.textContent = "📝 Confirm: Request Changes";
+
+      if (r.status === "Pending") {
+        notice.innerHTML = `<strong>Notification:</strong> The submitter (${escHtml(r.submittedBy || r.leader1Email || "—")}) will be notified by email that changes are required before this request can proceed.`;
+      } else {
+        notice.innerHTML = `<strong>Notification:</strong> The AST VP (${escHtml(r.astVpName || "—")} · ${escHtml(r.astVpEmail || "—")}) will be notified by email that changes are required.`;
+      }
+      notice.style.display = "block";
+      notice.style.background = "#fffbe6";
+      notice.style.borderColor = "#ffe58f";
+      notice.style.color = "var(--navy)";
+      notesLabel.textContent = "What changes are needed?";
+    }
+
+    modal.style.display = "flex";
+  };
+
+  window.closeWfActionModal = function() {
+    document.getElementById("wfActionModal").style.display = "none";
+    pendingWfAction = null;
+  };
+
+  window.confirmWfAction = async function() {
+    if (!pendingWfAction) return;
+    const { type, requestId } = pendingWfAction;
+    const r = allProjectRequests.find(x => x.id === requestId);
+    if (!r) return;
+
+    const notes = document.getElementById("wfNotesInput").value.trim();
+    const reviewer = currentAccount?.username || "Unknown";
+
+    // Determine new status
+    let newStatus;
+    if (type === "approve") {
+      newStatus = r.status === "Pending" ? "Pending Final Approval" : "Approved";
+    } else if (type === "deny") {
+      newStatus = "Denied";
+    } else if (type === "changes") {
+      newStatus = "Denied Pending Changes";
+    }
+
+    // Update locally
+    r.status = newStatus;
+    r.reviewNotes = notes || r.reviewNotes;
+    r.reviewedBy = reviewer;
+    r.reviewedAt = new Date().toISOString();
+
+    // If live mode, PATCH to worker
+    if (currentAccount) {
+      try {
+        const token = await getAccessToken();
+        const res = await fetch(`${WORKER_URL}/project-requests/${encodeURIComponent(requestId)}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ status: newStatus, reviewNotes: notes })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast("Error: " + (data.error || res.statusText), true);
+          closeWfActionModal();
+          return;
+        }
+      } catch (err) {
+        showToast("Network error: " + err.message, true);
+        closeWfActionModal();
+        return;
+      }
+    }
+
+    closeWfActionModal();
+    updateRequestCounts();
+    renderProjectRequestsList();
+    showProjectRequest(requestId);
+
+    // Show success toast
+    const labels = { approve: "approved", deny: "denied", changes: "returned for changes" };
+    showToast(`Request ${labels[type]} successfully`);
+  };
+
+  // ── Edit General Request Modal ─────────────────────────────────────────
+  window.openWfEditModal = function(requestId) {
+    const r = allProjectRequests.find(x => x.id === requestId);
+    if (!r) return;
+    pendingWfAction = { type: "edit", requestId };
+
+    const body = document.getElementById("wfEditModalBody");
+    body.innerHTML = `
+      <div style="font-family:'Playfair Display',serif;font-size:15px;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:4px;margin-bottom:12px;">Project Overview</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
+        <div class="wf-field" style="grid-column:1/-1;">
+          <label>Project Title</label>
+          <input type="text" data-edit-key="requestTitle" value="${escHtml(r.requestTitle || '')}" />
+        </div>
+        <div class="wf-field">
+          <label>Country</label>
+          <input type="text" data-edit-key="country" value="${escHtml(r.country || '')}" />
+        </div>
+        <div class="wf-field">
+          <label>Area</label>
+          <input type="text" data-edit-key="area" value="${escHtml(r.area || '')}" />
+        </div>
+        <div class="wf-field">
+          <label>Start Date</label>
+          <input type="date" data-edit-key="startDate" value="${escHtml(r.startDate || '')}" />
+        </div>
+        <div class="wf-field">
+          <label>End Date</label>
+          <input type="date" data-edit-key="endDate" value="${escHtml(r.endDate || '')}" />
+        </div>
+        <div class="wf-field">
+          <label>National Project Type</label>
+          <input type="text" data-edit-key="nationalProjectType" value="${escHtml(r.nationalProjectType || '')}" />
+        </div>
+        ${r.projectType === 'N2N' ? `
+        <div class="wf-field">
+          <label>Theme</label>
+          <input type="text" data-edit-key="theme" value="${escHtml(r.theme || '')}" />
+        </div>` : ''}
+      </div>
+
+      <div style="font-family:'Playfair Display',serif;font-size:15px;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:4px;margin-bottom:12px;">Evangelism Projections</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:18px;">
+        <div class="wf-field">
+          <label>Churches</label>
+          <input type="number" min="0" data-edit-key="churches" value="${r.churches || 0}" />
+        </div>
+        <div class="wf-field">
+          <label>Hearers</label>
+          <input type="number" min="0" data-edit-key="hearers" value="${r.hearers || 0}" />
+        </div>
+        <div class="wf-field">
+          <label>Decisions</label>
+          <input type="number" min="0" data-edit-key="decisions" value="${r.decisions || 0}" />
+        </div>
+        <div class="wf-field">
+          <label>Discipled</label>
+          <input type="number" min="0" data-edit-key="discipled" value="${r.discipled || 0}" />
+        </div>
+        <div class="wf-field">
+          <label>Baptisms</label>
+          <input type="number" min="0" data-edit-key="baptisms" value="${r.baptisms || 0}" />
+        </div>
+      </div>
+
+      <div style="font-family:'Playfair Display',serif;font-size:15px;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:4px;margin-bottom:12px;">Financial Budget Proposal (${escHtml(r.projectType)})</div>
+      <div style="background:rgba(200,169,110,.12);border:1px solid var(--gold);border-radius:4px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div style="font-weight:700;color:var(--navy);font-size:14px;">Dedicated Itemized Budget Editor</div>
+          <div style="font-size:12.5px;color:var(--muted);margin-top:2px;">Itemized materials, retreats, visitation, discipleship, and funding allocations are managed in the dedicated budget editor.</div>
+        </div>
+        <button type="button" class="btn-action-edit" onclick="closeWfEditModal();openWfBudgetModal('${r.id}')">💰 Edit Full Budget</button>
+      </div>
+
+      <div style="font-family:'Playfair Display',serif;font-size:15px;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:4px;margin-bottom:12px;">Leadership</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
+        <div class="wf-field">
+          <label>Primary Leader Name</label>
+          <input type="text" data-edit-key="leader1Name" value="${escHtml(r.leader1Name || '')}" />
+        </div>
+        <div class="wf-field">
+          <label>Primary Leader Email</label>
+          <input type="email" data-edit-key="leader1Email" value="${escHtml(r.leader1Email || '')}" />
+        </div>
+        <div class="wf-field">
+          <label>Primary Leader Phone</label>
+          <input type="text" data-edit-key="leader1Phone" value="${escHtml(r.leader1Phone || '')}" />
+        </div>
+        <div class="wf-field">
+          <label>Primary Leader Address</label>
+          <input type="text" data-edit-key="leader1Address" value="${escHtml(r.leader1Address || '')}" />
+        </div>
+        ${r.projectType === 'N2N' ? `
+        <div class="wf-field">
+          <label>Secondary Leader Name</label>
+          <input type="text" data-edit-key="leader2Name" value="${escHtml(r.leader2Name || '')}" />
+        </div>
+        <div class="wf-field">
+          <label>Secondary Leader Email</label>
+          <input type="email" data-edit-key="leader2Email" value="${escHtml(r.leader2Email || '')}" />
+        </div>
+        <div class="wf-field">
+          <label>Secondary Leader Phone</label>
+          <input type="text" data-edit-key="leader2Phone" value="${escHtml(r.leader2Phone || '')}" />
+        </div>
+        <div class="wf-field">
+          <label>Secondary Leader Address</label>
+          <input type="text" data-edit-key="leader2Address" value="${escHtml(r.leader2Address || '')}" />
+        </div>` : ''}
+      </div>
+
+      <div style="font-family:'Playfair Display',serif;font-size:15px;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:4px;margin-bottom:12px;">Vision & Needs</div>
+      <div style="display:grid;grid-template-columns:1fr;gap:12px;">
+        <div class="wf-field">
+          <label>Vision</label>
+          <textarea data-edit-key="vision" style="width:100%;min-height:60px;resize:vertical;">${escHtml(r.vision || '')}</textarea>
+        </div>
+        <div class="wf-field">
+          <label>Spiritual Needs</label>
+          <textarea data-edit-key="spiritualNeeds" style="width:100%;min-height:60px;resize:vertical;">${escHtml(r.spiritualNeeds || '')}</textarea>
+        </div>
+        <div class="wf-field">
+          <label>Strategic Importance</label>
+          <textarea data-edit-key="importance" style="width:100%;min-height:60px;resize:vertical;">${escHtml(r.importance || '')}</textarea>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("wfEditModal").style.display = "flex";
+  };
+
+  window.closeWfEditModal = function() {
+    document.getElementById("wfEditModal").style.display = "none";
+    pendingWfAction = null;
+  };
+
+  window.saveWfEdit = async function() {
+    if (!pendingWfAction || pendingWfAction.type !== "edit") return;
+    const r = allProjectRequests.find(x => x.id === pendingWfAction.requestId);
+    if (!r) return;
+
+    // Collect general edits
+    const inputs = document.querySelectorAll("[data-edit-key]");
+    const updates = {};
+    inputs.forEach(el => {
+      const key = el.dataset.editKey;
+      const val = el.value;
+      if (val !== (r[key] || "").toString()) {
+        updates[key] = val;
+        r[key] = el.type === "number" ? (parseInt(val, 10) || 0) : val;
+      }
+    });
+
+    // If live mode, PATCH to worker
+    if (currentAccount && Object.keys(updates).length) {
+      try {
+        const token = await getAccessToken();
+        const res = await fetch(`${WORKER_URL}/project-requests/${encodeURIComponent(pendingWfAction.requestId)}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ ...updates, status: r.status })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast("Error: " + (data.error || res.statusText), true);
+          closeWfEditModal();
+          return;
+        }
+      } catch (err) {
+        showToast("Network error: " + err.message, true);
+        closeWfEditModal();
+        return;
+      }
+    }
+
+    const reqId = pendingWfAction.requestId;
+    closeWfEditModal();
+    renderProjectRequestsList();
+    showProjectRequest(reqId);
+    showToast("Request updated successfully");
+  };
+
+  // ── Dedicated Itemized Budget Modal ────────────────────────────────────
+  let activeBudgetRequestId = null;
+
+  window.openWfBudgetModal = function(requestId) {
+    const r = allProjectRequests.find(x => x.id === requestId);
+    if (!r) return;
+    activeBudgetRequestId = requestId;
+
+    document.getElementById("wfBudgetTitle").textContent = `Edit Financial Budget Proposal — ${r.requestTitle || 'Request'} (${r.projectType})`;
+    const body = document.getElementById("wfBudgetModalBody");
+
+    if (r.projectType === "OA") {
+      const b = r.oaBudget || {};
+      body.innerHTML = `
+        <div style="font-family:'Playfair Display',serif;font-size:16px;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:4px;margin-bottom:14px;">
+          Operation Andrew Budget Breakdown
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
+          <div class="wf-field">
+            <label>Operation Andrew Quantity / Offering</label>
+            <input type="number" min="0" step="any" id="modalOaAndrewAmount" value="${b.oaAndrewAmount || 0}" />
+          </div>
+          <div class="wf-field">
+            <label>Operation Andrew Printing ($)</label>
+            <input type="number" min="0" step="any" id="modalOaAndrew" value="${b.oaAndrew || 0}" oninput="calcBudgetModalOaTotal()" />
+          </div>
+          <div class="wf-field">
+            <label>Meeting to Launch OA ($)</label>
+            <input type="number" min="0" step="any" id="modalOaLaunch" value="${b.oaLaunch || 0}" oninput="calcBudgetModalOaTotal()" />
+          </div>
+          <div class="wf-field">
+            <label>Meeting to Collect OA Results ($)</label>
+            <input type="number" min="0" step="any" id="modalOaResults" value="${b.oaResults || 0}" oninput="calcBudgetModalOaTotal()" />
+          </div>
+        </div>
+        <div style="background:var(--navy);color:#fff;border-radius:6px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="color:#a8c4e0;font-size:12px;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Total Requested Budget</div>
+            <div style="font-size:13px;opacity:0.85;">Sum of Printing, Launch, and Results meetings</div>
+          </div>
+          <div id="modalOaTotalDisplay" style="font-size:24px;font-weight:700;color:#fff;">
+            $${Number(b.total || ((Number(b.oaAndrew||0)+Number(b.oaLaunch||0)+Number(b.oaResults||0)))).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+        </div>
+      `;
+    } else {
+      // N2N Itemized Budget
+      const b = parseN2NBudget(r.n2nBudget);
+      
+      const matInputsHtml = b.materials.map(m => `
+        <tr data-material-key="${escHtml(m.key)}">
+          <td style="font-weight:500;">${escHtml(m.label)}</td>
+          <td><input type="number" min="0" class="budget-mat-qty" value="${m.amount || 0}" oninput="updateBudgetModalN2NTotals()" /></td>
+          <td><input type="number" min="0" step="any" class="budget-mat-churches" value="${m.churches || 0}" oninput="updateBudgetModalN2NTotals()" /></td>
+          <td><input type="number" min="0" step="any" class="budget-mat-ic" value="${m.ic || 0}" oninput="updateBudgetModalN2NTotals()" /></td>
+          <td class="budget-num budget-mat-subtotal" style="font-weight:600;">$${((Number(m.churches) || 0) + (Number(m.ic) || 0)).toFixed(2)}</td>
+        </tr>
+      `).join("");
+
+      body.innerHTML = `
+        <!-- Section 1: Materials -->
+        <div style="font-family:'Playfair Display',serif;font-size:15px;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:4px;margin-bottom:12px;">
+          1. Materials Budget
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">Enter quantity of materials and the cost distribution between local churches and International Commission.</p>
+        <div class="finance-wrap" style="margin-bottom:22px;">
+          <table class="budget-table">
+            <thead>
+              <tr>
+                <th>Materials Category</th>
+                <th style="width:110px;" class="budget-num">Quantity</th>
+                <th style="width:140px;" class="budget-num">Churches ($)</th>
+                <th style="width:140px;" class="budget-num">IC ($)</th>
+                <th style="width:120px;" class="budget-num">Total ($)</th>
+              </tr>
+            </thead>
+            <tbody id="modalN2nMaterialsBody">
+              ${matInputsHtml}
+            </tbody>
+            <tfoot>
+              <tr class="bt-total">
+                <td>Materials Subtotal</td>
+                <td class="budget-num" id="modalN2nMatQtyTotal">0</td>
+                <td class="budget-num" id="modalN2nMatChurchesTotal">$0.00</td>
+                <td class="budget-num" id="modalN2nMatIcTotal">$0.00</td>
+                <td class="budget-num" id="modalN2nMatCombinedTotal">$0.00</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- Section 2: Preparation Retreat -->
+        <div style="font-family:'Playfair Display',serif;font-size:15px;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:4px;margin-bottom:12px;">
+          2. Preparation Retreat
+        </div>
+        <div class="wf-field" style="max-width:320px;margin-bottom:12px;">
+          <label>Prayer Preparation Retreat Date</label>
+          <input type="date" id="modalRetreatDate" value="${escHtml(b.retreatDate || '')}" />
+        </div>
+        <div class="finance-wrap" style="margin-bottom:8px;">
+          <table class="budget-table">
+            <thead>
+              <tr>
+                <th>Expense Category</th>
+                <th style="width:140px;" class="budget-num">Churches ($)</th>
+                <th style="width:140px;" class="budget-num">IC ($)</th>
+                <th style="width:120px;" class="budget-num">Total ($)</th>
+                <th style="width:50px;"></th>
+              </tr>
+            </thead>
+            <tbody id="modalN2nRetreatBody"></tbody>
+            <tfoot>
+              <tr class="bt-total">
+                <td>Retreat Subtotal</td>
+                <td class="budget-num" id="modalN2nRetChurchesTotal">$0.00</td>
+                <td class="budget-num" id="modalN2nRetIcTotal">$0.00</td>
+                <td class="budget-num" id="modalN2nRetCombinedTotal">$0.00</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div style="margin-bottom:22px;">
+          <button type="button" class="btn-budget-add" onclick="addBudgetModalRow('retreat')">+ Add Retreat Expense</button>
+        </div>
+
+        <!-- Section 3: Visitation -->
+        <div style="font-family:'Playfair Display',serif;font-size:15px;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:4px;margin-bottom:12px;">
+          3. Visitation
+        </div>
+        <div class="finance-wrap" style="margin-bottom:8px;">
+          <table class="budget-table">
+            <thead>
+              <tr>
+                <th>Expense Category</th>
+                <th style="width:140px;" class="budget-num">Churches ($)</th>
+                <th style="width:140px;" class="budget-num">IC ($)</th>
+                <th style="width:120px;" class="budget-num">Total ($)</th>
+                <th style="width:50px;"></th>
+              </tr>
+            </thead>
+            <tbody id="modalN2nVisitationBody"></tbody>
+            <tfoot>
+              <tr class="bt-total">
+                <td>Visitation Subtotal</td>
+                <td class="budget-num" id="modalN2nVisChurchesTotal">$0.00</td>
+                <td class="budget-num" id="modalN2nVisIcTotal">$0.00</td>
+                <td class="budget-num" id="modalN2nVisCombinedTotal">$0.00</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div style="margin-bottom:22px;">
+          <button type="button" class="btn-budget-add" onclick="addBudgetModalRow('visitation')">+ Add Visitation Expense</button>
+        </div>
+
+        <!-- Section 4: Discipleship -->
+        <div style="font-family:'Playfair Display',serif;font-size:15px;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:4px;margin-bottom:12px;">
+          4. Discipleship
+        </div>
+        <div class="finance-wrap" style="margin-bottom:8px;">
+          <table class="budget-table">
+            <thead>
+              <tr>
+                <th>Expense Category</th>
+                <th style="width:140px;" class="budget-num">Churches ($)</th>
+                <th style="width:140px;" class="budget-num">IC ($)</th>
+                <th style="width:120px;" class="budget-num">Total ($)</th>
+                <th style="width:50px;"></th>
+              </tr>
+            </thead>
+            <tbody id="modalN2nDiscipleshipBody"></tbody>
+            <tfoot>
+              <tr class="bt-total">
+                <td>Discipleship Subtotal</td>
+                <td class="budget-num" id="modalN2nDiscChurchesTotal">$0.00</td>
+                <td class="budget-num" id="modalN2nDiscIcTotal">$0.00</td>
+                <td class="budget-num" id="modalN2nDiscCombinedTotal">$0.00</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div style="margin-bottom:22px;">
+          <button type="button" class="btn-budget-add" onclick="addBudgetModalRow('discipleship')">+ Add Discipleship Expense</button>
+        </div>
+
+        <!-- Section 5: Budget Summary & Funding Notes -->
+        <div style="font-family:'Playfair Display',serif;font-size:15px;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:4px;margin-bottom:12px;">
+          5. Budget Summary & Funding Notes
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
+          <div class="wf-field">
+            <label>Local Churches Funding Notes</label>
+            <textarea id="modalN2nChurchNotes" placeholder="Describe local church financial participation…">${escHtml(b.n2nChurchFundingNotes || '')}</textarea>
+          </div>
+          <div class="wf-field">
+            <label>IC Funding Notes</label>
+            <textarea id="modalN2nIcNotes" placeholder="Describe IC financial coverage…">${escHtml(b.n2nIcFundingNotes || '')}</textarea>
+          </div>
+        </div>
+
+        <div style="background:var(--navy);color:#fff;border-radius:6px;padding:16px 20px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;text-align:center;">
+          <div>
+            <div style="color:#a8c4e0;font-size:12px;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Churches Funding</div>
+            <div id="modalSummaryChurchesTotal" style="font-size:20px;font-weight:700;color:#fff;margin-top:4px;">$0.00</div>
+          </div>
+          <div>
+            <div style="color:#a8c4e0;font-size:12px;text-transform:uppercase;letter-spacing:1px;font-weight:600;">IC Funding</div>
+            <div id="modalSummaryIcTotal" style="font-size:20px;font-weight:700;color:#fff;margin-top:4px;">$0.00</div>
+          </div>
+          <div style="border-left:1px solid rgba(255,255,255,0.2);padding-left:16px;">
+            <div style="color:#c8a96e;font-size:12px;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Grand Total</div>
+            <div id="modalSummaryGrandTotal" style="font-size:24px;font-weight:700;color:#fff;margin-top:4px;">$0.00</div>
+          </div>
+        </div>
+      `;
+
+      // Populate existing rows for retreat, visitation, discipleship
+      (b.retreatRows || []).forEach(r => addBudgetModalRow("retreat", r.category, r.churches, r.ic));
+      if (!b.retreatRows?.length) addBudgetModalRow("retreat", "", 0, 0);
+
+      (b.visitationRows || []).forEach(r => addBudgetModalRow("visitation", r.category, r.churches, r.ic));
+      if (!b.visitationRows?.length) addBudgetModalRow("visitation", "", 0, 0);
+
+      (b.discipleshipRows || []).forEach(r => addBudgetModalRow("discipleship", r.category, r.churches, r.ic));
+      if (!b.discipleshipRows?.length) addBudgetModalRow("discipleship", "", 0, 0);
+
+      updateBudgetModalN2NTotals();
+    }
+
+    document.getElementById("wfBudgetModal").style.display = "flex";
+  };
+
+  window.closeWfBudgetModal = function() {
+    document.getElementById("wfBudgetModal").style.display = "none";
+    activeBudgetRequestId = null;
+  };
+
+  window.addBudgetModalRow = function(group, category = "", churches = 0, ic = 0) {
+    const tbody = document.getElementById(`modalN2n${group.charAt(0).toUpperCase() + group.slice(1)}Body`);
+    if (!tbody) return;
+    const tr = document.createElement("tr");
+    tr.className = `budget-row-${group}`;
+    tr.innerHTML = `
+      <td><input type="text" class="budget-row-cat" placeholder="Expense description" value="${escHtml(category)}" /></td>
+      <td><input type="number" min="0" step="any" class="budget-row-churches" value="${churches}" oninput="updateBudgetModalN2NTotals()" /></td>
+      <td><input type="number" min="0" step="any" class="budget-row-ic" value="${ic}" oninput="updateBudgetModalN2NTotals()" /></td>
+      <td class="budget-num budget-row-subtotal" style="font-weight:600;">$${((Number(churches) || 0) + (Number(ic) || 0)).toFixed(2)}</td>
+      <td style="text-align:center;"><button type="button" class="btn-budget-del" onclick="removeBudgetModalRow(this)" title="Remove expense row">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+    updateBudgetModalN2NTotals();
+  };
+
+  window.removeBudgetModalRow = function(btn) {
+    const tr = btn.closest("tr");
+    if (tr) {
+      tr.remove();
+      updateBudgetModalN2NTotals();
+    }
+  };
+
+  window.calcBudgetModalOaTotal = function() {
+    const andrew = parseFloat(document.getElementById("modalOaAndrew")?.value) || 0;
+    const launch = parseFloat(document.getElementById("modalOaLaunch")?.value) || 0;
+    const results = parseFloat(document.getElementById("modalOaResults")?.value) || 0;
+    const total = andrew + launch + results;
+    const el = document.getElementById("modalOaTotalDisplay");
+    if (el) el.textContent = `$${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  window.updateBudgetModalN2NTotals = function() {
+    // 1. Materials
+    let matQty = 0, matChurches = 0, matIc = 0;
+    document.querySelectorAll("#modalN2nMaterialsBody tr").forEach(tr => {
+      const q = parseFloat(tr.querySelector(".budget-mat-qty")?.value) || 0;
+      const c = parseFloat(tr.querySelector(".budget-mat-churches")?.value) || 0;
+      const i = parseFloat(tr.querySelector(".budget-mat-ic")?.value) || 0;
+      matQty += q;
+      matChurches += c;
+      matIc += i;
+      const sub = tr.querySelector(".budget-mat-subtotal");
+      if (sub) sub.textContent = `$${(c + i).toFixed(2)}`;
+    });
+    const matCombined = matChurches + matIc;
+    const elMatQty = document.getElementById("modalN2nMatQtyTotal");
+    const elMatC = document.getElementById("modalN2nMatChurchesTotal");
+    const elMatI = document.getElementById("modalN2nMatIcTotal");
+    const elMatComb = document.getElementById("modalN2nMatCombinedTotal");
+    if (elMatQty) elMatQty.textContent = matQty.toLocaleString();
+    if (elMatC) elMatC.textContent = `$${matChurches.toFixed(2)}`;
+    if (elMatI) elMatI.textContent = `$${matIc.toFixed(2)}`;
+    if (elMatComb) elMatComb.textContent = `$${matCombined.toFixed(2)}`;
+
+    // Helper for custom groups
+    function sumGroup(grp) {
+      let cTotal = 0, iTotal = 0;
+      document.querySelectorAll(`#modalN2n${grp.charAt(0).toUpperCase() + grp.slice(1)}Body tr`).forEach(tr => {
+        const c = parseFloat(tr.querySelector(".budget-row-churches")?.value) || 0;
+        const i = parseFloat(tr.querySelector(".budget-row-ic")?.value) || 0;
+        cTotal += c;
+        iTotal += i;
+        const sub = tr.querySelector(".budget-row-subtotal");
+        if (sub) sub.textContent = `$${(c + i).toFixed(2)}`;
+      });
+      return { cTotal, iTotal, combined: cTotal + iTotal };
+    }
+
+    const ret = sumGroup("retreat");
+    const elRetC = document.getElementById("modalN2nRetChurchesTotal");
+    const elRetI = document.getElementById("modalN2nRetIcTotal");
+    const elRetComb = document.getElementById("modalN2nRetCombinedTotal");
+    if (elRetC) elRetC.textContent = `$${ret.cTotal.toFixed(2)}`;
+    if (elRetI) elRetI.textContent = `$${ret.iTotal.toFixed(2)}`;
+    if (elRetComb) elRetComb.textContent = `$${ret.combined.toFixed(2)}`;
+
+    const vis = sumGroup("visitation");
+    const elVisC = document.getElementById("modalN2nVisChurchesTotal");
+    const elVisI = document.getElementById("modalN2nVisIcTotal");
+    const elVisComb = document.getElementById("modalN2nVisCombinedTotal");
+    if (elVisC) elVisC.textContent = `$${vis.cTotal.toFixed(2)}`;
+    if (elVisI) elVisI.textContent = `$${vis.iTotal.toFixed(2)}`;
+    if (elVisComb) elVisComb.textContent = `$${vis.combined.toFixed(2)}`;
+
+    const disc = sumGroup("discipleship");
+    const elDiscC = document.getElementById("modalN2nDiscChurchesTotal");
+    const elDiscI = document.getElementById("modalN2nDiscIcTotal");
+    const elDiscComb = document.getElementById("modalN2nDiscCombinedTotal");
+    if (elDiscC) elDiscC.textContent = `$${disc.cTotal.toFixed(2)}`;
+    if (elDiscI) elDiscI.textContent = `$${disc.iTotal.toFixed(2)}`;
+    if (elDiscComb) elDiscComb.textContent = `$${disc.combined.toFixed(2)}`;
+
+    // Grand totals
+    const grandChurches = matChurches + ret.cTotal + vis.cTotal + disc.cTotal;
+    const grandIc = matIc + ret.iTotal + vis.iTotal + disc.iTotal;
+    const grandTotal = grandChurches + grandIc;
+
+    const elSumC = document.getElementById("modalSummaryChurchesTotal");
+    const elSumI = document.getElementById("modalSummaryIcTotal");
+    const elSumGrand = document.getElementById("modalSummaryGrandTotal");
+    if (elSumC) elSumC.textContent = `$${grandChurches.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (elSumI) elSumI.textContent = `$${grandIc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (elSumGrand) elSumGrand.textContent = `$${grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  window.saveWfBudget = async function() {
+    if (!activeBudgetRequestId) return;
+    const r = allProjectRequests.find(x => x.id === activeBudgetRequestId);
+    if (!r) return;
+
+    const updates = {};
+
+    if (r.projectType === "OA") {
+      const oaAndrewAmount = parseFloat(document.getElementById("modalOaAndrewAmount")?.value) || 0;
+      const oaAndrew = parseFloat(document.getElementById("modalOaAndrew")?.value) || 0;
+      const oaLaunch = parseFloat(document.getElementById("modalOaLaunch")?.value) || 0;
+      const oaResults = parseFloat(document.getElementById("modalOaResults")?.value) || 0;
+      const total = oaAndrew + oaLaunch + oaResults;
+
+      r.oaBudget = { oaAndrewAmount, oaAndrew, oaLaunch, oaResults, total };
+      updates.OABudgetJson = JSON.stringify(r.oaBudget);
+    } else {
+      // N2N
+      const materials = [];
+      document.querySelectorAll("#modalN2nMaterialsBody tr").forEach(tr => {
+        const key = tr.dataset.materialKey;
+        const cat = N2N_MATERIAL_CATS.find(c => c.key === key);
+        const amount = parseFloat(tr.querySelector(".budget-mat-qty")?.value) || 0;
+        const churches = parseFloat(tr.querySelector(".budget-mat-churches")?.value) || 0;
+        const ic = parseFloat(tr.querySelector(".budget-mat-ic")?.value) || 0;
+        materials.push({ key, label: cat ? cat.label : key, amount, churches, ic });
+      });
+
+      const retreatDate = document.getElementById("modalRetreatDate")?.value || "";
+
+      function collectGroup(grp) {
+        const rows = [];
+        document.querySelectorAll(`#modalN2n${grp.charAt(0).toUpperCase() + grp.slice(1)}Body tr`).forEach(tr => {
+          const category = tr.querySelector(".budget-row-cat")?.value.trim() || "";
+          const churches = parseFloat(tr.querySelector(".budget-row-churches")?.value) || 0;
+          const ic = parseFloat(tr.querySelector(".budget-row-ic")?.value) || 0;
+          if (category || churches || ic) {
+            rows.push({ category, churches, ic });
+          }
+        });
+        return rows;
+      }
+
+      const retreatRows = collectGroup("retreat");
+      const visitationRows = collectGroup("visitation");
+      const discipleshipRows = collectGroup("discipleship");
+
+      const n2nChurchFundingNotes = document.getElementById("modalN2nChurchNotes")?.value.trim() || "";
+      const n2nIcFundingNotes = document.getElementById("modalN2nIcNotes")?.value.trim() || "";
+
+      const totals = calculateN2NTotals({ materials, retreatRows, visitationRows, discipleshipRows });
+
+      r.n2nBudget = {
+        retreatDate,
+        materials,
+        retreatRows,
+        visitationRows,
+        discipleshipRows,
+        n2nChurchFundingNotes,
+        n2nIcFundingNotes,
+        total: totals.grandTotal
+      };
+      updates.N2NBudgetJson = JSON.stringify(r.n2nBudget);
+    }
+
+    // Live mode PATCH
+    if (currentAccount && Object.keys(updates).length) {
+      try {
+        const token = await getAccessToken();
+        const res = await fetch(`${WORKER_URL}/project-requests/${encodeURIComponent(r.id)}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ ...updates, status: r.status })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast("Error saving budget: " + (data.error || res.statusText), true);
+          closeWfBudgetModal();
+          return;
+        }
+      } catch (err) {
+        showToast("Network error: " + err.message, true);
+        closeWfBudgetModal();
+        return;
+      }
+    }
+
+    const savedId = activeBudgetRequestId;
+    closeWfBudgetModal();
+    renderProjectRequestsList();
+    showProjectRequest(savedId);
+    showToast("Budget updated successfully");
+  };
+
+  // ── Close modals on overlay click ──────────────────────────────────────
+  document.getElementById("wfActionModal").addEventListener("click", function(e) {
+    if (e.target === this) closeWfActionModal();
+  });
+  document.getElementById("wfEditModal").addEventListener("click", function(e) {
+    if (e.target === this) closeWfEditModal();
+  });
+  const wfBudgetOverlay = document.getElementById("wfBudgetModal");
+  if (wfBudgetOverlay) {
+    wfBudgetOverlay.addEventListener("click", function(e) {
+      if (e.target === this) closeWfBudgetModal();
+    });
+  }
+
+  // ── URL parameter deep linking ─────────────────────────────────────────
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get("view") === "requests") {
+    // Delay until after auth
+    const checkAndSwitch = () => {
+      if (currentAccount) {
+        toggleDashboardView("requests");
+        const reqId = urlParams.get("request");
+        if (reqId) {
+          setTimeout(() => showProjectRequest(reqId), 500);
+        }
+      }
+    };
+    // Check immediately and also after a delay for auth
+    setTimeout(checkAndSwitch, 100);
+    setTimeout(checkAndSwitch, 2000);
+  }
+
   }); // end DOMContentLoaded
 </script>
 
@@ -2315,6 +4212,61 @@
         </div>
         <div id="manageShareLinksList"></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Workflow Action Modal (Approve / Deny / Deny Pending Changes) ── -->
+<div class="wf-modal-overlay" id="wfActionModal" style="display:none;">
+  <div class="wf-modal">
+    <div class="wf-modal-header">
+      <h3 id="wfModalTitle">Review Project Request</h3>
+      <button type="button" class="wf-modal-close" onclick="closeWfActionModal()">&times;</button>
+    </div>
+    <div class="wf-modal-body">
+      <div class="notice-box" id="wfModalNotice"></div>
+      <div class="wf-field">
+        <label id="wfNotesLabel" for="wfNotesInput">Review Notes</label>
+        <textarea id="wfNotesInput" placeholder="Add comments, instructions, or reason for decision…"></textarea>
+      </div>
+    </div>
+    <div class="wf-modal-footer">
+      <button type="button" class="btn-refresh" style="background:#e8e3da;color:var(--navy);border:1px solid #bfb7a8;font-weight:600;padding:7px 16px;border-radius:4px;cursor:pointer;" onclick="closeWfActionModal()">Cancel</button>
+      <button type="button" id="wfConfirmBtn" class="btn-action-approve" onclick="confirmWfAction()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Edit Project Request Modal ── -->
+<div class="wf-modal-overlay" id="wfEditModal" style="display:none;">
+  <div class="wf-modal" style="width:min(740px, 95vw);">
+    <div class="wf-modal-header">
+      <h3 id="wfEditTitle">Edit Project Request</h3>
+      <button type="button" class="wf-modal-close" onclick="closeWfEditModal()">&times;</button>
+    </div>
+    <div class="wf-modal-body" id="wfEditModalBody">
+      <!-- Edit fields generated dynamically -->
+    </div>
+    <div class="wf-modal-footer">
+      <button type="button" class="btn-refresh" style="background:#e8e3da;color:var(--navy);border:1px solid #bfb7a8;font-weight:600;padding:7px 16px;border-radius:4px;cursor:pointer;" onclick="closeWfEditModal()">Cancel</button>
+      <button type="button" class="btn-action-approve" style="background:var(--navy);border:1px solid var(--gold);color:#fff;" onclick="saveWfEdit()">💾 Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Edit Financial Budget Modal ── -->
+<div class="wf-modal-overlay" id="wfBudgetModal" style="display:none;">
+  <div class="wf-modal" style="width:min(920px, 95vw);max-height:92vh;display:flex;flex-direction:column;">
+    <div class="wf-modal-header">
+      <h3 id="wfBudgetTitle">Edit Financial Budget Proposal</h3>
+      <button type="button" class="wf-modal-close" onclick="closeWfBudgetModal()">&times;</button>
+    </div>
+    <div class="wf-modal-body" id="wfBudgetModalBody" style="overflow-y:auto;flex:1;padding:24px;">
+      <!-- Dynamic itemized budget controls -->
+    </div>
+    <div class="wf-modal-footer">
+      <button type="button" class="btn-refresh" style="background:#e8e3da;color:var(--navy);border:1px solid #bfb7a8;font-weight:600;padding:7px 16px;border-radius:4px;cursor:pointer;" onclick="closeWfBudgetModal()">Cancel</button>
+      <button type="button" class="btn-action-approve" style="background:var(--navy);border:1px solid var(--gold);color:#fff;" onclick="saveWfBudget()">💾 Save Budget</button>
     </div>
   </div>
 </div>
