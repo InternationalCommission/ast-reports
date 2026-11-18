@@ -117,7 +117,7 @@ Column **internal names** must match exactly — set them on first creation.
 
 ## OA / N2N Project Requests and VP Approval
 
-The repository includes `project-request.html` (submission form) and `project-requests-admin.html` (approval dashboard). The form switches between N2N and OA fields and submits to the same Cloudflare Worker. The Worker uses the existing `getAreaVpMapping(env, token)` mapping from the SharePoint **AST VPs** list to determine the assigned area VP; the browser cannot choose or override the assigned VP.
+The repository includes `project-request.html` (submission form) and integrates approval workflows directly into `admin.html` (`?view=requests`). The form switches between N2N and OA fields and submits to the Cloudflare Worker. The Worker uses the existing `getAreaVpMapping(env, token)` mapping from the SharePoint **AST VPs** list to determine the assigned area VP; the browser cannot choose or override the assigned VP. (Note: `project-requests-admin.html` is deprecated and automatically redirects to `admin.html?view=requests`).
 
 ### Create the request list
 
@@ -139,7 +139,7 @@ The Worker stores the shared form values in named columns. The full submitted pa
 ### Worker and identity configuration
 
 - Set `PROJECT_REQUESTS_LIST_NAME` to the request list title if it differs from `AST Project Requests`.
-- The existing Worker app registration needs Microsoft Graph **Sites.ReadWrite.All** and **Mail.Send** application permissions with admin consent. `EMAIL_SENDER` must be a licensed mailbox the app can send as.
+- The existing Worker app registration needs Microsoft Graph **Sites.ReadWrite.All**, **Mail.Send**, and **GroupMember.Read.All** (or **Group.Read.All**) application permissions with admin consent. `EMAIL_SENDER` must be a licensed mailbox the app can send as. Group member read permissions allow the Worker to dynamically look up recipient emails from the Final Approval Azure AD group.
 - Add the hosted origin for both new HTML pages to `ALLOWED_ORIGIN` (same origin as the existing form/admin pages).
 - AST VPs must be members of the Azure AD group configured in `VP_GROUP_ID`, and their email must match an entry in the SharePoint **AST VPs** list. VPs can review only requests assigned to their mapped area. SuperAdmin and ReadWrite users can review all areas; ReadOnly users can view but cannot approve or reject.
 - The admin page uses the same tenant, SPA client ID, and `Reports.Read` API scope as `admin.html`. Add `project-requests-admin.html` as a SPA redirect URI in the app registration if the identity provider requires exact redirect URIs.

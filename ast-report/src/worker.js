@@ -183,12 +183,13 @@ function projectRequestVpForArea(mapping, area) {
   const found = Object.entries(mapping).find(([key]) => normalizeAreaForAccess(key) === normalized);
   return found ? { area: found[0], name: found[1].name, email: found[1].email } : null;
 }
-async function sendProjectRequestNotification(requestData, vp, env, token) {
+async function sendProjectRequestNotification(requestData, vp, env, token, requestId) {
   const recipients = parseMultiEmail(vp.email);
   if (!recipients.length) throw new Error('No AST VP email is configured for area "' + vp.area + '".');
   const safe = value => String(value || "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   const origin = (env.ALLOWED_ORIGIN || "https://internationalcommission.org").split(",")[0].trim().replace(/\/$/, "");
-  const body = '<html><body style="font-family:Georgia,serif;color:#1a1a1a"><h2 style="color:#1a3a5c">New ' + safe(requestData.projectType) + ' project request</h2><p>A project request is awaiting review for your mapped area.</p><table><tr><td><b>Project</b></td><td>' + safe(requestData.requestTitle) + '</td></tr><tr><td><b>Country</b></td><td>' + safe(requestData.country) + '</td></tr><tr><td><b>Area</b></td><td>' + safe(requestData.area) + '</td></tr><tr><td><b>Dates</b></td><td>' + safe(requestData.startDate) + ' – ' + safe(requestData.endDate) + '</td></tr><tr><td><b>Main leader</b></td><td>' + safe(requestData.leader1Name) + ' (' + safe(requestData.leader1Email) + ')</td></tr></table><p><a href="' + safe(origin + "/project-requests-admin.html") + '">Open project request approvals</a></p></body></html>';
+  const dashboardLink = safe(origin + "/admin.html?view=requests" + (requestId ? "&request=" + encodeURIComponent(requestId) : ""));
+  const body = '<html><body style="font-family:Georgia,serif;color:#1a1a1a"><h2 style="color:#1a3a5c">New ' + safe(requestData.projectType) + ' project request</h2><p>A project request is awaiting review for your mapped area.</p><table><tr><td><b>Project</b></td><td>' + safe(requestData.requestTitle) + '</td></tr><tr><td><b>Country</b></td><td>' + safe(requestData.country) + '</td></tr><tr><td><b>Area</b></td><td>' + safe(requestData.area) + '</td></tr><tr><td><b>Dates</b></td><td>' + safe(requestData.startDate) + ' – ' + safe(requestData.endDate) + '</td></tr><tr><td><b>Main leader</b></td><td>' + safe(requestData.leader1Name) + ' (' + safe(requestData.leader1Email) + ')</td></tr></table><p><a href="' + dashboardLink + '" style="background:#1a3a5c;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block;margin-top:10px;">Review in Dashboard</a></p></body></html>';
   const intended = recipients.join(", ");
   const actual = env.TEST_MODE === "true" ? parseMultiEmail(env.EMAIL_RECIPIENT) : recipients;
   if (!env.EMAIL_SENDER) throw new Error("EMAIL_SENDER must be configured to notify AST VPs.");
@@ -241,7 +242,7 @@ async function handleProjectRequestSubmit(request, env) {
       method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ fields })
     });
     let notificationWarning = null;
-    try { await sendProjectRequestNotification({ ...data, requestTitle: data.requestTitle }, vp, env, token); }
+    try { await sendProjectRequestNotification({ ...data, requestTitle: data.requestTitle }, vp, env, token, created.id); }
     catch (mailError) { console.error("[project-requests] notification failed:", mailError.message); notificationWarning = "The request was saved, but the AST VP notification email failed. Please notify AST directly."; }
     return corsResponse({ success: true, id: created.id, notificationWarning }, 201, env);
   } catch (err) {
@@ -283,15 +284,45 @@ async function sendProjectRequestEmail(recipients, subject, htmlContent, env, to
 }
 
 async function getGroupMemberEmails(groupId, env, token) {
+  // 1. Try transitive members filtered to users
+  try {
+    const res = await graphFetch("https://graph.microsoft.com/v1.0/groups/" + groupId + "/transitiveMembers/microsoft.graph.user?$select=mail,userPrincipalName", {
+      headers: { Authorization: "Bearer " + token, Accept: "application/json" }
+    });
+    const emails = Array.from(new Set(
+      (res.value || []).map(m => (m.mail || m.userPrincipalName || "").trim()).filter(e => e && e.includes("@"))
+    ));
+    if (emails.length) return emails;
+  } catch (err) {
+    console.warn("[getGroupMemberEmails] transitiveMembers user filter failed, trying standard endpoint:", err.message);
+  }
+
+  // 2. Fallback to standard transitiveMembers
   try {
     const res = await graphFetch("https://graph.microsoft.com/v1.0/groups/" + groupId + "/transitiveMembers?$select=mail,userPrincipalName", {
       headers: { Authorization: "Bearer " + token, Accept: "application/json" }
     });
-    const emails = (res.value || []).map(m => m.mail || m.userPrincipalName).filter(Boolean);
+    const emails = Array.from(new Set(
+      (res.value || []).map(m => (m.mail || m.userPrincipalName || "").trim()).filter(e => e && e.includes("@"))
+    ));
+    if (emails.length) return emails;
+  } catch (err) {
+    console.warn("[getGroupMemberEmails] transitiveMembers failed, trying direct members:", err.message);
+  }
+
+  // 3. Fallback to direct members
+  try {
+    const res = await graphFetch("https://graph.microsoft.com/v1.0/groups/" + groupId + "/members/microsoft.graph.user?$select=mail,userPrincipalName", {
+      headers: { Authorization: "Bearer " + token, Accept: "application/json" }
+    });
+    const emails = Array.from(new Set(
+      (res.value || []).map(m => (m.mail || m.userPrincipalName || "").trim()).filter(e => e && e.includes("@"))
+    ));
     if (emails.length) return emails;
   } catch (err) {
     console.error("[getGroupMemberEmails] Error fetching group members:", err.message);
   }
+
   if (env.FINAL_APPROVAL_EMAILS) return parseMultiEmail(env.FINAL_APPROVAL_EMAILS);
   return [];
 }
@@ -457,6 +488,11 @@ async function handleReviewProjectRequest(request, env, id) {
     let statusChanged = false;
     let newStatus = body.status;
     if (newStatus === "Rejected") newStatus = "Denied";
+
+    // When an AST VP approves a Pending request, ensure it advances to "Pending Final Approval"
+    if (newStatus === "Approved" && current.status === "Pending" && !isAdmin) {
+      newStatus = "Pending Final Approval";
+    }
 
     if (newStatus && newStatus !== current.status) {
       const validStatuses = ["Pending Final Approval", "Approved", "Denied", "Denied Pending Changes", "Pending"];
