@@ -2848,46 +2848,97 @@
     };
   }
 
-  function parseN2NBudget(b) {
-    if (!b) return null;
-    if (typeof b === "string") {
-      try { b = JSON.parse(b); } catch (_) { return null; }
+  function parseN2NBudget(b, fallback) {
+    function resolveObj(val) {
+      if (!val) return null;
+      if (typeof val === "string") {
+        try { return JSON.parse(val); } catch (_) { return null; }
+      }
+      return typeof val === "object" ? val : null;
     }
+
+    let raw = resolveObj(b);
+    const fb = resolveObj(fallback);
+    if (!raw || Object.keys(raw).length === 0) raw = fb;
+    if (!raw) return null;
+
+    const source = (raw.materials || raw.materials_operationAndrew_amount !== undefined || raw.retreatRow0Category !== undefined)
+      ? raw
+      : (resolveObj(raw.requestData) || resolveObj(raw.n2nBudget) || resolveObj(raw.data) || fb || raw);
+
     const materials = N2N_MATERIAL_CATS.map(cat => {
-      const existing = (b.materials || []).find(m => m.key === cat.key) || {};
+      const existing = (Array.isArray(source.materials) ? source.materials.find(m => m.key === cat.key) : null) || {};
+      const amount = Number(
+        existing.amount !== undefined
+          ? existing.amount
+          : (source[`materials_${cat.key}_amount`] !== undefined ? source[`materials_${cat.key}_amount`] : (source[`materials_${cat.key}_qty`] || 0))
+      );
+      const churches = Number(
+        existing.churches !== undefined
+          ? existing.churches
+          : (source[`materials_${cat.key}_churches`] !== undefined ? source[`materials_${cat.key}_churches`] : 0)
+      );
+      const ic = Number(
+        existing.ic !== undefined
+          ? existing.ic
+          : (source[`materials_${cat.key}_ic`] !== undefined ? source[`materials_${cat.key}_ic`] : 0)
+      );
       return {
         key: cat.key,
         label: cat.label,
-        amount: Number(existing.amount || 0),
-        churches: Number(existing.churches || 0),
-        ic: Number(existing.ic || 0)
+        amount: isNaN(amount) ? 0 : amount,
+        churches: isNaN(churches) ? 0 : churches,
+        ic: isNaN(ic) ? 0 : ic
       };
     });
-    const retreatDate = b.retreatDate || "";
-    const retreatRows = Array.isArray(b.retreatRows) ? b.retreatRows.map(r => ({
-      category: r.category || "",
-      churches: Number(r.churches || 0),
-      ic: Number(r.ic || 0)
-    })) : [];
-    const visitationRows = Array.isArray(b.visitationRows) ? b.visitationRows.map(r => ({
-      category: r.category || "",
-      churches: Number(r.churches || 0),
-      ic: Number(r.ic || 0)
-    })) : [];
-    const discipleshipRows = Array.isArray(b.discipleshipRows) ? b.discipleshipRows.map(r => ({
-      category: r.category || "",
-      churches: Number(r.churches || 0),
-      ic: Number(r.ic || 0)
-    })) : [];
-    const n2nChurchFundingNotes = b.n2nChurchFundingNotes || "";
-    const n2nIcFundingNotes = b.n2nIcFundingNotes || "";
+
+    function extractRows(group) {
+      if (Array.isArray(source[group + "Rows"]) && source[group + "Rows"].length) {
+        return source[group + "Rows"].map(r => ({
+          category: r.category || "",
+          churches: Number(r.churches || 0),
+          ic: Number(r.ic || 0)
+        }));
+      }
+      const rowIndices = new Set();
+      const pattern = new RegExp(`^${group}Row(\\d+)(?:Category|Churches|IC|Ic|ic)$`, "i");
+      for (const k of Object.keys(source)) {
+        const m = k.match(pattern);
+        if (m) rowIndices.add(parseInt(m[1], 10));
+      }
+      const sorted = Array.from(rowIndices).sort((a, b) => a - b);
+      const rows = [];
+      for (const idx of sorted) {
+        const category = String(source[`${group}Row${idx}Category`] || "");
+        const churches = Number(source[`${group}Row${idx}Churches`] || 0);
+        const icVal = source[`${group}Row${idx}IC`] !== undefined
+          ? source[`${group}Row${idx}IC`]
+          : (source[`${group}Row${idx}Ic`] !== undefined ? source[`${group}Row${idx}Ic`] : source[`${group}Row${idx}ic`]);
+        const ic = Number(icVal || 0);
+        if (category.trim() || churches || ic) {
+          rows.push({
+            category: category.trim(),
+            churches: isNaN(churches) ? 0 : churches,
+            ic: isNaN(ic) ? 0 : ic
+          });
+        }
+      }
+      return rows;
+    }
+
+    const retreatRows = extractRows("retreat");
+    const visitationRows = extractRows("visitation");
+    const discipleshipRows = extractRows("discipleship");
+    const retreatDate = source.retreatDate || "";
+    const n2nChurchFundingNotes = source.n2nChurchFundingNotes || "";
+    const n2nIcFundingNotes = source.n2nIcFundingNotes || "";
 
     // Legacy fallback if custom rows are empty
-    if (!retreatRows.length && !visitationRows.length && !discipleshipRows.length && (b.n2nTravel || b.n2nMaterials || b.n2nVenue || b.n2nFood)) {
-      if (b.n2nMaterials) materials[0].ic = Number(b.n2nMaterials);
-      if (b.n2nVenue) retreatRows.push({ category: "Venue", churches: 0, ic: Number(b.n2nVenue) });
-      if (b.n2nFood) retreatRows.push({ category: "Food & Hospitality", churches: 0, ic: Number(b.n2nFood) });
-      if (b.n2nTravel) visitationRows.push({ category: "Travel", churches: 0, ic: Number(b.n2nTravel) });
+    if (!retreatRows.length && !visitationRows.length && !discipleshipRows.length && (source.n2nTravel || source.n2nMaterials || source.n2nVenue || source.n2nFood)) {
+      if (source.n2nMaterials) materials[0].ic = Number(source.n2nMaterials) || 0;
+      if (source.n2nVenue) retreatRows.push({ category: "Venue", churches: 0, ic: Number(source.n2nVenue) || 0 });
+      if (source.n2nFood) retreatRows.push({ category: "Food & Hospitality", churches: 0, ic: Number(source.n2nFood) || 0 });
+      if (source.n2nTravel) visitationRows.push({ category: "Travel", churches: 0, ic: Number(source.n2nTravel) || 0 });
     }
 
     const totals = calculateN2NTotals({ materials, retreatRows, visitationRows, discipleshipRows });
@@ -3010,7 +3061,7 @@
         </div>
         `;
     } else if (r.projectType === "N2N") {
-      const b = parseN2NBudget(r.n2nBudget);
+      const b = parseN2NBudget(r.n2nBudget, r.requestData || r.N2NBudgetJson);
       if (b) {
         const matRows = b.materials.map(m => `
           <tr>
@@ -3723,7 +3774,7 @@
       `;
     } else {
       // N2N Itemized Budget
-      const b = parseN2NBudget(r.n2nBudget);
+      const b = parseN2NBudget(r.n2nBudget, r.requestData || r.N2NBudgetJson);
       
       const matInputsHtml = b.materials.map(m => `
         <tr data-material-key="${escHtml(m.key)}">

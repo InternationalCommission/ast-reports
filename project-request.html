@@ -6,186 +6,1270 @@
 <link rel="icon" href="https://internationalcommission.org/Files/Blue-globe-square-crop.png.webp">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Source+Serif+4:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
-:root{--navy:#1a3a5c;--gold:#c8a96e;--paper:#f2ede6;--cream:#f9f7f4;--ink:#1a1a1a;--muted:#6b6660;--border:#d8d0c6}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px 'Source Serif 4',Georgia,serif}.top{background:var(--navy);color:white;padding:24px max(20px,calc((100% - 900px)/2))}.top h1{font:700 28px 'Playfair Display',serif;margin:0}.top p{margin:8px 0 0;color:#e4d5b7}main{max-width:900px;margin:28px auto;padding:0 18px 50px}.panel{background:var(--cream);padding:26px;border:1px solid var(--border);border-radius:6px;margin-bottom:18px}.panel h2{font:700 21px 'Playfair Display',serif;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:9px;margin:0 0 18px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}.field{display:flex;flex-direction:column;gap:5px}.wide{grid-column:1/-1}label{font-weight:600}input,select,textarea{font:inherit;padding:10px;border:1px solid var(--border);border-radius:4px;background:white;width:100%}textarea{min-height:90px;resize:vertical}.hint{color:var(--muted);font-size:14px}.hidden{display:none!important}.btn{background:var(--navy);color:white;border:0;border-radius:4px;padding:12px 22px;font:600 16px inherit;cursor:pointer}.btn:disabled{opacity:.55;cursor:wait}.actions{display:flex;align-items:center;gap:15px}.status{margin-top:15px;padding:12px;border-radius:4px;display:none}.status.ok{display:block;background:#e7f3e8;color:#20552b}.status.err{display:block;background:#f8e8e8;color:#8a1f2b}.budget-table-wrap{width:100%;overflow-x:auto;margin:12px 0 8px}.budget-table{width:100%;border-collapse:collapse;min-width:560px}.budget-table th,.budget-table td{padding:9px 8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}.budget-table th{background:#eee7dd;color:var(--navy);font-size:14px}.budget-table td:first-child{width:48%}.budget-table input{min-width:90px}.budget-table tfoot td{font-weight:700;background:#f1ece5}.budget-subsection{margin-top:22px;padding-top:16px;border-top:1px solid var(--border)}.budget-subsection h3{font:700 18px 'Playfair Display',serif;color:var(--navy);margin:0 0 8px}.budget-total{font-weight:700;color:var(--navy);margin:10px 0 0}.budget-actions{margin-top:10px}.btn.secondary{background:#e8e0d5;color:var(--navy);border:1px solid var(--border);padding:8px 12px;font-size:14px}.remove-row{background:transparent;border:0;color:#8a1f2b;cursor:pointer;font:inherit;padding:6px}.funding-label{font-weight:600;min-width:240px}.budget-note{min-width:160px}@media(max-width:650px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.panel{padding:18px}.budget-table{min-width:520px}}
-</style></head>
-<body><header class="top"><h1>Project Request</h1><p>International Commission · AST</p></header>
-<main><form id="requestForm">
-<section class="panel"><h2>Project Type and Location</h2><div class="grid">
-<div class="field"><label for="projectType">Project type *</label><select id="projectType" name="projectType" required><option value="">Choose project type</option><option value="N2N">Nationals-to-Nationals (N2N)</option><option value="OA">Operation Andrew (OA)</option></select></div>
-<div class="field"><label for="country">Country *</label><input id="country" name="country" required></div>
-<div class="field"><label for="startDate">Starting date *</label><input type="date" id="startDate" name="startDate" required></div>
-<div class="field"><label for="endDate">Finishing date *</label><input type="date" id="endDate" name="endDate" required></div>
-<div class="field hidden"><label for="completedDate">Date form completed *</label><input type="date" id="completedDate" name="completedDate" required></div>
-<div class="field"><label for="nationalProjectType">Type of national project *</label><select id="nationalProjectType" name="nationalProjectType" required><option value="">Choose one</option><option>The whole church</option><option>Women</option><option>Men</option><option>Youth</option><option>Children</option></select></div>
-<div class="field"><label for="area">Area of the world *</label><select id="area" name="area" required><option value="">Loading areas…</option></select><span class="hint">Choose the area from the AST VP mapping.</span></div>
-<div class="field"><label for="theme">Location (main cities/villages) *</label><input id="theme" name="theme"></div>
-<div class="field"><label for="churches">Number of participating churches *</label><input type="number" min="0" id="churches" name="churches" required></div>
-<div class="field"><label for="hearers">Expected people who will hear the Gospel *</label><input type="number" min="0" id="hearers" name="hearers" required></div>
-<div class="field"><label for="decisions">Expected decisions for Christ *</label><input type="number" min="0" id="decisions" name="decisions" required></div>
-<div class="field"><label for="discipled">Expected people discipled *</label><input type="number" min="0" id="discipled" name="discipled" required></div>
-<div class="field"><label for="baptisms">Expected persons baptized *</label><input type="number" min="0" id="baptisms" name="baptisms" required></div>
-</div></section>
-<section class="panel"><h2>Project Leaders</h2><p class="hint">N2N requests require two leaders; OA requests require one main leader.</p>
-<div id="leaders" class="grid">
-<div class="field"><label for="leader1Name">Main leader name *</label><input id="leader1Name" name="leader1Name" required></div><div class="field"><label for="leader1Address">Country *</label><input id="leader1Address" name="leader1Address" required></div><div class="field"><label for="leader1Phone">Telephone *</label><input id="leader1Phone" name="leader1Phone" required></div><div class="field"><label for="leader1Email">Email *</label><input type="email" id="leader1Email" name="leader1Email" required></div>
-<div class="field n2n hidden"><label for="leader2Name">Second leader name *</label><input id="leader2Name" name="leader2Name"></div><div class="field n2n hidden"><label for="leader2Address">Second leader country *</label><input id="leader2Address" name="leader2Address"></div><div class="field n2n hidden"><label for="leader2Phone">Second leader telephone *</label><input id="leader2Phone" name="leader2Phone"></div><div class="field n2n hidden"><label for="leader2Email">Second leader email *</label><input type="email" id="leader2Email" name="leader2Email"></div>
-</div></section>
-<section class="panel"><h2>Project Information for Financial Partners</h2><div class="grid">
-<div class="field"><label for="firstTime">Is this a first-time IC project in this area or country? *</label><select id="firstTime" name="firstTime" required><option value="">Choose one</option><option>Yes</option><option>No</option></select></div>
-<div class="field wide"><label for="spiritualNeeds">What are the spiritual needs of this area? *</label><textarea id="spiritualNeeds" name="spiritualNeeds" required></textarea></div>
-<div class="field wide"><label for="importance">What is important about this area? *</label><textarea id="importance" name="importance" required></textarea></div>
-<div class="field wide"><label for="vision">Share goals from your vision and anything else we should know *</label><textarea id="vision" name="vision" required></textarea></div>
-<div class="field"><label for="coordinator">Area coordinator *</label><input id="coordinator" name="coordinator" required></div>
-</div></section>
-<section class="panel n2n hidden" id="n2nBudget">
-<h2>N2N Budget Proposal</h2>
-<p class="hint">Enter the number of materials and the costs covered by churches and IC. Add custom expense rows for Preparation Retreat, Visitation, and Discipleship. Totals update automatically.</p>
+:root{--navy:#1a3a5c;--gold:#c8a96e;--paper:#f2ede6;--cream:#f9f7f4;--ink:#1a1a1a;--muted:#6b6660;--border:#d8d0c6;--green:#2a6b3c;--red:#9b2335}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px 'Source Serif 4',Georgia,serif}
+.top{background:var(--navy);color:white;padding:24px max(20px,calc((100% - 900px)/2))}
+.top h1{font:700 28px 'Playfair Display',serif;margin:0}
+.top p{margin:8px 0 0;color:#e4d5b7}
+main{max-width:900px;margin:28px auto;padding:0 18px 50px}
+.panel{background:var(--cream);padding:26px;border:1px solid var(--border);border-radius:6px;margin-bottom:18px}
+.panel h2{font:700 21px 'Playfair Display',serif;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:9px;margin:0 0 18px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.field{display:flex;flex-direction:column;gap:5px}
+.wide{grid-column:1/-1}
+label{font-weight:600}
+input,select,textarea{font:inherit;padding:10px;border:1px solid var(--border);border-radius:4px;background:white;width:100%}
+textarea{min-height:90px;resize:vertical}
+.hint{color:var(--muted);font-size:14px}
+.hidden{display:none!important}
+.btn{background:var(--navy);color:white;border:0;border-radius:4px;padding:12px 22px;font:600 16px inherit;cursor:pointer}
+.btn:disabled{opacity:.55;cursor:wait}
+.actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.actions .btn-draft{padding:12px 18px;font-size:15px}
+.status{margin-top:15px;padding:12px;border-radius:4px;display:none}
+.status.ok{display:block;background:#e7f3e8;color:#20552b}
+.status.err{display:block;background:#f8e8e8;color:#8a1f2b}
+.budget-table-wrap{width:100%;overflow-x:auto;margin:12px 0 8px}
+.budget-table{width:100%;border-collapse:collapse;min-width:560px}
+.budget-table th,.budget-table td{padding:9px 8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}
+.budget-table th{background:#eee7dd;color:var(--navy);font-size:14px}
+.budget-table td:first-child{width:48%}
+.budget-table input{min-width:90px}
+.budget-table tfoot td{font-weight:700;background:#f1ece5}
+.budget-subsection{margin-top:22px;padding-top:16px;border-top:1px solid var(--border)}
+.budget-subsection h3{font:700 18px 'Playfair Display',serif;color:var(--navy);margin:0 0 8px}
+.budget-total{font-weight:700;color:var(--navy);margin:10px 0 0}
+.budget-actions{margin-top:10px}
+.btn.secondary{background:#e8e0d5;color:var(--navy);border:1px solid var(--border);padding:8px 12px;font-size:14px}
+.remove-row{background:transparent;border:0;color:#8a1f2b;cursor:pointer;font:inherit;padding:6px}
+.funding-label{font-weight:600;min-width:240px}
+.budget-note{min-width:160px}
 
-<div class="budget-subsection">
-<h3>1. Materials</h3>
-<div class="budget-table-wrap"><table class="budget-table" aria-label="Materials budget">
-<thead><tr><th scope="col">Materials category</th><th scope="col">Quantity</th><th scope="col">Churches ($)</th><th scope="col">IC ($)</th></tr></thead>
-<tbody id="materialsRows"></tbody>
-<tfoot><tr><td>Total Cost of Material</td><td><input id="materialsQuantityTotal" readonly value="0" aria-label="Total number of materials"></td><td><input id="materialsChurchesTotal" readonly value="0.00" aria-label="Total materials cost paid by churches"></td><td><input id="materialsICTotal" readonly value="0.00" aria-label="Total materials cost paid by IC"></td></tr></tfoot>
-</table></div>
+/* Draft Persistence Toolbar */
+.draft-toolbar {
+  background: var(--cream);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
+}
+@media (max-width: 680px) {
+  .draft-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .draft-toolbar-right {
+    justify-content: flex-end;
+  }
+}
+.draft-toolbar-left {
+  font-size: 13.5px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+.draft-toolbar-left strong {
+  color: var(--navy);
+}
+.draft-active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(42, 107, 60, 0.12);
+  color: var(--green);
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid rgba(42, 107, 60, 0.25);
+}
+.draft-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.btn-draft {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  color: var(--navy);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s ease;
+  white-space: nowrap;
+}
+.btn-draft:hover {
+  background: #f4efe9;
+  border-color: var(--navy);
+  color: var(--navy);
+}
+.btn-draft-primary {
+  background: var(--navy);
+  color: #fff;
+  border-color: var(--navy);
+}
+.btn-draft-primary:hover {
+  background: #254e7a;
+  border-color: #254e7a;
+  color: #fff;
+}
+.btn-draft-unlink {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 2px 4px;
+  font-family: inherit;
+}
+.btn-draft-unlink:hover {
+  color: var(--red);
+}
+
+/* Modals */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 30, 48, 0.65);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-dialog {
+  background: var(--cream);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 100%;
+  max-width: 520px;
+  box-shadow: 0 12px 36px rgba(0,0,0,.28);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: modalSlideUp 0.18s ease-out;
+}
+.modal-dialog-lg {
+  max-width: 680px;
+  max-height: 85vh;
+}
+@keyframes modalSlideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.modal-header {
+  background: var(--navy);
+  color: #fff;
+  padding: 15px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal-header h3 {
+  font-family: 'Playfair Display', serif;
+  font-size: 18px;
+  font-weight: 500;
+  color: #fff;
+  margin: 0;
+  letter-spacing: .3px;
+}
+.modal-close {
+  background: none;
+  border: none;
+  color: #a8c4e0;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  transition: color .15s;
+}
+.modal-close:hover {
+  color: #fff;
+}
+.modal-body {
+  padding: 22px;
+  overflow-y: auto;
+}
+.modal-footer {
+  padding: 14px 22px;
+  background: rgba(26,58,92,.04);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.btn-modal-primary {
+  background: var(--navy);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  padding: 9px 22px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-modal-primary:hover {
+  background: #254e7a;
+}
+.btn-modal-secondary {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 9px 18px;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-modal-secondary:hover {
+  background: #f0ebe4;
+}
+
+/* Draft Cards inside Load Modal */
+.draft-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.draft-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.draft-card:hover {
+  border-color: var(--gold);
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+}
+.draft-card-main {
+  flex: 1;
+  min-width: 0;
+}
+.draft-card-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--navy);
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+.draft-card-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.draft-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.draft-chip {
+  display: inline-block;
+  background: rgba(26,58,92,.06);
+  color: var(--navy);
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 11.5px;
+}
+.draft-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.btn-card-load {
+  background: var(--navy);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  padding: 7px 16px;
+  font-size: 13.5px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-card-load:hover {
+  background: #254e7a;
+}
+.btn-card-delete {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--muted);
+  border-radius: 3px;
+  padding: 6px 10px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-card-delete:hover {
+  color: var(--red);
+  background: rgba(155,35,53,.08);
+  border-color: rgba(155,35,53,.2);
+}
+.drafts-empty-state {
+  text-align: center;
+  padding: 36px 16px;
+  color: var(--muted);
+}
+.drafts-empty-icon {
+  font-size: 38px;
+  margin-bottom: 12px;
+}
+
+/* Toast */
+#toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--green);
+  color: #fff;
+  padding: 14px 28px;
+  border-radius: 4px;
+  font-size: 15px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.2);
+  transition: transform .35s cubic-bezier(.34,1.56,.64,1);
+  z-index: 1000;
+  white-space: nowrap;
+}
+#toast.show { transform: translateX(-50%) translateY(0); }
+#toast.error { background: var(--red); }
+
+@media(max-width:650px){
+  .grid{grid-template-columns:1fr}
+  .wide{grid-column:auto}
+  .panel{padding:18px}
+  .budget-table{min-width:520px}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Project Request</h1>
+  <p>International Commission · AST</p>
+</header>
+
+<main>
+  <!-- Draft Persistence Toolbar -->
+  <div class="draft-toolbar" id="draftToolbar">
+    <div class="draft-toolbar-left" id="draftStatusInfo">
+      <span class="draft-icon">💾</span>
+      <span id="draftStatusText">In-progress requests can be saved to your device and loaded anytime.</span>
+    </div>
+    <div class="draft-toolbar-right">
+      <button type="button" class="btn-draft" id="loadDraftBtnTop" title="Load a saved draft from this computer">
+        <span>📂</span> Load
+      </button>
+      <button type="button" class="btn-draft btn-draft-primary" id="saveDraftBtnTop" title="Save current progress to this computer">
+        <span>💾</span> Save For Later
+      </button>
+    </div>
+  </div>
+
+  <form id="requestForm">
+    <section class="panel">
+      <h2>Project Type and Location</h2>
+      <div class="grid">
+        <div class="field"><label for="projectType">Project type *</label><select id="projectType" name="projectType" required><option value="">Choose project type</option><option value="N2N">Nationals-to-Nationals (N2N)</option><option value="OA">Operation Andrew (OA)</option></select></div>
+        <div class="field"><label for="country">Country *</label><input id="country" name="country" required></div>
+        <div class="field"><label for="startDate">Starting date *</label><input type="date" id="startDate" name="startDate" required></div>
+        <div class="field"><label for="endDate">Finishing date *</label><input type="date" id="endDate" name="endDate" required></div>
+        <div class="field hidden"><label for="completedDate">Date form completed *</label><input type="date" id="completedDate" name="completedDate" required></div>
+        <div class="field"><label for="nationalProjectType">Type of national project *</label><select id="nationalProjectType" name="nationalProjectType" required><option value="">Choose one</option><option>The whole church</option><option>Women</option><option>Men</option><option>Youth</option><option>Children</option></select></div>
+        <div class="field"><label for="area">Area of the world *</label><select id="area" name="area" required><option value="">Loading areas…</option></select><span class="hint">Choose the area from the AST VP mapping.</span></div>
+        <div class="field"><label for="theme">Location (main cities/villages) *</label><input id="theme" name="theme"></div>
+        <div class="field"><label for="churches">Number of participating churches *</label><input type="number" min="0" id="churches" name="churches" required></div>
+        <div class="field"><label for="hearers">Expected people who will hear the Gospel *</label><input type="number" min="0" id="hearers" name="hearers" required></div>
+        <div class="field"><label for="decisions">Expected decisions for Christ *</label><input type="number" min="0" id="decisions" name="decisions" required></div>
+        <div class="field"><label for="discipled">Expected people discipled *</label><input type="number" min="0" id="discipled" name="discipled" required></div>
+        <div class="field"><label for="baptisms">Expected persons baptized *</label><input type="number" min="0" id="baptisms" name="baptisms" required></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Project Leaders</h2>
+      <p class="hint">N2N requests require two leaders; OA requests require one main leader.</p>
+      <div id="leaders" class="grid">
+        <div class="field"><label for="leader1Name">Main leader name *</label><input id="leader1Name" name="leader1Name" required></div>
+        <div class="field"><label for="leader1Address">Country *</label><input id="leader1Address" name="leader1Address" required></div>
+        <div class="field"><label for="leader1Phone">Telephone *</label><input id="leader1Phone" name="leader1Phone" required></div>
+        <div class="field"><label for="leader1Email">Email *</label><input type="email" id="leader1Email" name="leader1Email" required></div>
+        <div class="field n2n hidden"><label for="leader2Name">Second leader name *</label><input id="leader2Name" name="leader2Name"></div>
+        <div class="field n2n hidden"><label for="leader2Address">Second leader country *</label><input id="leader2Address" name="leader2Address"></div>
+        <div class="field n2n hidden"><label for="leader2Phone">Second leader telephone *</label><input id="leader2Phone" name="leader2Phone"></div>
+        <div class="field n2n hidden"><label for="leader2Email">Second leader email *</label><input type="email" id="leader2Email" name="leader2Email"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Project Information for Financial Partners</h2>
+      <div class="grid">
+        <div class="field"><label for="firstTime">Is this a first-time IC project in this area or country? *</label><select id="firstTime" name="firstTime" required><option value="">Choose one</option><option>Yes</option><option>No</option></select></div>
+        <div class="field wide"><label for="spiritualNeeds">What are the spiritual needs of this area? *</label><textarea id="spiritualNeeds" name="spiritualNeeds" required></textarea></div>
+        <div class="field wide"><label for="importance">What is important about this area? *</label><textarea id="importance" name="importance" required></textarea></div>
+        <div class="field wide"><label for="vision">Share goals from your vision and anything else we should know *</label><textarea id="vision" name="vision" required></textarea></div>
+        <div class="field"><label for="coordinator">Area coordinator *</label><input id="coordinator" name="coordinator" required></div>
+      </div>
+    </section>
+
+    <section class="panel n2n hidden" id="n2nBudget">
+      <h2>N2N Budget Proposal</h2>
+      <p class="hint">Enter the number of materials and the costs covered by churches and IC. Add custom expense rows for Preparation Retreat, Visitation, and Discipleship. Totals update automatically.</p>
+
+      <div class="budget-subsection">
+        <h3>1. Materials</h3>
+        <div class="budget-table-wrap">
+          <table class="budget-table" aria-label="Materials budget">
+            <thead><tr><th scope="col">Materials category</th><th scope="col">Quantity</th><th scope="col">Churches ($)</th><th scope="col">IC ($)</th></tr></thead>
+            <tbody id="materialsRows"></tbody>
+            <tfoot><tr><td>Total Cost of Material</td><td><input id="materialsQuantityTotal" readonly value="0" aria-label="Total number of materials"></td><td><input id="materialsChurchesTotal" readonly value="0.00" aria-label="Total materials cost paid by churches"></td><td><input id="materialsICTotal" readonly value="0.00" aria-label="Total materials cost paid by IC"></td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div class="budget-subsection">
+        <h3>2. Preparation Retreat</h3>
+        <p class="hint">Add one row for each expense category.</p>
+        <div class="field" style="max-width:360px;margin:12px 0"><label for="retreatDate">Prayer preparation retreat date</label><input type="date" id="retreatDate" name="retreatDate"></div>
+        <div class="budget-table-wrap">
+          <table class="budget-table" aria-label="Preparation retreat budget">
+            <thead><tr><th scope="col">Expense category</th><th scope="col">Churches ($)</th><th scope="col">IC ($)</th><th scope="col">Action</th></tr></thead>
+            <tbody id="retreatRows"></tbody>
+            <tfoot><tr><td>Total Preparation Retreat</td><td><input id="retreatChurchesTotal" readonly value="0.00"></td><td><input id="retreatICTotal" readonly value="0.00"></td><td></td></tr></tfoot>
+          </table>
+        </div>
+        <div class="budget-actions"><button type="button" class="btn secondary" data-add-row="retreat">+ Add expense row</button></div>
+      </div>
+
+      <div class="budget-subsection">
+        <h3>3. Visitation</h3>
+        <p class="hint">Add one row for each expense category.</p>
+        <div class="budget-table-wrap">
+          <table class="budget-table" aria-label="Visitation budget">
+            <thead><tr><th scope="col">Expense category</th><th scope="col">Churches ($)</th><th scope="col">IC ($)</th><th scope="col">Action</th></tr></thead>
+            <tbody id="visitationRows"></tbody>
+            <tfoot><tr><td>Total Visitation</td><td><input id="visitationChurchesTotal" readonly value="0.00"></td><td><input id="visitationICTotal" readonly value="0.00"></td><td></td></tr></tfoot>
+          </table>
+        </div>
+        <div class="budget-actions"><button type="button" class="btn secondary" data-add-row="visitation">+ Add expense row</button></div>
+      </div>
+
+      <div class="budget-subsection">
+        <h3>4. Discipleship</h3>
+        <p class="hint">Add one row for each expense category.</p>
+        <div class="budget-table-wrap">
+          <table class="budget-table" aria-label="Discipleship budget">
+            <thead><tr><th scope="col">Expense category</th><th scope="col">Churches ($)</th><th scope="col">IC ($)</th><th scope="col">Action</th></tr></thead>
+            <tbody id="discipleshipRows"></tbody>
+            <tfoot><tr><td>Total Discipleship</td><td><input id="discipleshipChurchesTotal" readonly value="0.00"></td><td><input id="discipleshipICTotal" readonly value="0.00"></td><td></td></tr></tfoot>
+          </table>
+        </div>
+        <div class="budget-actions"><button type="button" class="btn secondary" data-add-row="discipleship">+ Add expense row</button></div>
+      </div>
+
+      <div class="budget-subsection">
+        <h3>5. Total Budget</h3>
+        <div class="budget-table-wrap">
+          <table class="budget-table" aria-label="Total budget summary">
+            <thead><tr><th scope="col">Budget category</th><th scope="col">Churches ($)</th><th scope="col">IC ($)</th></tr></thead>
+            <tbody>
+              <tr><td>Materials</td><td><input id="summaryMaterialsChurches" readonly value="0.00"></td><td><input id="summaryMaterialsIC" readonly value="0.00"></td></tr>
+              <tr><td>Preparation Retreat</td><td><input id="summaryRetreatChurches" readonly value="0.00"></td><td><input id="summaryRetreatIC" readonly value="0.00"></td></tr>
+              <tr><td>Visitation</td><td><input id="summaryVisitationChurches" readonly value="0.00"></td><td><input id="summaryVisitationIC" readonly value="0.00"></td></tr>
+              <tr><td>Discipleship</td><td><input id="summaryDiscipleshipChurches" readonly value="0.00"></td><td><input id="summaryDiscipleshipIC" readonly value="0.00"></td></tr>
+            </tbody>
+            <tfoot><tr><td>Total Budget</td><td><input id="n2nChurchesTotal" readonly value="0.00"></td><td><input id="n2nICTotal" readonly value="0.00"></td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div class="budget-subsection">
+        <h3>6. Budget Funding</h3>
+        <p class="hint">Funding amounts are copied from the Total Budget above. Add an optional note describing what each group will provide.</p>
+        <div class="budget-table-wrap">
+          <table class="budget-table" aria-label="Budget funding">
+            <thead><tr><th scope="col">Funding source</th><th scope="col">Calculated amount ($)</th><th scope="col">Notes (optional)</th></tr></thead>
+            <tbody>
+              <tr><td class="funding-label">Local Churches &amp; Host Committee will provide</td><td><input id="n2nChurchFunding" name="n2nChurchFunding" readonly value="0.00" aria-label="Local churches and host committee funding total"></td><td><input class="budget-note" id="n2nChurchFundingNotes" name="n2nChurchFundingNotes" aria-label="Notes for local churches and host committee"></td></tr>
+              <tr><td class="funding-label">I. C. will provide</td><td><input id="n2nIcFunding" name="n2nIcFunding" readonly value="0.00" aria-label="IC funding total"></td><td><input class="budget-note" id="n2nIcFundingNotes" name="n2nIcFundingNotes" aria-label="Notes for IC funding"></td></tr>
+            </tbody>
+            <tfoot><tr><td>Final Total</td><td colspan="2"><input id="n2nFundingTotal" readonly value="0.00" aria-label="Final total budget funding"></td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel oa hidden" id="oaBudget">
+      <h2>OA Budget Proposal</h2>
+      <div class="grid">
+        <div class="field"><label for="oaAndrewAmount">Operation Andrew Quantity</label><input type="number" min="0" step=".01" id="oaAndrewAmount" name="oaAndrewAmount" value="0"></div>
+        <div class="field"><label for="oaAndrew">Operation Andrew Printing ($)</label><input type="number" min="0" step=".01" id="oaAndrew" name="oaAndrew" value="0"></div>
+        <div class="field"><label for="oaLaunch">Meeting to launch OA ($)</label><input type="number" min="0" step=".01" id="oaLaunch" name="oaLaunch" value="0"></div>
+        <div class="field"><label for="oaResults">Meeting to collect OA results ($)</label><input type="number" min="0" step=".01" id="oaResults" name="oaResults" value="0"></div>
+        <div class="field"><label for="oaTotal">Total requested ($)</label><input id="oaTotal" readonly value="0.00"></div>
+      </div>
+    </section>
+
+    <div class="actions">
+      <button class="btn" type="submit" id="submitBtn">Submit project request</button>
+      <button type="button" class="btn-draft" id="loadDraftBtnBottom" title="Load a saved draft from this computer">
+        <span>📂</span> Load
+      </button>
+      <button type="button" class="btn-draft btn-draft-primary" id="saveDraftBtnBottom" title="Save current progress to this computer">
+        <span>💾</span> Save For Later
+      </button>
+      <span class="hint">Required fields are marked with an asterisk.</span>
+    </div>
+
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+  </form>
+</main>
+
+<!-- Save Draft Modal -->
+<div class="modal-overlay" id="saveDraftModal" style="display:none;" aria-hidden="true">
+  <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="saveModalTitle">
+    <div class="modal-header">
+      <h3 id="saveModalTitle">Save Form For Later</h3>
+      <button type="button" class="modal-close" id="closeSaveModalBtn" title="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:16px;color:var(--muted);font-size:14.5px;line-height:1.5;">
+        Save your in-progress project request to this browser. You can return and load it anytime before final submission.
+      </p>
+      <div class="field" style="margin-bottom:6px;">
+        <label for="saveDraftNameInput">Name for this saved form <span style="color:var(--red);">*</span></label>
+        <input type="text" id="saveDraftNameInput" placeholder="e.g. Kenya N2N Outreach - Summer 2026" maxlength="80" autocomplete="off">
+      </div>
+      <div id="saveDraftError" style="color:var(--red);font-size:13px;display:none;margin-top:6px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-modal-secondary" id="cancelSaveModalBtn">Cancel</button>
+      <button type="button" class="btn-modal-primary" id="confirmSaveDraftBtn">Save Draft</button>
+    </div>
+  </div>
 </div>
 
-<div class="budget-subsection">
-<h3>2. Preparation Retreat</h3>
-<p class="hint">Add one row for each expense category.</p>
-<div class="field" style="max-width:360px;margin:12px 0"><label for="retreatDate">Prayer preparation retreat date</label><input type="date" id="retreatDate" name="retreatDate"></div>
-<div class="budget-table-wrap"><table class="budget-table" aria-label="Preparation retreat budget"><thead><tr><th scope="col">Expense category</th><th scope="col">Churches ($)</th><th scope="col">IC ($)</th><th scope="col">Action</th></tr></thead><tbody id="retreatRows"></tbody><tfoot><tr><td>Total Preparation Retreat</td><td><input id="retreatChurchesTotal" readonly value="0.00"></td><td><input id="retreatICTotal" readonly value="0.00"></td><td></td></tr></tfoot></table></div>
-<div class="budget-actions"><button type="button" class="btn secondary" data-add-row="retreat">+ Add expense row</button></div>
+<!-- Load Saved Forms Modal -->
+<div class="modal-overlay" id="loadDraftModal" style="display:none;" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-lg" role="dialog" aria-modal="true" aria-labelledby="loadModalTitle">
+    <div class="modal-header">
+      <h3 id="loadModalTitle">Saved Form Submissions</h3>
+      <button type="button" class="modal-close" id="closeLoadModalBtn" title="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:16px;color:var(--muted);font-size:14.5px;">
+        Select a saved project request from this computer to continue editing.
+      </p>
+      <div id="savedDraftsList" class="draft-cards-list">
+        <!-- Draft cards rendered by JS -->
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-modal-secondary" id="cancelLoadModalBtn">Close</button>
+    </div>
+  </div>
 </div>
 
-<div class="budget-subsection">
-<h3>3. Visitation</h3>
-<p class="hint">Add one row for each expense category.</p>
-<div class="budget-table-wrap"><table class="budget-table" aria-label="Visitation budget"><thead><tr><th scope="col">Expense category</th><th scope="col">Churches ($)</th><th scope="col">IC ($)</th><th scope="col">Action</th></tr></thead><tbody id="visitationRows"></tbody><tfoot><tr><td>Total Visitation</td><td><input id="visitationChurchesTotal" readonly value="0.00"></td><td><input id="visitationICTotal" readonly value="0.00"></td><td></td></tr></tfoot></table></div>
-<div class="budget-actions"><button type="button" class="btn secondary" data-add-row="visitation">+ Add expense row</button></div>
-</div>
+<!-- Floating Feedback Toast -->
+<div id="toast"></div>
 
-<div class="budget-subsection">
-<h3>4. Discipleship</h3>
-<p class="hint">Add one row for each expense category.</p>
-<div class="budget-table-wrap"><table class="budget-table" aria-label="Discipleship budget"><thead><tr><th scope="col">Expense category</th><th scope="col">Churches ($)</th><th scope="col">IC ($)</th><th scope="col">Action</th></tr></thead><tbody id="discipleshipRows"></tbody><tfoot><tr><td>Total Discipleship</td><td><input id="discipleshipChurchesTotal" readonly value="0.00"></td><td><input id="discipleshipICTotal" readonly value="0.00"></td><td></td></tr></tfoot></table></div>
-<div class="budget-actions"><button type="button" class="btn secondary" data-add-row="discipleship">+ Add expense row</button></div>
-</div>
-
-<div class="budget-subsection">
-<h3>5. Total Budget</h3>
-<div class="budget-table-wrap"><table class="budget-table" aria-label="Total budget summary"><thead><tr><th scope="col">Budget category</th><th scope="col">Churches ($)</th><th scope="col">IC ($)</th></tr></thead>
-<tbody><tr><td>Materials</td><td><input id="summaryMaterialsChurches" readonly value="0.00"></td><td><input id="summaryMaterialsIC" readonly value="0.00"></td></tr>
-<tr><td>Preparation Retreat</td><td><input id="summaryRetreatChurches" readonly value="0.00"></td><td><input id="summaryRetreatIC" readonly value="0.00"></td></tr>
-<tr><td>Visitation</td><td><input id="summaryVisitationChurches" readonly value="0.00"></td><td><input id="summaryVisitationIC" readonly value="0.00"></td></tr>
-<tr><td>Discipleship</td><td><input id="summaryDiscipleshipChurches" readonly value="0.00"></td><td><input id="summaryDiscipleshipIC" readonly value="0.00"></td></tr></tbody>
-<tfoot><tr><td>Total Budget</td><td><input id="n2nChurchesTotal" readonly value="0.00"></td><td><input id="n2nICTotal" readonly value="0.00"></td></tr></tfoot>
-</table></div>
-</div>
-
-<div class="budget-subsection">
-<h3>6. Budget Funding</h3>
-<p class="hint">Funding amounts are copied from the Total Budget above. Add an optional note describing what each group will provide.</p>
-<div class="budget-table-wrap"><table class="budget-table" aria-label="Budget funding"><thead><tr><th scope="col">Funding source</th><th scope="col">Calculated amount ($)</th><th scope="col">Notes (optional)</th></tr></thead>
-<tbody><tr><td class="funding-label">Local Churches &amp; Host Committee will provide</td><td><input id="n2nChurchFunding" name="n2nChurchFunding" readonly value="0.00" aria-label="Local churches and host committee funding total"></td><td><input class="budget-note" id="n2nChurchFundingNotes" name="n2nChurchFundingNotes" aria-label="Notes for local churches and host committee"></td></tr>
-<tr><td class="funding-label">I. C. will provide</td><td><input id="n2nIcFunding" name="n2nIcFunding" readonly value="0.00" aria-label="IC funding total"></td><td><input class="budget-note" id="n2nIcFundingNotes" name="n2nIcFundingNotes" aria-label="Notes for IC funding"></td></tr></tbody>
-<tfoot><tr><td>Final Total</td><td colspan="2"><input id="n2nFundingTotal" readonly value="0.00" aria-label="Final total budget funding"></td></tr></tfoot>
-</table></div>
-
-</div>
-</section>
-<section class="panel oa hidden" id="oaBudget"><h2>OA Budget Proposal</h2><div class="grid"><div class="field"><label for="oaAndrewAmount">Operation Andrew Quantity</label><input type="number" min="0" step=".01" id="oaAndrewAmount" name="oaAndrewAmount" value="0"></div><div class="field"><label for="oaAndrew">Operation Andrew Printing ($)</label><input type="number" min="0" step=".01" id="oaAndrew" name="oaAndrew" value="0"></div><div class="field"><label for="oaLaunch">Meeting to launch OA ($)</label><input type="number" min="0" step=".01" id="oaLaunch" name="oaLaunch" value="0"></div><div class="field"><label for="oaResults">Meeting to collect OA results ($)</label><input type="number" min="0" step=".01" id="oaResults" name="oaResults" value="0"></div><div class="field"><label for="oaTotal">Total requested ($)</label><input id="oaTotal" readonly value="0.00"></div></div></section>
-<div class="actions"><button class="btn" type="submit" id="submitBtn">Submit project request</button><span class="hint">Required fields are marked with an asterisk.</span></div><div id="status" class="status" role="status" aria-live="polite"></div>
-</form></main>
 <script>
-const WORKER_URL="https://ast-report.alex-wascomb.workers.dev";
-const form=document.getElementById("requestForm"),type=document.getElementById("projectType");
-const materialCategories=[
-["operationAndrew","Operation Andrew"],
-["invitations","Invitations/envelopes — Service of the Ten"],
-["testimonies","General Testimonies"],
-["decisionCards","Decision Cards"],
-["newBelieverLesson","Lesson for the New Believer"],
-["followupPoster","Follow-up poster"],
-["otherMaterials","Other materials"]
+const WORKER_URL = "https://ast-report.alex-wascomb.workers.dev";
+let pendingAreaValue = null;
+let currentActiveDraftId = null;
+let currentActiveDraftName = null;
+
+const form = document.getElementById("requestForm");
+const type = document.getElementById("projectType");
+const materialCategories = [
+  ["operationAndrew", "Operation Andrew"],
+  ["invitations", "Invitations/envelopes — Service of the Ten"],
+  ["testimonies", "General Testimonies"],
+  ["decisionCards", "Decision Cards"],
+  ["newBelieverLesson", "Lesson for the New Believer"],
+  ["followupPoster", "Follow-up poster"],
+  ["otherMaterials", "Other materials"]
 ];
-const budgetGroups=["retreat","visitation","discipleship"];
-const rowCounts={retreat:0,visitation:0,discipleship:0};
-const money=(id)=>Number(document.getElementById(id)?.value)||0;
-const fmt=(n)=>n.toFixed(2);
-function createMaterialRows(){
- const body=document.getElementById("materialsRows");
- body.innerHTML="";
- materialCategories.forEach(([key,label])=>{
-  const tr=document.createElement("tr");
-  tr.innerHTML='<td>'+label+'</td><td><input type="number" min="0" step="1" id="materials_'+key+'_amount" name="materials_'+key+'_amount" value="0" aria-label="'+label+' quantity"></td><td><input type="number" min="0" step=".01" id="materials_'+key+'_churches" name="materials_'+key+'_churches" value="0" aria-label="'+label+' cost paid by churches"></td><td><input type="number" min="0" step=".01" id="materials_'+key+'_ic" name="materials_'+key+'_ic" value="0" aria-label="'+label+' cost paid by IC"></td>';
+const budgetGroups = ["retreat", "visitation", "discipleship"];
+const rowCounts = { retreat: 0, visitation: 0, discipleship: 0 };
+
+const money = (id) => Number(document.getElementById(id)?.value) || 0;
+const fmt = (n) => n.toFixed(2);
+
+function escHtml(str) {
+  if (!str) return "";
+  return String(str).replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[ch]));
+}
+
+function showToast(msg, isError = false) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = isError ? "error" : "";
+  setTimeout(() => t.classList.add("show"), 10);
+  setTimeout(() => t.classList.remove("show"), 5500);
+}
+
+function createMaterialRows() {
+  const body = document.getElementById("materialsRows");
+  body.innerHTML = "";
+  materialCategories.forEach(([key, label]) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = '<td>' + label + '</td><td><input type="number" min="0" step="1" id="materials_' + key + '_amount" name="materials_' + key + '_amount" value="0" aria-label="' + label + ' quantity"></td><td><input type="number" min="0" step=".01" id="materials_' + key + '_churches" name="materials_' + key + '_churches" value="0" aria-label="' + label + ' cost paid by churches"></td><td><input type="number" min="0" step=".01" id="materials_' + key + '_ic" name="materials_' + key + '_ic" value="0" aria-label="' + label + ' cost paid by IC"></td>';
+    body.appendChild(tr);
+    tr.querySelectorAll("input").forEach(input => input.addEventListener("input", updateN2NTotals));
+  });
+}
+
+function addBudgetRow(group, category = "", churches = 0, ic = 0) {
+  const index = rowCounts[group]++;
+  const body = document.getElementById(group + "Rows");
+  const tr = document.createElement("tr");
+  tr.dataset.group = group;
+  tr.innerHTML = '<td><input type="text" name="' + group + 'Row' + index + 'Category" aria-label="' + group + ' expense category" placeholder="Enter expense category" value=""></td><td><input type="number" min="0" step=".01" name="' + group + 'Row' + index + 'Churches" aria-label="' + group + ' expense paid by churches" value="0"></td><td><input type="number" min="0" step=".01" name="' + group + 'Row' + index + 'IC" aria-label="' + group + ' expense paid by IC" value="0"></td><td><button type="button" class="remove-row" aria-label="Remove expense row">Remove</button></td>';
+  const inputs = tr.querySelectorAll("input");
+  inputs[0].value = category;
+  inputs[1].value = churches;
+  inputs[2].value = ic;
+  inputs.forEach(input => input.addEventListener("input", updateN2NTotals));
+  tr.querySelector(".remove-row").addEventListener("click", () => { tr.remove(); updateN2NTotals(); });
   body.appendChild(tr);
-  tr.querySelectorAll("input").forEach(input=>input.addEventListener("input",updateN2NTotals));
- });
+  updateN2NTotals();
 }
-function addBudgetRow(group, category="", churches=0, ic=0){
- const index=rowCounts[group]++;
- const body=document.getElementById(group+"Rows");
- const tr=document.createElement("tr");
- tr.dataset.group=group;
- tr.innerHTML='<td><input type="text" name="'+group+'Row'+index+'Category" aria-label="'+group+' expense category" placeholder="Enter expense category" value=""></td><td><input type="number" min="0" step=".01" name="'+group+'Row'+index+'Churches" aria-label="'+group+' expense paid by churches" value="0"></td><td><input type="number" min="0" step=".01" name="'+group+'Row'+index+'IC" aria-label="'+group+' expense paid by IC" value="0"></td><td><button type="button" class="remove-row" aria-label="Remove expense row">Remove</button></td>';
- const inputs=tr.querySelectorAll("input");
- inputs[0].value=category;
- inputs[1].value=churches;
- inputs[2].value=ic;
- inputs.forEach(input=>input.addEventListener("input",updateN2NTotals));
- tr.querySelector(".remove-row").addEventListener("click",()=>{tr.remove();updateN2NTotals()});
- body.appendChild(tr);
- updateN2NTotals();
+
+function resetBudgetDynamicRows() {
+  for (const group of budgetGroups) {
+    document.getElementById(group + "Rows").innerHTML = "";
+    rowCounts[group] = 0;
+    addBudgetRow(group, "");
+  }
 }
-function sumMaterial(field){
- return materialCategories.reduce((total,[key])=>total+money("materials_"+key+"_"+field),0);
+
+function sumMaterial(field) {
+  return materialCategories.reduce((total, [key]) => total + money("materials_" + key + "_" + field), 0);
 }
-function sumGroup(group,field){
- return Array.from(document.querySelectorAll("#"+group+"Rows tr")).reduce((total,tr)=>{
-  const input=tr.querySelectorAll("input")[field==="Churches"?1:2];
-  return total+(Number(input?.value)||0);
- },0);
+
+function sumGroup(group, field) {
+  return Array.from(document.querySelectorAll("#" + group + "Rows tr")).reduce((total, tr) => {
+    const input = tr.querySelectorAll("input")[field === "Churches" ? 1 : 2];
+    return total + (Number(input?.value) || 0);
+  }, 0);
 }
-function setMoney(id,value){document.getElementById(id).value=fmt(value)}
-function updateN2NTotals(){
- const materialsChurches=sumMaterial("churches"),materialsIC=sumMaterial("ic");
- document.getElementById("materialsQuantityTotal").value=String(materialCategories.reduce((total,[key])=>total+money("materials_"+key+"_amount"),0));
- setMoney("materialsChurchesTotal",materialsChurches);
- setMoney("materialsICTotal",materialsIC);
- const totals={materials:{churches:materialsChurches,ic:materialsIC}};
- for(const group of budgetGroups){
-  const churches=sumGroup(group,"Churches"),ic=sumGroup(group,"IC");
-  setMoney(group+"ChurchesTotal",churches);setMoney(group+"ICTotal",ic);
-  totals[group]={churches,ic};
- }
- for(const group of ["materials",...budgetGroups]){
-  setMoney("summary"+group.charAt(0).toUpperCase()+group.slice(1)+"Churches",totals[group].churches);
-  setMoney("summary"+group.charAt(0).toUpperCase()+group.slice(1)+"IC",totals[group].ic);
- }
- const churches=Object.values(totals).reduce((s,t)=>s+t.churches,0);
- const ic=Object.values(totals).reduce((s,t)=>s+t.ic,0);
- setMoney("n2nChurchesTotal",churches);setMoney("n2nICTotal",ic);
- setMoney("n2nChurchFunding",churches);setMoney("n2nIcFunding",ic);
- setMoney("n2nFundingTotal",churches+ic);
+
+function setMoney(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = fmt(value);
 }
-function showType(){
- const t=type.value;
- document.querySelectorAll(".n2n").forEach(e=>e.classList.toggle("hidden",t!=="N2N"));
- document.querySelectorAll(".oa").forEach(e=>e.classList.toggle("hidden",t!=="OA"));
- document.getElementById("n2nBudget").classList.toggle("hidden",t!=="N2N");
- document.getElementById("oaBudget").classList.toggle("hidden",t!=="OA");
- ["theme","leader2Name","leader2Address","leader2Phone","leader2Email"].forEach(id=>document.getElementById(id).required=t==="N2N");
- document.querySelectorAll("#n2nBudget input, #n2nBudget button").forEach(el=>{if(!el.matches("#n2nChurchFundingNotes,#n2nIcFundingNotes")&&!el.hasAttribute("data-add-row")&&!el.classList.contains("remove-row"))el.disabled=t!=="N2N"});
- ["oaAndrew","oaLaunch","oaResults"].forEach(id=>document.getElementById(id).disabled=t!=="OA");
+
+function updateN2NTotals() {
+  const materialsChurches = sumMaterial("churches"), materialsIC = sumMaterial("ic");
+  const matQtyEl = document.getElementById("materialsQuantityTotal");
+  if (matQtyEl) matQtyEl.value = String(materialCategories.reduce((total, [key]) => total + money("materials_" + key + "_amount"), 0));
+  setMoney("materialsChurchesTotal", materialsChurches);
+  setMoney("materialsICTotal", materialsIC);
+  const totals = { materials: { churches: materialsChurches, ic: materialsIC } };
+  for (const group of budgetGroups) {
+    const churches = sumGroup(group, "Churches"), ic = sumGroup(group, "IC");
+    setMoney(group + "ChurchesTotal", churches);
+    setMoney(group + "ICTotal", ic);
+    totals[group] = { churches, ic };
+  }
+  for (const group of ["materials", ...budgetGroups]) {
+    setMoney("summary" + group.charAt(0).toUpperCase() + group.slice(1) + "Churches", totals[group].churches);
+    setMoney("summary" + group.charAt(0).toUpperCase() + group.slice(1) + "IC", totals[group].ic);
+  }
+  const churches = Object.values(totals).reduce((s, t) => s + t.churches, 0);
+  const ic = Object.values(totals).reduce((s, t) => s + t.ic, 0);
+  setMoney("n2nChurchesTotal", churches);
+  setMoney("n2nICTotal", ic);
+  setMoney("n2nChurchFunding", churches);
+  setMoney("n2nIcFunding", ic);
+  setMoney("n2nFundingTotal", churches + ic);
 }
-document.querySelectorAll("[data-add-row]").forEach(button=>button.addEventListener("click",()=>addBudgetRow(button.dataset.addRow)));
+
+function showType() {
+  const t = type.value;
+  document.querySelectorAll(".n2n").forEach(e => e.classList.toggle("hidden", t !== "N2N"));
+  document.querySelectorAll(".oa").forEach(e => e.classList.toggle("hidden", t !== "OA"));
+  document.getElementById("n2nBudget").classList.toggle("hidden", t !== "N2N");
+  document.getElementById("oaBudget").classList.toggle("hidden", t !== "OA");
+  ["theme", "leader2Name", "leader2Address", "leader2Phone", "leader2Email"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.required = (t === "N2N");
+  });
+  document.querySelectorAll("#n2nBudget input, #n2nBudget button").forEach(el => {
+    if (!el.matches("#n2nChurchFundingNotes,#n2nIcFundingNotes") && !el.hasAttribute("data-add-row") && !el.classList.contains("remove-row")) {
+      el.disabled = (t !== "N2N");
+    }
+  });
+  ["oaAndrew", "oaLaunch", "oaResults"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = (t !== "OA");
+  });
+}
+
+// ── IndexedDB Draft Persistence ──────────────────────────────────────────
+const DRAFTS_DB_NAME = "ICProjectRequestDraftsDB";
+const DRAFTS_STORE_NAME = "drafts";
+const DRAFTS_DB_VERSION = 1;
+
+function openDraftsDB() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+      return reject(new Error("IndexedDB is not supported in this browser."));
+    }
+    const req = window.indexedDB.open(DRAFTS_DB_NAME, DRAFTS_DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(DRAFTS_STORE_NAME)) {
+        const store = db.createObjectStore(DRAFTS_STORE_NAME, { keyPath: "id" });
+        store.createIndex("updatedAt", "updatedAt", { unique: false });
+      }
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e.target.error || new Error("Failed to open IndexedDB"));
+  });
+}
+
+async function getAllDraftsFromDB() {
+  const db = await openDraftsDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DRAFTS_STORE_NAME, "readonly");
+    const store = tx.objectStore(DRAFTS_STORE_NAME);
+    const req = store.getAll();
+    req.onsuccess = () => {
+      const list = req.result || [];
+      list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      resolve(list);
+    };
+    req.onerror = (e) => reject(e.target.error || new Error("Failed to load drafts"));
+  });
+}
+
+async function getDraftByIdFromDB(id) {
+  if (!id) return null;
+  const db = await openDraftsDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DRAFTS_STORE_NAME, "readonly");
+    const store = tx.objectStore(DRAFTS_STORE_NAME);
+    const req = store.get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = (e) => reject(e.target.error || new Error("Failed to get draft"));
+  });
+}
+
+async function saveDraftToDB(draft) {
+  const db = await openDraftsDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DRAFTS_STORE_NAME, "readwrite");
+    const store = tx.objectStore(DRAFTS_STORE_NAME);
+    const req = store.put(draft);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = (e) => reject(e.target.error || new Error("Failed to save draft"));
+  });
+}
+
+async function deleteDraftFromDB(id) {
+  if (!id) return;
+  const db = await openDraftsDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DRAFTS_STORE_NAME, "readwrite");
+    const store = tx.objectStore(DRAFTS_STORE_NAME);
+    const req = store.delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = (e) => reject(e.target.error || new Error("Failed to delete draft"));
+  });
+}
+
+function collectFormData() {
+  const standardIds = [
+    "projectType", "country", "startDate", "endDate", "completedDate",
+    "nationalProjectType", "area", "theme", "churches", "hearers",
+    "decisions", "discipled", "baptisms", "leader1Name", "leader1Address",
+    "leader1Phone", "leader1Email", "leader2Name", "leader2Address",
+    "leader2Phone", "leader2Email", "firstTime", "spiritualNeeds",
+    "importance", "vision", "coordinator"
+  ];
+  const data = {};
+  standardIds.forEach(id => {
+    const el = document.getElementById(id);
+    data[id] = el ? el.value : "";
+  });
+
+  // Materials
+  data.materials = {};
+  materialCategories.forEach(([key]) => {
+    data.materials[key] = {
+      amount: document.getElementById("materials_" + key + "_amount")?.value || "0",
+      churches: document.getElementById("materials_" + key + "_churches")?.value || "0",
+      ic: document.getElementById("materials_" + key + "_ic")?.value || "0"
+    };
+  });
+
+  // Dynamic budget rows
+  for (const group of budgetGroups) {
+    data[group + "Rows"] = Array.from(document.querySelectorAll("#" + group + "Rows tr")).map(tr => {
+      const inputs = tr.querySelectorAll("input");
+      return {
+        category: inputs[0]?.value || "",
+        churches: inputs[1]?.value || "0",
+        ic: inputs[2]?.value || "0"
+      };
+    });
+  }
+
+  // Additional N2N fields
+  data.retreatDate = document.getElementById("retreatDate")?.value || "";
+  data.n2nChurchFundingNotes = document.getElementById("n2nChurchFundingNotes")?.value || "";
+  data.n2nIcFundingNotes = document.getElementById("n2nIcFundingNotes")?.value || "";
+  data.n2nFundingTotal = document.getElementById("n2nFundingTotal")?.value || "0.00";
+
+  // OA fields
+  data.oaAndrewAmount = document.getElementById("oaAndrewAmount")?.value || "0";
+  data.oaAndrew = document.getElementById("oaAndrew")?.value || "0";
+  data.oaLaunch = document.getElementById("oaLaunch")?.value || "0";
+  data.oaResults = document.getElementById("oaResults")?.value || "0";
+  data.oaTotal = document.getElementById("oaTotal")?.value || "0.00";
+
+  return data;
+}
+
+function populateFormWithData(draft) {
+  if (!draft || !draft.data) return;
+  const data = draft.data;
+
+  // Set project type first to unhide sections
+  if (data.projectType) {
+    type.value = data.projectType;
+  }
+  showType();
+
+  const standardIds = [
+    "country", "startDate", "endDate", "completedDate",
+    "nationalProjectType", "area", "theme", "churches", "hearers",
+    "decisions", "discipled", "baptisms", "leader1Name", "leader1Address",
+    "leader1Phone", "leader1Email", "leader2Name", "leader2Address",
+    "leader2Phone", "leader2Email", "firstTime", "spiritualNeeds",
+    "importance", "vision", "coordinator"
+  ];
+  standardIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && data[id] !== undefined) {
+      el.value = data[id];
+    }
+  });
+
+  if (data.area) {
+    pendingAreaValue = data.area;
+    const areaSelect = document.getElementById("area");
+    if (areaSelect) {
+      areaSelect.value = data.area;
+    }
+  }
+
+  // Materials
+  if (data.materials) {
+    materialCategories.forEach(([key]) => {
+      const mat = data.materials[key];
+      if (mat) {
+        const amtEl = document.getElementById("materials_" + key + "_amount");
+        const chEl = document.getElementById("materials_" + key + "_churches");
+        const icEl = document.getElementById("materials_" + key + "_ic");
+        if (amtEl && mat.amount !== undefined) amtEl.value = mat.amount;
+        if (chEl && mat.churches !== undefined) chEl.value = mat.churches;
+        if (icEl && mat.ic !== undefined) icEl.value = mat.ic;
+      }
+    });
+  }
+
+  // Dynamic budget rows: retreat, visitation, discipleship
+  budgetGroups.forEach(group => {
+    const rowsKey = group + "Rows";
+    const body = document.getElementById(rowsKey);
+    body.innerHTML = "";
+    rowCounts[group] = 0;
+    const rows = Array.isArray(data[rowsKey]) ? data[rowsKey] : [];
+    if (rows.length > 0) {
+      rows.forEach(r => addBudgetRow(group, r.category || "", r.churches || 0, r.ic || 0));
+    } else {
+      addBudgetRow(group, "");
+    }
+  });
+
+  // Additional N2N fields
+  if (data.retreatDate !== undefined) document.getElementById("retreatDate").value = data.retreatDate;
+  if (data.n2nChurchFundingNotes !== undefined) document.getElementById("n2nChurchFundingNotes").value = data.n2nChurchFundingNotes;
+  if (data.n2nIcFundingNotes !== undefined) document.getElementById("n2nIcFundingNotes").value = data.n2nIcFundingNotes;
+
+  // OA fields
+  if (data.oaAndrewAmount !== undefined) document.getElementById("oaAndrewAmount").value = data.oaAndrewAmount;
+  if (data.oaAndrew !== undefined) document.getElementById("oaAndrew").value = data.oaAndrew;
+  if (data.oaLaunch !== undefined) document.getElementById("oaLaunch").value = data.oaLaunch;
+  if (data.oaResults !== undefined) document.getElementById("oaResults").value = data.oaResults;
+  const oaSum = ["oaAndrew", "oaLaunch", "oaResults"].reduce((s, k) => s + (Number(document.getElementById(k)?.value) || 0), 0);
+  document.getElementById("oaTotal").value = oaSum.toFixed(2);
+
+  updateN2NTotals();
+
+  currentActiveDraftId = draft.id;
+  currentActiveDraftName = draft.name;
+  updateDraftStatusUI();
+}
+
+function updateDraftStatusUI() {
+  const statusEl = document.getElementById("draftStatusInfo");
+  if (!statusEl) return;
+  if (currentActiveDraftId && currentActiveDraftName) {
+    statusEl.innerHTML = `
+      <span class="draft-active-badge">✓ Loaded Draft</span>
+      <span>Active: <strong>${escHtml(currentActiveDraftName)}</strong></span>
+      <button type="button" class="btn-draft-unlink" onclick="unlinkCurrentDraft()" title="Clear form to start fresh without deleting stored draft">Start Fresh</button>
+    `;
+  } else {
+    statusEl.innerHTML = `
+      <span class="draft-icon">💾</span>
+      <span id="draftStatusText">In-progress requests can be saved to your device and loaded anytime.</span>
+    `;
+  }
+}
+
+window.unlinkCurrentDraft = function() {
+  if (confirm("Clear the form and start a new blank project request? (Your saved draft will remain stored on your device)")) {
+    currentActiveDraftId = null;
+    currentActiveDraftName = null;
+    form.reset();
+    resetBudgetDynamicRows();
+    document.getElementById("completedDate").value = new Date().toISOString().slice(0, 10);
+    showType();
+    updateN2NTotals();
+    updateDraftStatusUI();
+    showToast("Form cleared for a new project request.", false);
+  }
+};
+
+function openSaveModal() {
+  const modal = document.getElementById("saveDraftModal");
+  const input = document.getElementById("saveDraftNameInput");
+  const errorEl = document.getElementById("saveDraftError");
+  errorEl.style.display = "none";
+  errorEl.textContent = "";
+
+  if (currentActiveDraftName) {
+    input.value = currentActiveDraftName;
+  } else {
+    const pType = (document.getElementById("projectType")?.value || "").trim();
+    const country = (document.getElementById("country")?.value || "").trim();
+    if (pType && country) {
+      input.value = `${pType} Request - ${country}`;
+    } else if (country) {
+      input.value = `Project Request - ${country}`;
+    } else {
+      const today = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      input.value = `Project Request - ${today}`;
+    }
+  }
+
+  modal.style.display = "flex";
+  modal.setAttribute("aria-hidden", "false");
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 50);
+}
+
+function closeSaveModal() {
+  const modal = document.getElementById("saveDraftModal");
+  modal.style.display = "none";
+  modal.setAttribute("aria-hidden", "true");
+}
+
+async function handleSaveDraft() {
+  const input = document.getElementById("saveDraftNameInput");
+  const errorEl = document.getElementById("saveDraftError");
+  const name = input.value.trim();
+  if (!name) {
+    errorEl.textContent = "Please enter a name for this saved form.";
+    errorEl.style.display = "block";
+    input.focus();
+    return;
+  }
+
+  const draftId = currentActiveDraftId || ("draft_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7));
+  const formData = collectFormData();
+
+  const draft = {
+    id: draftId,
+    name: name,
+    updatedAt: Date.now(),
+    data: formData
+  };
+
+  try {
+    await saveDraftToDB(draft);
+    currentActiveDraftId = draft.id;
+    currentActiveDraftName = draft.name;
+    updateDraftStatusUI();
+    closeSaveModal();
+    showToast(`✓ Form saved as "${name}" for later.`);
+  } catch (err) {
+    console.error("Failed to save draft:", err);
+    errorEl.textContent = "Failed to save draft: " + err.message;
+    errorEl.style.display = "block";
+  }
+}
+
+async function openLoadModal() {
+  const modal = document.getElementById("loadDraftModal");
+  const listContainer = document.getElementById("savedDraftsList");
+  listContainer.innerHTML = '<div style="padding:28px 16px;text-align:center;color:var(--muted);">Loading saved forms…</div>';
+  modal.style.display = "flex";
+  modal.setAttribute("aria-hidden", "false");
+
+  try {
+    const drafts = await getAllDraftsFromDB();
+    renderDraftsList(drafts);
+  } catch (err) {
+    console.error("Failed to load drafts from DB:", err);
+    listContainer.innerHTML = `<div class="drafts-empty-state"><div class="drafts-empty-icon">⚠️</div><p>Error loading saved forms: ${escHtml(err.message)}</p></div>`;
+  }
+}
+
+function closeLoadModal() {
+  const modal = document.getElementById("loadDraftModal");
+  modal.style.display = "none";
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function renderDraftsList(drafts) {
+  const container = document.getElementById("savedDraftsList");
+  if (!drafts || drafts.length === 0) {
+    container.innerHTML = `
+      <div class="drafts-empty-state">
+        <div class="drafts-empty-icon">📂</div>
+        <p style="font-size:16px;color:var(--navy);font-weight:600;margin-bottom:6px;">No saved forms found</p>
+        <p style="font-size:13.5px;color:var(--muted);max-width:380px;margin:0 auto;line-height:1.45;">
+          Click <strong>"Save For Later"</strong> at any time to save your progress on this device and return to it later.
+        </p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = drafts.map(d => {
+    const dateStr = new Date(d.updatedAt || Date.now()).toLocaleString(undefined, {
+      month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit"
+    });
+    const dData = d.data || {};
+    const pType = dData.projectType ? (dData.projectType === "N2N" ? "Nationals-to-Nationals (N2N)" : "Operation Andrew (OA)") : "";
+    const locationParts = [dData.country, dData.area].filter(Boolean);
+    const loc = locationParts.join(" · ");
+    let totalBudget = "";
+    if (dData.projectType === "OA") {
+      totalBudget = "$" + (Number(dData.oaTotal) || 0).toFixed(2);
+    } else if (dData.projectType === "N2N") {
+      totalBudget = "$" + (Number(dData.n2nFundingTotal) || 0).toFixed(2);
+    }
+    const isCurrent = (currentActiveDraftId === d.id);
+
+    return `
+      <div class="draft-card" data-id="${escHtml(d.id)}">
+        <div class="draft-card-main">
+          <div class="draft-card-title">
+            ${escHtml(d.name)}
+            ${isCurrent ? ' <span class="draft-active-badge" style="font-size:11px;">Current</span>' : ''}
+          </div>
+          <div class="draft-card-meta">Saved: ${dateStr}</div>
+          <div class="draft-card-chips">
+            ${pType ? `<span class="draft-chip">📁 ${escHtml(pType)}</span>` : ""}
+            ${loc ? `<span class="draft-chip">📍 ${escHtml(loc)}</span>` : ""}
+            ${totalBudget ? `<span class="draft-chip">💰 Budget: ${escHtml(totalBudget)}</span>` : ""}
+            ${dData.coordinator ? `<span class="draft-chip">👤 ${escHtml(dData.coordinator)}</span>` : ""}
+          </div>
+        </div>
+        <div class="draft-card-actions">
+          <button type="button" class="btn-card-load" onclick="selectDraftToLoad('${escHtml(d.id)}')">
+            Load
+          </button>
+          <button type="button" class="btn-card-delete" onclick="handleDeleteDraft('${escHtml(d.id)}', '${escHtml(d.name).replace(/'/g, "\\'")}')" title="Delete this saved form">
+            🗑️
+          </button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+window.selectDraftToLoad = async function(draftId) {
+  try {
+    const drafts = await getAllDraftsFromDB();
+    const draft = drafts.find(d => d.id === draftId);
+    if (!draft) {
+      showToast("Draft not found.", true);
+      return;
+    }
+    populateFormWithData(draft);
+    closeLoadModal();
+    showToast(`✓ Loaded draft "${draft.name}".`);
+  } catch (err) {
+    console.error("Failed to load draft:", err);
+    showToast("Error loading draft: " + err.message, true);
+  }
+};
+
+window.handleDeleteDraft = async function(draftId, draftName) {
+  if (!confirm(`Are you sure you want to delete the saved draft "${draftName}"?`)) {
+    return;
+  }
+  try {
+    await deleteDraftFromDB(draftId);
+    if (currentActiveDraftId === draftId) {
+      currentActiveDraftId = null;
+      currentActiveDraftName = null;
+      updateDraftStatusUI();
+    }
+    const drafts = await getAllDraftsFromDB();
+    renderDraftsList(drafts);
+    showToast(`Deleted draft "${draftName}".`);
+  } catch (err) {
+    console.error("Failed to delete draft:", err);
+    showToast("Error deleting draft: " + err.message, true);
+  }
+};
+
+// Wire event listeners
+document.querySelectorAll("[data-add-row]").forEach(button => button.addEventListener("click", () => addBudgetRow(button.dataset.addRow)));
 createMaterialRows();
-addBudgetRow("retreat","");addBudgetRow("visitation","");addBudgetRow("discipleship","");
-type.addEventListener("change",showType);
-["oaAndrew","oaLaunch","oaResults"].forEach(id=>document.getElementById(id).addEventListener("input",()=>document.getElementById("oaTotal").value=["oaAndrew","oaLaunch","oaResults"].reduce((s,k)=>s+(Number(document.getElementById(k).value)||0),0).toFixed(2)));
-document.getElementById("completedDate").value=new Date().toISOString().slice(0,10);
-form.addEventListener("submit",async e=>{e.preventDefault();const btn=document.getElementById("submitBtn"),status=document.getElementById("status");btn.disabled=true;status.className="status";status.textContent="Submitting request…";try{const data=Object.fromEntries(new FormData(form).entries());data.requestTitle=data.projectType+" — "+data.country+" — "+data.area;const response=await fetch(WORKER_URL+"/project-requests",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const result=await response.json();if(!response.ok)throw new Error(result.error||"Request submission failed.");form.reset();document.getElementById("completedDate").value=new Date().toISOString().slice(0,10);showType();status.className=result.notificationWarning?"status err":"status ok";status.textContent=result.notificationWarning||"Your project request was submitted successfully. The AST Area VP has been notified."; }catch(err){status.className="status err";status.textContent=err.message||"Unable to submit the request. Please try again."}finally{btn.disabled=false}});
-showType();updateN2NTotals();
-(async()=>{const areaSelect=document.getElementById("area");try{const response=await fetch(WORKER_URL+"/project-request-areas");const result=await response.json();if(!response.ok)throw new Error(result.error||"Could not load areas.");areaSelect.innerHTML='<option value="">Choose project area</option>'+result.areas.map(area=>'<option value="'+area.replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]))+'">'+area.replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]))+'</option>').join("");}catch(error){areaSelect.innerHTML='<option value="">Unable to load areas</option>';areaSelect.disabled=true;document.getElementById("status").className="status err";document.getElementById("status").textContent=error.message+" Please contact AST.";}})();
-</script></body></html>
+addBudgetRow("retreat", "");
+addBudgetRow("visitation", "");
+addBudgetRow("discipleship", "");
+type.addEventListener("change", showType);
+["oaAndrew", "oaLaunch", "oaResults"].forEach(id => document.getElementById(id).addEventListener("input", () => {
+  document.getElementById("oaTotal").value = ["oaAndrew", "oaLaunch", "oaResults"].reduce((s, k) => s + (Number(document.getElementById(k).value) || 0), 0).toFixed(2);
+}));
+document.getElementById("completedDate").value = new Date().toISOString().slice(0, 10);
+
+document.getElementById("saveDraftBtnTop")?.addEventListener("click", openSaveModal);
+document.getElementById("saveDraftBtnBottom")?.addEventListener("click", openSaveModal);
+document.getElementById("loadDraftBtnTop")?.addEventListener("click", openLoadModal);
+document.getElementById("loadDraftBtnBottom")?.addEventListener("click", openLoadModal);
+document.getElementById("confirmSaveDraftBtn")?.addEventListener("click", handleSaveDraft);
+document.getElementById("closeSaveModalBtn")?.addEventListener("click", closeSaveModal);
+document.getElementById("cancelSaveModalBtn")?.addEventListener("click", closeSaveModal);
+document.getElementById("closeLoadModalBtn")?.addEventListener("click", closeLoadModal);
+document.getElementById("cancelLoadModalBtn")?.addEventListener("click", closeLoadModal);
+
+document.getElementById("saveDraftModal")?.addEventListener("click", (e) => {
+  if (e.target.id === "saveDraftModal") closeSaveModal();
+});
+document.getElementById("loadDraftModal")?.addEventListener("click", (e) => {
+  if (e.target.id === "loadDraftModal") closeLoadModal();
+});
+document.getElementById("saveDraftNameInput")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    handleSaveDraft();
+  }
+});
+
+form.addEventListener("submit", async e => {
+  e.preventDefault();
+  const btn = document.getElementById("submitBtn"), status = document.getElementById("status");
+  btn.disabled = true;
+  status.className = "status";
+  status.textContent = "Submitting request…";
+  try {
+    const data = Object.fromEntries(new FormData(form).entries());
+    data.requestTitle = data.projectType + " — " + data.country + " — " + data.area;
+    const response = await fetch(WORKER_URL + "/project-requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Request submission failed.");
+
+    // Delete active draft from IndexedDB
+    if (currentActiveDraftId) {
+      try {
+        await deleteDraftFromDB(currentActiveDraftId);
+        currentActiveDraftId = null;
+        currentActiveDraftName = null;
+        updateDraftStatusUI();
+      } catch (draftErr) {
+        console.warn("Could not remove saved draft after submission:", draftErr);
+      }
+    }
+
+    form.reset();
+    resetBudgetDynamicRows();
+    document.getElementById("completedDate").value = new Date().toISOString().slice(0, 10);
+    showType();
+    updateN2NTotals();
+    status.className = result.notificationWarning ? "status err" : "status ok";
+    status.textContent = result.notificationWarning || "Your project request was submitted successfully. The AST Area VP has been notified.";
+    showToast("✓ Project request submitted successfully!", false);
+  } catch (err) {
+    status.className = "status err";
+    status.textContent = err.message || "Unable to submit the request. Please try again.";
+    showToast("Submission failed: " + err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+showType();
+updateN2NTotals();
+
+(async () => {
+  const areaSelect = document.getElementById("area");
+  try {
+    const response = await fetch(WORKER_URL + "/project-request-areas");
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Could not load areas.");
+    areaSelect.innerHTML = '<option value="">Choose project area</option>' + result.areas.map(area => '<option value="' + area.replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])) + '">' + area.replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])) + '</option>').join("");
+    if (pendingAreaValue) {
+      areaSelect.value = pendingAreaValue;
+    }
+  } catch (error) {
+    areaSelect.innerHTML = '<option value="">Unable to load areas</option>';
+    areaSelect.disabled = true;
+    document.getElementById("status").className = "status err";
+    document.getElementById("status").textContent = error.message + " Please contact AST.";
+  }
+})();
+</script>
+</body>
+</html>
