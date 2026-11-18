@@ -1613,6 +1613,9 @@
     // Show New Report button when signed in
     document.getElementById("newReportBtn").style.display = "inline-block";
 
+    // Always default to reports view after sign-in
+    toggleDashboardView("reports");
+
     loadReports();
   }
 
@@ -1628,6 +1631,7 @@
       msalInstance.logoutRedirect({ account: currentAccount })
     );
     currentAccount = null;
+    toggleDashboardView("reports");
     document.getElementById("userChip").style.display   = "none";
     document.getElementById("signOutBtn").style.display = "none";
     document.getElementById("authGate").style.display   = "flex";
@@ -4128,16 +4132,16 @@
   }
 
   // ── URL parameter deep linking ─────────────────────────────────────────
+  // Only deep-link to requests view when a specific request ID is present,
+  // so users always land on reports by default after sign-in.
   const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get("view") === "requests") {
+  const deepLinkReqId = urlParams.get("request");
+  if (urlParams.get("view") === "requests" && deepLinkReqId) {
     // Delay until after auth
     const checkAndSwitch = () => {
       if (currentAccount) {
         toggleDashboardView("requests");
-        const reqId = urlParams.get("request");
-        if (reqId) {
-          setTimeout(() => showProjectRequest(reqId), 500);
-        }
+        setTimeout(() => showProjectRequest(deepLinkReqId), 500);
       }
     };
     // Check immediately and also after a delay for auth
