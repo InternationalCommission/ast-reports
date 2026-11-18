@@ -2921,7 +2921,6 @@
           { type: "deny", label: "❌ Deny", cls: "btn-action-deny" },
           { type: "changes", label: "📝 Request Changes", cls: "btn-action-changes" },
           { type: "edit", label: "✏️ Edit Request", cls: "btn-action-edit" },
-          { type: "budget", label: "💰 Edit Budget", cls: "btn-action-edit" },
         ];
       } else {
         noticeHtml = `<div class="testimony" style="margin-bottom:28px;border-left:3px solid var(--gold);background:rgba(200,169,110,.08);color:var(--navy);font-size:13.5px;padding:14px 18px;line-height:1.5;"><strong>Status Notice:</strong> This request is currently awaiting AST Area VP review. Members of the Final Approval group can review once approved by the AST VP.</div>`;
@@ -2933,7 +2932,6 @@
           { type: "deny", label: "❌ Deny", cls: "btn-action-deny" },
           { type: "changes", label: "📝 Request Changes", cls: "btn-action-changes" },
           { type: "edit", label: "✏️ Edit Request", cls: "btn-action-edit" },
-          { type: "budget", label: "💰 Edit Budget", cls: "btn-action-edit" },
         ];
       } else if (role === "ast_vp") {
         noticeHtml = `<div class="testimony" style="margin-bottom:28px;border-left:3px solid #1d39c4;background:rgba(29,57,196,.06);color:var(--navy);font-size:13.5px;padding:14px 18px;line-height:1.5;"><strong>Status Notice:</strong> You approved this request. It is now awaiting Final Approval.</div>`;
@@ -2946,7 +2944,6 @@
       if (role === "superadmin") {
         actions = [
           { type: "edit", label: "✏️ Edit & Resubmit", cls: "btn-action-edit" },
-          { type: "budget", label: "💰 Edit Budget", cls: "btn-action-edit" },
         ];
       } else {
         noticeHtml = `<div class="testimony" style="margin-bottom:28px;border-left:3px solid #b57404;background:rgba(200,169,110,.08);color:var(--navy);font-size:13.5px;padding:14px 18px;line-height:1.5;"><strong>Status Notice:</strong> Changes have been requested. The submitter must resubmit this request with revisions.</div>`;
@@ -3003,9 +3000,6 @@
               ${fRow("Total Requested", oaTotal, "ft-total")}
             </tbody>
           </table>
-        </div>
-        <div style="margin-bottom:20px;">
-          <button type="button" class="btn-action-edit" onclick="openWfBudgetModal('${r.id}')">💰 Edit Budget</button>
         </div>`;
     } else if (r.projectType === "N2N") {
       const b = parseN2NBudget(r.n2nBudget);
@@ -3219,10 +3213,6 @@
               <div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:6px;">${money(b.totals.totalIc) || "$0.00"}</div>
               <div style="font-size:13px;color:var(--ink);">${escHtml(b.n2nIcFundingNotes || "No funding notes provided.")}</div>
             </div>
-          </div>
-
-          <div style="margin-bottom:20px;">
-            <button type="button" class="btn-action-edit" onclick="openWfBudgetModal('${r.id}')">💰 Edit Budget</button>
           </div>
         `;
       }
